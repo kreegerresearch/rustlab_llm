@@ -13,7 +13,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 
 | Phase | Title | Status |
 |-------|-------|--------|
-| 1 | Foundations | Not started |
+| 1 | Foundations | Complete |
 | 2 | First Working Model | Not started |
 | 3 | Attention Mechanism | Not started |
 | 4 | Transformer Components | Not started |
@@ -35,23 +35,26 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - `04-embeddings-and-similarity`
 
 **Deliverables — each lesson must have:**
-- [ ] `lesson.md` with all 6 required sections (Learning Objectives, Background, Theory, Core Concepts, Simulations, Exercises)
-- [ ] One or more `.r` scripts with the required header block
-- [ ] All scripts run without error via `rustlab run <path>`
-- [ ] All plot outputs saved to `lessons/<NN-topic>/outputs/` (SVG)
-- [ ] Key numerical results printed with `print()` so a student can verify by hand
+- [x] `lesson.md` with all 6 required sections (Learning Objectives, Background, Theory, Core Concepts, Simulations, Exercises)
+- [x] One or more `.r` scripts with the required header block
+- [x] All scripts run without error via `rustlab run <path>`
+- [x] All plot outputs saved to `lessons/<NN-topic>/outputs/` (SVG)
+- [x] Key numerical results printed with `print()` so a student can verify by hand
 
 **Acceptance criteria:**
 - A student with linear algebra background can read each lesson sequentially with no gaps.
 - Lessons 01–04 do not reference attention, GPT, or concepts from Phase 2 onward.
 - All scripts are self-contained (no shared state).
 
-**Status:** Not started
+**Status:** Complete
 
-**Handoff notes:** *(Update this when pausing mid-phase)*
-- Last completed lesson: —
-- Next action: Create `lessons/01-tokens-and-encoding/` directory structure and start with `lesson.md`.
-- Known blockers: None — `sum`, `max`, `log`, `softmax`, `savebar`, `savescatter`, `savehist` all confirmed available.
+**Handoff notes:**
+- Last completed lesson: 04-embeddings-and-similarity
+- Next action: Start Phase 2 with `lessons/05-bigram-language-model/lesson.md`.
+- Known blockers (rustlab quirks to remember):
+  - `abs()` does not support matrix args — flatten with `reshape(M, 1, numel)` first.
+  - `ones(n)` is a row vector; for `M * ones(n)` use `M * ones(n)'` (transpose to column).
+  - `savebar(v, path, title)` is 3 args, not 4 as noted in AGENTS.md.
 
 ---
 
