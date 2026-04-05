@@ -55,10 +55,8 @@ print("queen / woman (moderate — same gender)      :", s_qw);
 print("man   / woman (low  — different on most dims):", s_mw);
 
 # === Verify Symmetry ===
-# S_ij == S_ji  =>  max(|diff|) should be ~0
-# Flatten the difference matrix to a vector so abs() and max() work element-wise
-diff_flat = reshape(S - transpose(S), 1, 16);
-sym_err = max(abs(diff_flat));
+# S_ij == S_ji  =>  max(|S - S'|) should be ~0
+sym_err = max(reshape(abs(S - transpose(S)), 1, 16));
 print("Symmetry check max|S - S'| (should be ~0):", sym_err);
 
 # === Analogy Arithmetic: king - man + woman ≈ queen ===

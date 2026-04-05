@@ -125,7 +125,7 @@ Evaluate $\mathcal{L}(2.0, 0.0)$ manually. Confirm it equals 0 (the model perfec
 ### `gradient_descent.r` — Gradient Descent Path
 
 **What it computes:**
-Runs 15 steps of gradient descent starting at $(w_0, b_0) = (0, 0)$ with learning rate $\eta = 0.02$. At each step, computes the predictions, residuals, gradients, and updated parameters. Prints the loss at each step. Plots the $(w, b)$ trajectory as a scatter plot.
+Runs 30 steps of gradient descent starting at $(w_0, b_0) = (0, 0)$ with learning rate $\eta = 0.05$, using a `for` loop. At each step it computes predictions, residuals, gradients, and updated parameters. Plots the loss curve and the $(w, b)$ trajectory.
 
 **What to observe:**
 - The loss decreases monotonically (guaranteed for MSE with a suitable learning rate).

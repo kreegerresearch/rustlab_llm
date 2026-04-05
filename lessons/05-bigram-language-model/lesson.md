@@ -119,7 +119,7 @@ The sampling algorithm — cumulative distribution + uniform threshold — is a 
 ### `bigram_counts.r` — Bigram Count and Probability Matrix
 
 **What it computes:**
-Uses the corpus `"abcbabcba"` with vocabulary `{a:1, b:2, c:3}`. Builds the $3 \times 3$ bigram count matrix by hand, normalises to probabilities (with and without Laplace smoothing), and saves both matrices as heatmaps.
+Uses the corpus `"abcbabcba"` with vocabulary `{a:1, b:2, c:3}`. Scans the token sequence with a `for` loop to build the $3 \times 3$ bigram count matrix, normalises each row to probabilities, applies Laplace smoothing, and saves both matrices as heatmaps.
 
 **What to observe:**
 - The raw count matrix: bright cells show frequent token pairs; dark cells show rare or absent pairs.
@@ -135,12 +135,12 @@ Trace through `"abcbabcba"` character by character, tallying each bigram. Confir
 ### `bigram_sampling.r` — Sampling Trace
 
 **What it computes:**
-Demonstrates the CDF-based sampling algorithm using the normalised bigram probability matrix. For each token in the vocabulary, prints the CDF and shows which token would be sampled for two specific uniform draws ($u = 0.3$ and $u = 0.7$). Traces a 6-step generated sequence starting from token `a`.
+Demonstrates the CDF-based sampling formula `sum(CDF < u) + 1` on token `b` with two fixed draws, then runs a `for` loop to generate a 12-token sequence from a random starting point, using `rand()` for the draws.
 
 **What to observe:**
-- For token `a`: CDF = [0, 1, 1]. Any draw samples `b` (token 2). Completely deterministic.
-- For token `b`: CDF = [0.5, 0.5, 1.0]. Draw 0.3 < 0.5 → samples `a`; draw 0.7 ≥ 0.5 → samples `c`.
-- The generated sequence alternates between `b` and either `a` or `c`, reflecting the model's learned structure.
+- For token `b`: CDF = [0.5, 0.5, 1.0]. Draw 0.3 < 0.5 → samples `a` (index 1); draw 0.7 ≥ 0.5 → samples `c` (index 3).
+- The generated sequence always has `b` at every even position (since `a` and `c` both lead deterministically to `b`).
+- Re-running the script produces a different sequence each time due to `rand()` — the structure (b at every even step) is preserved.
 
 **Verify by hand:**
 Use the CDF for token `c` and draws $u = 0.1$ and $u = 0.9$. Predict which token is sampled. Confirm against the printed output.

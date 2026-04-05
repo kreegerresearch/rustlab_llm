@@ -10,27 +10,22 @@
 # Token sequence: [1, 2, 3, 2, 1, 2, 3, 2, 1]
 
 vocab_size = 3;
-n_tokens   = 9;
-n_bigrams  = n_tokens - 1;   # 8 consecutive pairs
+seq = [1, 2, 3, 2, 1, 2, 3, 2, 1];
+n_tokens = len(seq);
+n_bigrams = n_tokens - 1;
 
 print("Corpus: abcbabcba");
 print("Vocabulary: a=1  b=2  c=3");
 print("Number of bigrams:", n_bigrams);
 
-# === Bigram Count Matrix C ===
-# Trace through "abcbabcba":
-#   (a,b)=1->2  (b,c)=2->3  (c,b)=3->2  (b,a)=2->1
-#   (a,b)=1->2  (b,c)=2->3  (c,b)=3->2  (b,a)=2->1
-#
-# Counts:  C[1,2] a->b = 2,  C[2,3] b->c = 2,  C[3,2] c->b = 2,  C[2,1] b->a = 2
-# All other pairs = 0
-#
-# Matrix layout: row = current token, col = next token
-#        a  b  c
-# a:  [  0, 2, 0 ]
-# b:  [  2, 0, 2 ]
-# c:  [  0, 2, 0 ]
-C = [0, 2, 0; 2, 0, 2; 0, 2, 0];
+# === Build Bigram Count Matrix from the sequence ===
+# For each consecutive pair (seq[t], seq[t+1]), increment C[i, j]
+C = zeros(vocab_size, vocab_size);
+for t = 1:(n_tokens - 1)
+  i = seq(t);
+  j = seq(t + 1);
+  C(i, j) = C(i, j) + 1;
+end
 
 print("Bigram count matrix C  (row=current, col=next):");
 print(C);
@@ -41,54 +36,51 @@ print("Total bigram count (should be 8):", total_counts);
 
 # === Row-Normalise → Probability Matrix P ===
 # P_ij = C_ij / row_sum_i
-row_sum_a = sum(C(1));   # sum of row a
-row_sum_b = sum(C(2));   # sum of row b
-row_sum_c = sum(C(3));   # sum of row c
-
-P_a = C(1) / row_sum_a;
-P_b = C(2) / row_sum_b;
-P_c = C(3) / row_sum_c;
-
-P = [P_a; P_b; P_c];
+P = zeros(vocab_size, vocab_size);
+for i = 1:vocab_size
+  row_sum = sum(C(i));
+  P(i, 1) = C(i, 1) / row_sum;
+  P(i, 2) = C(i, 2) / row_sum;
+  P(i, 3) = C(i, 3) / row_sum;
+end
 
 print("Normalised probability matrix P:");
 print(P);
-print("Row sums (each should be 1):");
-row_sums_P = [sum(P(1)), sum(P(2)), sum(P(3))];
-print(row_sums_P);
+
+# Verify row sums
+row_sums = [sum(P(1)), sum(P(2)), sum(P(3))];
+print("Row sums (each should be 1):", row_sums);
 
 # === Laplace-Smoothed Probability Matrix P_smooth ===
 # P^smooth_ij = (C_ij + 1) / (row_sum_i + |V|)
 # Ensures no zero probabilities for unseen bigrams
 C_smooth = C + ones(vocab_size, vocab_size);
-
-row_sum_a_s = sum(C_smooth(1));
-row_sum_b_s = sum(C_smooth(2));
-row_sum_c_s = sum(C_smooth(3));
-
-P_a_s = C_smooth(1) / row_sum_a_s;
-P_b_s = C_smooth(2) / row_sum_b_s;
-P_c_s = C_smooth(3) / row_sum_c_s;
-
-P_smooth = [P_a_s; P_b_s; P_c_s];
+P_smooth = zeros(vocab_size, vocab_size);
+for i = 1:vocab_size
+  row_sum_s = sum(C_smooth(i));
+  P_smooth(i, 1) = C_smooth(i, 1) / row_sum_s;
+  P_smooth(i, 2) = C_smooth(i, 2) / row_sum_s;
+  P_smooth(i, 3) = C_smooth(i, 3) / row_sum_s;
+end
 
 print("Laplace-smoothed probability matrix P_smooth:");
 print(P_smooth);
 
-# Verify no zeros (minimum value > 0)
 min_smooth = min(reshape(P_smooth, 1, vocab_size * vocab_size));
 print("Minimum value in P_smooth (should be > 0):", min_smooth);
 
 # === Row entropy ===
 # H(row) = -sum(p * log2(p))   [bits]
 eps = 1e-12;
-H_a = -sum(P_a .* log2(P_a + eps));
-H_b = -sum(P_b .* log2(P_b + eps));
-H_c = -sum(P_c .* log2(P_c + eps));
+H = zeros(vocab_size);
+for i = 1:vocab_size
+  p = P(i);
+  H(i) = -sum(p .* log2(p + eps));
+end
 
-print("Row entropy H(a) bits:", H_a, "  (0 = deterministic)");
-print("Row entropy H(b) bits:", H_b, "  (1 = maximum for 2 options)");
-print("Row entropy H(c) bits:", H_c, "  (0 = deterministic)");
+print("Row entropy H(a) bits:", H(1), "  (0 = deterministic)");
+print("Row entropy H(b) bits:", H(2), "  (1 = maximum for 2 options)");
+print("Row entropy H(c) bits:", H(3), "  (0 = deterministic)");
 
 # === Heatmaps ===
 saveimagesc(C, "outputs/bigram_counts.svg", "Bigram Count Matrix C (a,b,c)", "viridis")
