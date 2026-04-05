@@ -14,7 +14,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 | Phase | Title | Status |
 |-------|-------|--------|
 | 1 | Foundations | Complete |
-| 2 | First Working Model | Not started |
+| 2 | First Working Model | Complete |
 | 3 | Attention Mechanism | Not started |
 | 4 | Transformer Components | Not started |
 | 5 | Full GPT Architecture | Not started |
@@ -76,12 +76,12 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - Lesson 06 makes clear why a learned linear layer outperforms a count table.
 - Scripts produce at least one heatmap and one line plot per lesson.
 
-**Status:** Not started
+**Status:** Complete
 
 **Handoff notes:**
-- Last completed lesson: —
-- Next action: Start with `lessons/05-bigram-language-model/lesson.md`.
-- Known blockers: None — `randn(m, n)` 2D form now confirmed available.
+- Last completed lesson: 06-linear-layers-and-gradient-descent
+- Next action: Start Phase 3 with `lessons/07-context-and-naive-averaging/lesson.md`.
+- Known blockers: No loops in rustlab — gradient descent unrolled as 15 explicit steps. For the 2D loss landscape, used the analytic expansion L(w,b)=7.5w²+b²+5wb-30w-10b+30 with outer products instead of a nested loop. Two assignments cannot share one line.
 
 ---
 
