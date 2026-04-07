@@ -75,7 +75,7 @@ eps = 1e-12;
 H = zeros(vocab_size);
 for i = 1:vocab_size
   p = P(i);
-  H(i) = -sum(p .* log2(p + eps));
+  H(i) = max([0.0, -sum(p .* log2(p + eps))]);
 end
 
 print("Row entropy H(a) bits:", H(1), "  (0 = deterministic)");

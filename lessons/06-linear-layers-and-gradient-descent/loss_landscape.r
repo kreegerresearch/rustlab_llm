@@ -11,11 +11,11 @@ y = [2.0, 4.0, 6.0, 8.0];
 
 # === Verify true and initial parameters ===
 y_hat_true = 2.0 * x + 0.0;
-L_true = mean((y_hat_true - y) .^ 2);
+L_true = real(mean((y_hat_true - y) .^ 2));
 print("Loss at true parameters (w=2, b=0):", L_true, "  (should be 0)");
 
 y_hat_init = 0.0 * x + 0.0;
-L_init = mean((y_hat_init - y) .^ 2);
+L_init = real(mean((y_hat_init - y) .^ 2));
 print("Loss at initial parameters (w=0, b=0):", L_init);
 
 # === Analytic expansion of L(w,b) ===

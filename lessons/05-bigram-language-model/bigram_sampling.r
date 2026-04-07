@@ -47,7 +47,7 @@ print("Generated sequence (indices):", generated);
 # P(b|a)=1.0 → log-prob=0;  P(c|b)=P(a|b)=0.5 → log-prob=log(0.5)
 # Mean CE = -(4*log(1.0) + 4*log(0.5)) / 8 = -0.5*log(0.5)
 log_probs = [log(1.0), log(0.5), log(1.0), log(0.5), log(1.0), log(0.5), log(1.0), log(0.5)];
-mean_ce = -mean(log_probs);
+mean_ce = -real(mean(log_probs));
 print("Mean cross-entropy loss on training corpus (nats):", mean_ce);
 print("Perplexity = exp(loss):", exp(mean_ce));
 

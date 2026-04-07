@@ -10,7 +10,7 @@ x = [1.0, 2.0, 3.0, 4.0];
 y = [2.0, 4.0, 6.0, 8.0];
 npts = 4.0;
 lr = 0.05;
-n_steps = 30;
+n_steps = 200;
 
 # === Gradient descent loop ===
 w = 0.0;
