@@ -123,6 +123,7 @@ Notebooks use the `rustlab-notebook` format: standard Markdown files where fence
 - Variables persist across code blocks — define once, use in later blocks
 - Use LaTeX math in prose: `$inline$` and `$$display$$`
 - Use `<!-- hide -->` before setup-only code blocks the reader doesn't need to see
+- Use template interpolation `${expr}` to embed computed values in prose (e.g. `${mean(v):%.3f}`)
 - Save plots to `outputs/` (same commands as scripts); inline Plotly plots are automatic for `figure()`/`savefig()` calls
 - Each notebook should be self-contained — a reader should not need to run the separate `.r` scripts first
 - Keep the narrative concise; the `lesson.md` has the full theory and exercises
@@ -131,7 +132,7 @@ Notebooks use the `rustlab-notebook` format: standard Markdown files where fence
 
 ## Rustlab Language Reference
 
-Rustlab is a scientific computing CLI (`../rustlab`) with a MATLAB-like scripting language. Full reference: `../rustlab/docs/quickref.md`.
+Rustlab is a scientific computing CLI (`../rustlab`) with a MATLAB-like scripting language. Full reference: `../rustlab/docs/quickref.md`. Function signatures and examples: `../rustlab/docs/functions.md`. Notebook spec: `../rustlab/docs/notebooks.md`.
 
 ### Language Essentials
 
@@ -143,50 +144,72 @@ Rustlab is a scientific computing CLI (`../rustlab`) with a MATLAB-like scriptin
 - For loop: `for i = 1:n` ... `end`
 - While loop: `while cond` ... `end`
 - Conditionals: `if` / `elseif` / `else` / `end`
+- Switch: `switch expr` / `case val` / `otherwise` / `end`
 - Functions: `function [out] = name(args)` ... `end`
-- Anonymous functions: `@(x) x.^2`
+- Anonymous functions: `@(x) x.^2`; function handles: `@name`
 - Chain indexing: `f(args)(i)` works without a temporary
 - Compound assignment: `+=`, `-=`, `*=`, `/=`
 - Line continuation: `...`
+- Destructuring: `[X, Y] = meshgrid(x, y)`
+- Indexed assignment grows vectors: `v(i) = val`
+- String arrays: `{"a", "b", "c"}`
+- Structs: `s.field = val` auto-creates struct
+- `clear` removes all variables; `clf` clears current figure
 
 ### Function Reference (subset relevant to this tutorial)
 
-**Math (element-wise):** `exp`, `log`, `log2`, `log10`, `sqrt`, `abs`, `sin`, `cos`, `tanh`, `real`, `imag`, `floor`, `ceil`, `round`, `mod`, `sign`
+**Math (element-wise):** `exp`, `log`, `log2`, `log10`, `sqrt`, `abs`, `sin`, `cos`, `asin`, `acos`, `atan`, `atan2`, `tanh`, `sinh`, `cosh`, `real`, `imag`, `conj`, `angle`, `floor`, `ceil`, `round`, `mod`, `sign`
 
-**Statistics:** `sum`, `prod`, `cumsum`, `min`, `max`, `argmin`, `argmax`, `mean`, `median`, `std`, `sort`, `trapz`, `all`, `any`
+**Statistics:** `sum`, `prod`, `cumsum`, `min`, `max`, `argmin`, `argmax`, `mean`, `median`, `std`, `sort`, `trapz`, `hist(v,n)`, `all`, `any`
 
 **ML / Activations:** `softmax(v)`, `relu(v)`, `gelu(v)`, `layernorm(v)`, `layernorm(v, eps)`
 
-**Array construction:** `zeros(n)` / `zeros(m,n)`, `ones(n)` / `ones(m,n)`, `eye(n)`, `linspace(a,b,n)`, `rand(n)`, `randn(n)` / `randn(m,n)`, `randi(imax,n)`, `randi([lo,hi],n)`
+**Array construction:** `zeros(n)` / `zeros(m,n)`, `ones(n)` / `ones(m,n)`, `eye(n)`, `linspace(a,b,n)`, `logspace(a,b,n)`, `rand(n)`, `randn(n)` / `randn(m,n)`, `randi(imax,n)`, `randi([lo,hi],n)`
 
 **Array inspection:** `len(v)`, `length(v)`, `numel(x)`, `size(x)`
 
-**Matrix ops:** `reshape(A,m,n)`, `repmat(A,m,n)`, `transpose(A)`, `diag(v)` / `diag(M)`, `outer(a,b)`, `kron(A,B)`, `inv(M)`, `det(M)`, `trace(M)`, `rank(M)`, `eig(M)`, `expm(M)`, `norm(v)`, `dot(u,v)`, `cross(u,v)`
+**Matrix ops:** `reshape(A,m,n)`, `repmat(A,m,n)`, `transpose(A)`, `diag(v)` / `diag(M)`, `outer(a,b)`, `kron(A,B)`, `inv(M)`, `linsolve(A,b)`, `det(M)`, `trace(M)`, `rank(M)`, `eig(M)`, `svd(A)`, `expm(M)`, `norm(v)` / `norm(v,p)`, `dot(u,v)`, `cross(u,v)`, `meshgrid(x,y)`, `roots(p)`
 
 **Concatenation:** `horzcat(A,B,...)` / `[A, B]`, `vertcat(A,B,...)` / `[A; B]`
 
-**I/O:** `print(x,...)`, `disp(x)`, `fprintf(fmt,...)`, `sprintf(fmt,...)`, `save(file,x)`, `load(file)`
+**Structs:** `struct("k",v,...)`, `s.field`, `s.field = val`, `isstruct(x)`, `fieldnames(s)`, `isfield(s,"name")`, `rmfield(s,"name")`
 
-**Plotting (file output):**
+**String arrays:** `{"a","b","c"}`, `sa(i)`, `iscell(x)`, `length(sa)`, `numel(sa)`
+
+**Higher-order:** `arrayfun(f, v)`, `feval("name", args...)`
+
+**I/O:** `print(x,...)`, `disp(x)`, `fprintf(fmt,...)`, `sprintf(fmt,...)`, `commas(x)`, `save(file,x)`, `save(file,"name",x,...)` (NPZ), `load(file)`, `load(file,"name")`, `whos`
+
+**Plotting (primary API — interactive plot + file save):**
+```
+plot(v)  /  plot(x, y, "color", "blue", "label", "name", "style", "dashed")
+bar(y)  /  bar(labels, y)  /  bar(M)        — bar / categorical / grouped
+scatter(x, y)
+imagesc(M, "viridis")                        — heatmap (colormaps: viridis, jet, hot, gray)
+histogram(v)
+savefig("file.svg")                          — save current figure to SVG, PNG, or HTML
+```
+
+**Figure controls:**
+```
+figure()  /  figure("file.html")
+subplot(rows, cols, idx)
+hold("on")  /  hold("off")
+grid("on")  /  grid("off")
+title("text")  /  xlabel("text")  /  ylabel("text")
+xlim([lo, hi])  /  ylim([lo, hi])
+hline(y, "color", "label")                   — horizontal reference line
+legend("s1", "s2")
+clf                                          — clear current figure
+```
+
+**Shorthand save wrappers (backwards-compatible):**
 ```
 savefig(v, file, title)           — line plot
 savebar(y, file, title)           — bar chart
 savescatter(x, y, file, title)    — scatter plot
-saveimagesc(M, file, title, cmap) — heatmap (colormaps: viridis, jet, hot, gray)
-savehist(v, n, file, title)       — histogram
-```
-
-**Plotting (multi-series / subplots):**
-```
-figure()
-subplot(rows, cols, idx)
-hold("on")
-plot(x, y, "color", "blue", "label", "name", "style", "dashed")
-title("text")
-xlabel("text") / ylabel("text")
-xlim([lo, hi]) / ylim([lo, hi])
-legend()
-savefig("file.svg")
+saveimagesc(M, file, title, cmap) — heatmap
+savehist(v, file, title)          — histogram
 ```
 
 ---

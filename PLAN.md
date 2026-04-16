@@ -51,10 +51,10 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 **Handoff notes:**
 - Last completed lesson: 04-embeddings-and-similarity
 - Next action: Start Phase 2 with `lessons/05-bigram-language-model/lesson.md`.
-- Known blockers (rustlab quirks to remember):
-  - `abs()` does not support matrix args — flatten with `reshape(M, 1, numel)` first.
+- Known blockers: None — all previously noted quirks have been resolved:
+  - `abs()` now supports matrix args natively.
   - `ones(n)` is a row vector; for `M * ones(n)` use `M * ones(n)'` (transpose to column).
-  - `savebar(v, path, title)` is 3 args, not 4 as noted in AGENTS.md.
+  - `savebar(v, path, title)` is 3 args; preferred API is now `bar(y, title); savefig(path)`.
 
 ---
 
@@ -81,7 +81,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 **Handoff notes:**
 - Last completed lesson: 06-linear-layers-and-gradient-descent
 - Next action: Start Phase 3 with `lessons/07-context-and-naive-averaging/lesson.md`.
-- Known blockers: No loops in rustlab — gradient descent unrolled as 15 explicit steps. For the 2D loss landscape, used the analytic expansion L(w,b)=7.5w²+b²+5wb-30w-10b+30 with outer products instead of a nested loop. Two assignments cannot share one line.
+- Known blockers: None — `for`/`while` loops are fully supported. Gradient descent uses a `for` loop (200 steps). The 2D loss landscape uses the analytic expansion with outer products for efficiency.
 
 ---
 
