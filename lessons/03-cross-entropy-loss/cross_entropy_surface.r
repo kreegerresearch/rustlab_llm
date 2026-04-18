@@ -45,6 +45,7 @@ print("  p=0.99  :", L_vhigh, "nats");
 figure()
 hold("on")
 plot(p_hat, loss, "color", "blue", "label", "L = -log(p)")
+hline(L_4, "gray", "baseline = log(4)")
 title("Cross-Entropy Loss vs. Predicted Probability of Correct Token")
 xlabel("Predicted probability of correct token (p_c)")
 ylabel("Loss L = -log(p_c)  [nats]")

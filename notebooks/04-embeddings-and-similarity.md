@@ -1,3 +1,8 @@
+---
+title: "Lesson 04 — Embeddings & Similarity"
+order: 4
+---
+
 # Lesson 04 — Embeddings & Similarity
 
 One-hot vectors are orthogonal — every pair of tokens is equally "distant". This
@@ -16,7 +21,7 @@ $$\mathbf{E} \in \mathbb{R}^{|\mathcal{V}| \times d}$$
 where $d \ll |\mathcal{V}|$ is the embedding dimension. Row $\mathbf{E}_i$ is the
 learned embedding for token $i$.
 
-**Lookup as matrix multiplication.** For a one-hot vector $\mathbf{e}_i$ (Lesson 01):
+**Lookup as matrix multiplication.** For a one-hot vector $\mathbf{e}_i$ ([Lesson 01](01-tokens-and-encoding.md)):
 
 $$\mathbf{E}^\top \mathbf{e}_i = \mathbf{E}_i$$
 
@@ -33,37 +38,34 @@ d_embed = 6;
 % Random initialisation (scaled by 0.1 — standard practice)
 E = randn(vocab_size, d_embed) * 0.1;
 
-print("Embedding matrix E  (shape: vocab_size x d_embed):");
-print(size(E));
+print("Embedding matrix E:");
 print(E);
 ```
 
-```rustlab
-% Embedding lookup via one-hot multiply
-% Token index 3 → one-hot e3 = [0,0,1,0,0,0,0,0]
-% h = e3 * E  selects row 3
+Shape: ${size(E, 1)} $\times$ ${size(E, 2)} — one row per token in a
+${d_embed}-dimensional embedding space.
 
+```rustlab
+% Token index 3 → one-hot e3 selects row 3 via  h = e3 * E
 e3 = [0, 0, 1, 0, 0, 0, 0, 0];
 h3 = e3 * E;
 
-print("One-hot vector for token 3:");
-print(e3);
-print("Embedded representation (= row 3 of E):");
-print(h3);
-print("Row 3 of E directly:");
-print(E(3));
-
-% Max difference should be ~0 (machine epsilon)
 diff = max(abs(h3 - E(3)));
-print("Max difference (should be ~0):", diff);
+print("Embedded representation h3:", h3);
+print("Row 3 of E:", E(3));
 ```
+
+The lookup matches the direct row access exactly —
+$\max|h_3 - E_3| = ${diff:%.2e}$ (machine epsilon).
 
 At random initialisation all rows look similar. After training, semantically related
 tokens would cluster together:
 
 ```rustlab
-saveimagesc(E, "outputs/embedding_matrix.svg", "Embedding Matrix E  (8 tokens x 6 dims)  - random init", "viridis")
-print("Saved outputs/embedding_matrix.svg")
+figure()
+imagesc(E, "viridis")
+title("Embedding Matrix E  (8 tokens x 6 dims)  - random init")
+savefig("outputs/embedding_matrix.svg")
 ```
 
 ---
@@ -133,18 +135,21 @@ S = [s_kk, s_kq, s_km, s_kw; s_qk, s_qq, s_qm, s_qw; s_mk, s_mq, s_mm, s_mw; s_w
 
 print("Cosine similarity matrix (king, queen, man, woman):");
 print(S);
-print("king  / queen (high — both royal):", s_kq);
-print("king  / man   (moderate — same gender):", s_km);
-print("queen / woman (moderate — same gender):", s_qw);
 
 % Verify symmetry: S_ij == S_ji
 sym_err = max(reshape(abs(S - transpose(S)), 1, 16));
-print("Symmetry check max|S - S'| (should be ~0):", sym_err);
 ```
 
+Key pairs: king/queen = ${s_kq:%.3f}$ (both royal),
+king/man = ${s_km:%.3f}$ (same gender),
+queen/woman = ${s_qw:%.3f}$ (same gender).
+The matrix is symmetric: $\max|S - S^\top| = ${sym_err:%.2e}$.
+
 ```rustlab
-saveimagesc(S, "outputs/cosine_similarity.svg", "Cosine Similarity: king, queen, man, woman", "viridis")
-print("Saved outputs/cosine_similarity.svg")
+figure()
+imagesc(S, "viridis")
+title("Cosine Similarity: king, queen, man, woman")
+savefig("outputs/cosine_similarity.svg")
 ```
 
 ---
@@ -164,14 +169,12 @@ sim_to_king  = cos_sim(analogy, king);
 sim_to_queen = cos_sim(analogy, queen);
 sim_to_man   = cos_sim(analogy, man);
 sim_to_woman = cos_sim(analogy, woman);
-
-print("Similarity of (king - man + woman) to:");
-print("  king :", sim_to_king);
-print("  queen:", sim_to_queen);
-print("  man  :", sim_to_man);
-print("  woman:", sim_to_woman);
-print("Closest token should be 'queen'.");
 ```
+
+Similarity of $\mathbf{E}_{\text{king}} - \mathbf{E}_{\text{man}} + \mathbf{E}_{\text{woman}}$
+to each vocab item: king = ${sim_to_king:%.3f}$, **queen = ${sim_to_queen:%.3f}**,
+man = ${sim_to_man:%.3f}$, woman = ${sim_to_woman:%.3f}$. The closest token is
+**queen**, as predicted.
 
 This emergent structure is not programmed — it arises from training the model to
 predict next tokens. Dense embeddings are a compressed summary of co-occurrence
@@ -184,9 +187,14 @@ patterns in language.
 - Embeddings are the first transformation inside every language model: one-hot $\to$
   dense vector via the embedding matrix $\mathbf{E}$.
 - The embedding matrix is **learned** jointly with the rest of the model by gradient
-  descent (Lesson 06). At initialisation it is random; after training, similar tokens
+  descent ([Lesson 06](06-linear-layers-and-gradient-descent.md)). At initialisation it is
+  random; after training, similar tokens
   cluster.
 - Cosine similarity measures direction, not magnitude — robust to frequency
   differences between tokens.
 - The embedding dimension $d$ is a critical hyperparameter: too small and the vectors
   lack nuance; too large and the model is expensive to train.
+
+---
+
+← [Lesson 03 — Cross-Entropy Loss](03-cross-entropy-loss.md) · Next: [Lesson 05 — The Bigram Language Model](05-bigram-language-model.md) →

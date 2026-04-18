@@ -1,6 +1,11 @@
+---
+title: "Lesson 06 — Linear Layers & Gradient Descent"
+order: 6
+---
+
 # Lesson 06 — Linear Layers & Gradient Descent
 
-The bigram model (Lesson 05) uses fixed counts. To learn from data we need
+The bigram model ([Lesson 05](05-bigram-language-model.md)) uses fixed counts. To learn from data we need
 **learnable parameters** and a method to improve them. This lesson introduces the
 **linear layer** $\mathbf{y} = \mathbf{W}\mathbf{x} + \mathbf{b}$ and **gradient
 descent** — the engine that trains every neural network.
@@ -17,7 +22,7 @@ $$\mathbf{y} = \mathbf{W}\mathbf{x} + \mathbf{b}$$
 - $\mathbf{W} \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$ — the **weight matrix** (learnable)
 - $\mathbf{b} \in \mathbb{R}^{d_{\text{out}}}$ — the **bias vector** (learnable)
 
-The embedding lookup from Lesson 04 is a special case: multiplying the embedding
+The embedding lookup from [Lesson 04](04-embeddings-and-similarity.md) is a special case: multiplying the embedding
 matrix by a one-hot input selects one row — exactly a linear layer.
 
 ## Loss Function: Mean Squared Error
@@ -26,7 +31,7 @@ For a dataset $\{(x_i, y_i)\}$ the **MSE loss** is:
 
 $$\mathcal{L}(w, b) = \frac{1}{N} \sum_{i=1}^{N} (w x_i + b - y_i)^2$$
 
-For language models the loss is cross-entropy (Lesson 03), but MSE makes the geometry
+For language models the loss is cross-entropy ([Lesson 03](03-cross-entropy-loss.md)), but MSE makes the geometry
 of the loss landscape transparent.
 
 ---
@@ -43,25 +48,26 @@ relationship is $y = 2x$ (so $w^* = 2$, $b^* = 0$):
 x = [1.0, 2.0, 3.0, 4.0];
 y = [2.0, 4.0, 6.0, 8.0];
 
-% Verify loss at true and initial parameters
-y_hat_true = 2.0 * x + 0.0;
-L_true = real(mean((y_hat_true - y) .^ 2));
-print("Loss at true parameters (w=2, b=0):", L_true, "  (should be 0)");
-
-y_hat_init = 0.0 * x + 0.0;
-L_init = real(mean((y_hat_init - y) .^ 2));
-print("Loss at initial parameters (w=0, b=0):", L_init);
+% Loss at true parameters (w=2, b=0) and at initial parameters (w=0, b=0)
+L_true = real(mean((2.0 * x + 0.0 - y) .^ 2));
+L_init = real(mean((0.0 * x + 0.0 - y) .^ 2));
 ```
+
+At the optimum, $\mathcal{L}(2, 0) = ${L_true:%.3f}$ — zero loss because
+$y = 2x$ exactly. Starting from $(w, b) = (0, 0)$ the loss is
+${L_init:%.2f}$, the distance we need gradient descent to close.
 
 The analytic expansion for this dataset is:
 
 $$\mathcal{L}(w,b) = 7.5w^2 + b^2 + 5wb - 30w - 10b + 30$$
 
+<!-- hide -->
 ```rustlab
-% Verify: L(2, 0) = 7.5*4 + 0 + 0 - 60 + 0 + 30 = 0
+% Verify: L(2, 0) = 7.5*4 - 60 + 30 = 0
 L_check = 7.5 * 4.0 + 0.0 + 5.0 * 2.0 * 0.0 - 30.0 * 2.0 - 10.0 * 0.0 + 30.0;
-print("Analytic formula at (w=2, b=0):", L_check, "  (should be 0)");
+```
 
+```rustlab
 % Build a 40x40 grid of L(w, b) using outer products
 n_grid = 40;
 w_grid = linspace(-0.5, 3.5, n_grid);
@@ -74,12 +80,19 @@ term_w  = outer(ones(n_grid), -30.0 * w_grid);
 term_b  = outer(-10.0 * b_grid, ones(n_grid));
 
 L_matrix = term_w2 + term_b2 + term_wb + term_w + term_b + 30.0;
-
 min_loss_flat = min(reshape(L_matrix, 1, n_grid * n_grid));
-print("Minimum loss on grid (should be ~0):", min_loss_flat);
+```
 
-saveimagesc(L_matrix, "outputs/loss_landscape.svg", "MSE Loss L(w,b): y=2x  minimum at (w=2, b=0)", "viridis")
-print("Saved outputs/loss_landscape.svg");
+Analytic check: $\mathcal{L}(2, 0) = ${L_check:%.3f}$ from the expanded
+formula. The minimum over the $40 \times 40$ grid is
+${min_loss_flat:%.4f}$ — a hair above zero because the grid doesn't
+land exactly on $(2, 0)$.
+
+```rustlab
+figure()
+imagesc(L_matrix, "viridis")
+title("MSE Loss L(w,b): y=2x  minimum at (w=2, b=0)")
+savefig("outputs/loss_landscape.svg")
 ```
 
 The dark region (minimum loss) is centred at $(w, b) \approx (2, 0)$. The elliptical
@@ -103,8 +116,6 @@ $$\frac{\partial \mathcal{L}}{\partial w} = \frac{2}{N} \sum_{i=1}^{N} (\hat{y}_
 Starting at $(w_0, b_0) = (0, 0)$ with $\eta = 0.05$:
 
 ```rustlab
-x = [1.0, 2.0, 3.0, 4.0];
-y = [2.0, 4.0, 6.0, 8.0];
 npts = 4.0;
 lr = 0.05;
 n_steps = 200;
@@ -120,26 +131,22 @@ w_path(1)    = w;
 b_path(1)    = b;
 loss_path(1) = mean((w * x + b - y) .^ 2);
 
-print("Starting gradient descent: w=0, b=0, lr=0.05");
-print("True optimum: w*=2, b*=0");
-
 for step = 1:n_steps
   pred     = w * x + b;
   residual = pred - y;
   dw = (2.0 / npts) * sum(residual .* x);
   db = (2.0 / npts) * sum(residual);
-  w = w - lr * dw;
-  b = b - lr * db;
+  w -= lr * dw;
+  b -= lr * db;
   w_path(step + 1)    = w;
   b_path(step + 1)    = b;
   loss_path(step + 1) = mean((w * x + b - y) .^ 2);
 end
-
-print("After", n_steps, "steps:");
-print("  w =", w, "  (true w* = 2)");
-print("  b =", b, "  (true b* = 0)");
-print("  Loss =", loss_path(n_steps + 1));
 ```
+
+After ${n_steps} steps with $\eta = ${lr}$: $w = ${w:%.4f}$ (true
+$w^* = 2$), $b = ${b:%.4f}$ (true $b^* = 0$),
+$\mathcal{L} = ${loss_path(n_steps + 1):%.2e}$ — effectively zero.
 
 The loss decreases monotonically — guaranteed for MSE with a suitable learning rate.
 Early steps are large (steep gradients far from the minimum); later steps are small.
@@ -147,20 +154,22 @@ Early steps are large (steep gradients far from the minimum); later steps are sm
 ```rustlab
 figure()
 plot(loss_path, "color", "blue", "label", "MSE loss")
+hold("on")
+hline(0.0, "gray", "minimum")
 title("Gradient Descent: Loss vs. Step")
 xlabel("Step")
 ylabel("MSE Loss")
 legend()
 savefig("outputs/loss_curve.svg")
-print("Saved outputs/loss_curve.svg");
 ```
 
 The trajectory in $(w, b)$ space curves — it does not go straight to the minimum
 because the loss surface has different curvature in the $w$ and $b$ directions:
 
 ```rustlab
-savescatter(w_path, b_path, "outputs/gd_path.svg", "Gradient Descent Path in (w,b) Space - converges to (2, 0)")
-print("Saved outputs/gd_path.svg");
+figure()
+scatter(w_path, b_path, "Gradient Descent Path in (w,b) Space - converges to (2, 0)")
+savefig("outputs/gd_path.svg")
 ```
 
 ---
@@ -194,3 +203,7 @@ print("Saved outputs/gd_path.svg");
 - A linear layer alone cannot learn complex functions. Stacking them without
   non-linearity is equivalent to a single linear layer. The activation function
   (Lesson 11) is what makes deep networks expressive.
+
+---
+
+← [Lesson 05 — The Bigram Language Model](05-bigram-language-model.md)

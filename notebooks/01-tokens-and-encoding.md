@@ -1,3 +1,8 @@
+---
+title: "Lesson 01 — Tokens & Text Encoding"
+order: 1
+---
+
 # Lesson 01 — Tokens & Text Encoding
 
 A language model never sees letters — it sees integers. This lesson builds the bridge
@@ -43,40 +48,34 @@ $$f_i = \frac{c_i}{\sum_{j=1}^{|\mathcal{V}|} c_j}$$
 This is a discrete probability distribution over the vocabulary. Let's compute it
 for our corpus:
 
+<!-- hide -->
 ```rustlab
-% Corpus: "to be or not to be" (18 characters including spaces)
-% Vocabulary (sorted): ' '=1, 'b'=2, 'e'=3, 'n'=4, 'o'=5, 'r'=6, 't'=7
+% Corpus: "to be or not to be" — vocabulary (sorted): ' ', b, e, n, o, r, t
+chars = {" ", "b", "e", "n", "o", "r", "t"};
+vocab_size = length(chars);
 
-vocab_size = 7;
-
-% Raw character counts
-%   ' ' : 5   b : 2   e : 2   n : 1   o : 4   r : 1   t : 3
+% Raw character counts, matching the table above
 counts = [5, 2, 2, 1, 4, 1, 3];
+```
 
+```rustlab
 total = sum(counts);
-print("Corpus: to be or not to be");
-print("Total characters:", total);
-print("Vocabulary size:", vocab_size);
-
-% Relative frequencies: f_i = c_i / sum(c)
 freqs = counts / total;
 
-print("Character counts (space, b, e, n, o, r, t):");
-print(counts);
-print("Relative frequencies:");
-print(freqs);
+print("Character counts (space, b, e, n, o, r, t):", counts);
+print("Relative frequencies:", freqs);
 print("Sum of frequencies (should be 1.0):", sum(freqs));
 ```
 
-The highest-frequency character is the space at $5/18 \approx 0.278$. Verify by
-counting spaces in `"to be or not to be"` — there are exactly five.
+The corpus has **${total}** characters across a vocabulary of size
+**${vocab_size}**. The highest-frequency character is the space at
+${max(freqs):%.3f} $\approx 5/18$ — exactly five spaces in
+`"to be or not to be"`.
 
 ```rustlab
-max_freq = max(freqs);
-print("Highest frequency:", max_freq);
-
-savebar(freqs, "outputs/char_frequencies.svg", "Character Frequencies: 'to be or not to be'")
-print("Saved outputs/char_frequencies.svg")
+figure()
+bar(chars, freqs, "Character Frequencies: 'to be or not to be'")
+savefig("outputs/char_frequencies.svg")
 ```
 
 The bar heights sum to 1.0 — this is a valid probability distribution over the
@@ -98,7 +97,7 @@ All one-hot vectors are mutually orthogonal:
 $$\mathbf{e}_i \cdot \mathbf{e}_j = \delta_{ij}$$
 
 No two tokens share any geometric similarity — a clean slate before the model learns
-its own representations (Lesson 04).
+its own representations ([Lesson 04](04-embeddings-and-similarity.md)).
 
 ### Building the one-hot matrix
 
@@ -109,22 +108,26 @@ $$\mathbf{X} = \begin{bmatrix} \mathbf{e}_{i_1} \\ \mathbf{e}_{i_2} \\ \vdots \\
 
 Let's build this for `"hello"` with vocabulary $\{e{:}1,\; h{:}2,\; l{:}3,\; o{:}4\}$:
 
+<!-- hide -->
 ```rustlab
+% Vocabulary for "hello": e=1, h=2, l=3, o=4
 vocab_size = 4;
-
-% One-hot rows (each is a basis vector in R^4)
 oh_e = [1, 0, 0, 0];
 oh_h = [0, 1, 0, 0];
 oh_l = [0, 0, 1, 0];
 oh_o = [0, 0, 0, 1];
+```
 
+```rustlab
 % "hello" → token sequence [h, e, l, l, o] → indices [2, 1, 3, 3, 4]
 X = [oh_h; oh_e; oh_l; oh_l; oh_o];
 
 print("One-hot matrix X for 'hello'  (5 tokens x 4 vocab):");
 print(X);
-print("Shape (rows=tokens, cols=vocab_size):", size(X));
 ```
+
+The matrix is ${size(X, 1)} $\times$ ${size(X, 2)} — one row per token, one
+column per vocabulary slot.
 
 Each row has exactly one non-zero entry. Rows 3 and 4 (both `l`) are identical —
 the model sees them as the same token.
@@ -136,19 +139,22 @@ Row sums must all equal 1, and distinct one-hot vectors must be orthogonal:
 ```rustlab
 % Row sums via matrix-vector product
 row_sums = X * ones(vocab_size)';
-print("Row sums (each must equal 1):");
-print(row_sums);
+print("Row sums (each must equal 1):", row_sums);
 
 % Orthogonality check
 dot_h_e = sum(oh_h .* oh_e);
 dot_l_l = sum(oh_l .* oh_l);
-print("Dot product h . e (should be 0):", dot_h_e);
-print("Dot product l . l (should be 1):", dot_l_l);
+print("Dot product h . e:", dot_h_e, "  l . l:", dot_l_l);
 ```
 
+Orthogonality confirmed: $\mathbf{e}_h \cdot \mathbf{e}_e = ${dot_h_e}$ and
+$\mathbf{e}_l \cdot \mathbf{e}_l = ${dot_l_l}$ — exactly $\delta_{ij}$.
+
 ```rustlab
-saveimagesc(X, "outputs/one_hot_matrix.svg", "One-Hot Matrix: 'hello' (5 tokens x 4 vocab)", "viridis")
-print("Saved outputs/one_hot_matrix.svg")
+figure()
+imagesc(X, "viridis")
+title("One-Hot Matrix: 'hello' (5 tokens x 4 vocab)")
+savefig("outputs/one_hot_matrix.svg")
 ```
 
 In the heatmap, each row has one bright cell (value = 1) and three dark cells
@@ -163,5 +169,9 @@ In the heatmap, each row has one bright cell (value = 1) and three dark cells
 - A character-level vocabulary is tiny (~100 in English) but forces the model to learn
   spelling from scratch. Larger vocabularies reduce sequence length but increase memory.
 - One-hot encoding does *not* imply characters are independent — it is only the
-  starting point. The embedding layer (Lesson 04) will project these orthogonal vectors
-  into a dense space where learned relationships emerge.
+  starting point. The embedding layer ([Lesson 04](04-embeddings-and-similarity.md)) will
+  project these orthogonal vectors into a dense space where learned relationships emerge.
+
+---
+
+Next: [Lesson 02 — Probability & Softmax](02-probability-and-softmax.md) →

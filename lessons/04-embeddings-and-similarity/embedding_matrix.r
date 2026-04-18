@@ -40,5 +40,8 @@ print("Max difference between lookup and direct row access (should be ~0):", dif
 # === Heatmap of Embedding Matrix ===
 # Rows = tokens (0..vocab_size-1), Columns = embedding dimensions (0..d_embed-1)
 # At random init all rows look similar; after training clusters would appear.
-saveimagesc(E, "outputs/embedding_matrix.svg", "Embedding Matrix E  (8 tokens x 6 dims)  — random init", "viridis")
+figure()
+imagesc(E, "viridis")
+title("Embedding Matrix E  (8 tokens x 6 dims)  — random init")
+savefig("outputs/embedding_matrix.svg")
 print("Saved outputs/embedding_matrix.svg")

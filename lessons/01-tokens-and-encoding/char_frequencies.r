@@ -38,5 +38,7 @@ print("Highest frequency:", max_freq);
 # === Bar Chart ===
 # x-axis: character index (1=space, 2=b, 3=e, 4=n, 5=o, 6=r, 7=t)
 # y-axis: relative frequency
-savebar(freqs, "outputs/char_frequencies.svg", "Character Frequencies: 'to be or not to be'")
+figure()
+bar(freqs, "Character Frequencies: 'to be or not to be'")
+savefig("outputs/char_frequencies.svg")
 print("Saved outputs/char_frequencies.svg")

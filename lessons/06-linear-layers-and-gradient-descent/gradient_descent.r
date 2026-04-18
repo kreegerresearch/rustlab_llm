@@ -32,8 +32,8 @@ for step = 1:n_steps
   residual = pred - y;
   dw = (2.0 / npts) * sum(residual .* x);
   db = (2.0 / npts) * sum(residual);
-  w = w - lr * dw;
-  b = b - lr * db;
+  w -= lr * dw;
+  b -= lr * db;
   w_path(step + 1)    = w;
   b_path(step + 1)    = b;
   loss_path(step + 1) = mean((w * x + b - y) .^ 2);
@@ -47,6 +47,8 @@ print("  Loss =", loss_path(n_steps + 1));
 # === Loss curve ===
 figure()
 plot(loss_path, "color", "blue", "label", "MSE loss")
+hold("on")
+hline(0.0, "gray", "minimum")
 title("Gradient Descent: Loss vs. Step")
 xlabel("Step")
 ylabel("MSE Loss")
@@ -55,5 +57,7 @@ savefig("outputs/loss_curve.svg")
 print("Saved outputs/loss_curve.svg");
 
 # === Gradient descent path in (w, b) space ===
-savescatter(w_path, b_path, "outputs/gd_path.svg", "Gradient Descent Path in (w,b) Space — converges to (2, 0)")
+figure()
+scatter(w_path, b_path, "Gradient Descent Path in (w,b) Space — converges to (2, 0)")
+savefig("outputs/gd_path.svg")
 print("Saved outputs/gd_path.svg");

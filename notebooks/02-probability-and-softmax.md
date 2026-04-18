@@ -1,3 +1,8 @@
+---
+title: "Lesson 02 — Probability & Softmax"
+order: 2
+---
+
 # Lesson 02 — Probability & Softmax
 
 A language model produces raw scores called **logits** — one per vocabulary token.
@@ -54,28 +59,19 @@ Let's see this in action with logits $\mathbf{z} = [2.0, 1.0, 0.5, -0.5]$:
 
 ```rustlab
 z = [2.0, 1.0, 0.5, -0.5];
-print("Logits z:", z);
 
-% Softmax at three temperatures
 p_cold    = softmax(z / 0.5);
 p_neutral = softmax(z / 1.0);
 p_warm    = softmax(z / 2.0);
 
-print("Probabilities at T=0.5 (cold):");
-print(p_cold);
-print("Probabilities at T=1.0 (neutral):");
-print(p_neutral);
-print("Probabilities at T=2.0 (warm):");
-print(p_warm);
-
-% Verify: all distributions sum to 1.0
-print("Sum at T=0.5 (should be 1):", sum(p_cold));
-print("Sum at T=1.0 (should be 1):", sum(p_neutral));
-print("Sum at T=2.0 (should be 1):", sum(p_warm));
+print("T=0.5 (cold)   :", p_cold);
+print("T=1.0 (neutral):", p_neutral);
+print("T=2.0 (warm)   :", p_warm);
 ```
 
-At $T = 0.5$ most mass concentrates on token 1 (logit 2.0). At $T = 2.0$ the
-distribution flattens out.
+Each row sums to ${sum(p_cold):%.3f} — a valid distribution. At $T = 0.5$
+token 1 gets ${p_cold(1):%.3f}$ of the mass; at $T = 2.0$ it gets only
+${p_warm(1):%.3f}$ — the distribution flattens as temperature rises.
 
 ```rustlab
 figure()
@@ -99,7 +95,6 @@ xlabel("Token index")
 ylim([0, 1])
 
 savefig("outputs/softmax_temperature.svg")
-print("Saved outputs/softmax_temperature.svg")
 ```
 
 ---
@@ -116,10 +111,13 @@ $$H(\mathbf{p}) = -\sum_{i=1}^{|\mathcal{V}|} p_i \log_2 p_i \quad [\text{bits}]
 
 Higher temperature $\to$ higher entropy. Let's measure this:
 
+<!-- hide -->
 ```rustlab
 eps = 1e-12;
 vocab_size = 4;
+```
 
+```rustlab
 p05 = softmax(z / 0.5);
 p10 = softmax(z / 1.0);
 p20 = softmax(z / 2.0);
@@ -129,34 +127,35 @@ H05 = -sum(p05 .* log2(p05 + eps));
 H10 = -sum(p10 .* log2(p10 + eps));
 H20 = -sum(p20 .* log2(p20 + eps));
 H50 = -sum(p50 .* log2(p50 + eps));
-
-print("Entropy at T=0.5:", H05, "bits");
-print("Entropy at T=1.0:", H10, "bits");
-print("Entropy at T=2.0:", H20, "bits");
-print("Entropy at T=5.0:", H50, "bits");
 ```
 
-The theoretical maximum for 4 tokens is $\log_2(4) = 2$ bits. Let's verify:
+Entropy climbs with temperature: $H(T{=}0.5) = ${H05:%.3f}$ bits,
+$H(T{=}1.0) = ${H10:%.3f}$ bits, $H(T{=}2.0) = ${H20:%.3f}$ bits,
+$H(T{=}5.0) = ${H50:%.3f}$ bits.
+
+The theoretical maximum for 4 tokens is $\log_2(4) = 2$ bits. Two sanity checks:
 
 ```rustlab
-H_max = log2(vocab_size);
-print("Maximum entropy (uniform, 4 tokens):", H_max, "bits");
-
-% Uniform distribution achieves maximum entropy
+% Uniform distribution — should hit the maximum of log2(4) = 2 bits
 p_uniform = ones(vocab_size) / vocab_size;
 H_uniform = -sum(p_uniform .* log2(p_uniform + eps));
-print("Entropy of uniform distribution:", H_uniform, "bits  (should equal 2.0)");
 
-% Near-deterministic distribution has entropy near 0
+% Near-deterministic distribution — should be near 0
 p_det = [0.999, 0.0003, 0.0003, 0.0004];
 H_det = -sum(p_det .* log2(p_det + eps));
-print("Entropy of near-deterministic:", H_det, "bits  (should be near 0)");
 ```
 
+Uniform over 4 tokens: $H = ${H_uniform:%.3f}$ bits (matches $\log_2 4 = 2$).
+Near-deterministic: $H = ${H_det:%.4f}$ bits (near zero, as expected).
+
 ```rustlab
+figure()
+T_labels = {"T=0.5", "T=1.0", "T=2.0", "T=5.0"};
 H_vec = [H05, H10, H20, H50];
-savebar(H_vec, "outputs/entropy_vs_temperature.svg", "Entropy (bits) at T = 0.5, 1.0, 2.0, 5.0")
-print("Saved outputs/entropy_vs_temperature.svg")
+bar(T_labels, H_vec, "Entropy (bits) vs. Temperature")
+hold("on")
+hline(log2(vocab_size), "red", "max = log2(4)")
+savefig("outputs/entropy_vs_temperature.svg")
 ```
 
 Entropy increases monotonically with temperature — the model becomes harder to
@@ -174,3 +173,7 @@ predict from.
 - At every sequence position the model must output a full distribution over all next
   tokens. Everything that follows — loss functions, training, sampling — depends on
   softmax.
+
+---
+
+← [Lesson 01 — Tokens & Text Encoding](01-tokens-and-encoding.md) · Next: [Lesson 03 — Cross-Entropy Loss](03-cross-entropy-loss.md) →

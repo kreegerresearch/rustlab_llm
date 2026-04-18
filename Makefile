@@ -2,7 +2,6 @@
 
 SCRIPTS := $(sort $(wildcard lessons/*/*.r))
 NOTEBOOKS := $(sort $(wildcard notebooks/*.md))
-NOTEBOOK_HTMLS := $(patsubst notebooks/%.md,notebooks/outputs/%.html,$(NOTEBOOKS))
 
 # ── Help ────────────────────────────────────────────────────────────
 
@@ -39,14 +38,13 @@ lesson-%:
 
 # ── Notebooks ────────────────────────────────────────────────────────
 
-notebooks: $(NOTEBOOK_HTMLS) ## Render all notebooks to HTML
-
-notebooks/outputs/%.html: notebooks/%.md | notebooks/outputs
-	rustlab-notebook render $< -o $@
+notebooks: $(NOTEBOOKS) | notebooks/outputs ## Render all notebooks to a site (HTML + index)
+	rustlab notebook render notebooks/ -o notebooks/outputs
 
 # Render a single notebook:  make notebook-03
-notebook-%: notebooks/outputs/%-*.html
-	@true
+notebook-%: | notebooks/outputs
+	@f=$$(ls notebooks/$*-*.md | head -1); \
+	rustlab notebook render "$$f" -o "notebooks/outputs/$$(basename $$f .md).html"
 
 notebooks/outputs:
 	mkdir -p $@

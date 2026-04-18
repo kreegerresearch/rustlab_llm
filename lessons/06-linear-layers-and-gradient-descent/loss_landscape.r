@@ -57,5 +57,8 @@ print("Minimum loss on grid (should be ≈ 0):", min_loss_flat);
 # Dark = low loss (near w=2, b=0), bright = high loss
 # Rows = b values (row 1 = most negative b = -3)
 # Cols = w values (col 1 = w = -0.5)
-saveimagesc(L_matrix, "outputs/loss_landscape.svg", "MSE Loss L(w,b): y=2x  minimum at (w=2, b=0)", "viridis")
+figure()
+imagesc(L_matrix, "viridis")
+title("MSE Loss L(w,b): y=2x  minimum at (w=2, b=0)")
+savefig("outputs/loss_landscape.svg")
 print("Saved outputs/loss_landscape.svg");

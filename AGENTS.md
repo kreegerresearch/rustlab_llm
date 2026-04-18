@@ -50,14 +50,18 @@ Makefile               # build targets for scripts, notebooks, and cleanup
 All commands run from the project root:
 
 ```bash
-make                    # run all scripts + render all notebooks
+make                    # show help
+make all                # run all scripts + render notebook site
 make scripts            # run all .r scripts
-make notebooks          # render all notebooks to notebooks/outputs/*.html
+make notebooks          # render notebooks to a site (HTML + auto-generated index.html)
 make lesson-01          # run only lesson 01's scripts (works for 01–06)
+make notebook-03        # render only lesson 03's notebook
 make clean              # delete all generated SVGs and notebook HTML
 make clean-scripts      # delete only script SVG outputs
 make clean-notebooks    # delete only notebook HTML outputs
 ```
+
+The notebook render uses directory mode: `rustlab notebook render notebooks/ -o notebooks/outputs` produces one HTML per `.md` plus an `index.html` landing page. `notebooks/index.md` supplies the landing-page title and intro; per-lesson `.md` files carry YAML frontmatter with `title:` and `order:` so the index lists them in lesson order.
 
 Single script:
 ```bash
@@ -203,13 +207,17 @@ legend("s1", "s2")
 clf                                          — clear current figure
 ```
 
-**Shorthand save wrappers (backwards-compatible):**
+**Canonical save pattern.** The shorthand `savebar`, `savescatter`, `saveimagesc`, and `savehist` wrappers are deprecated — use the `plot/bar/scatter/imagesc` call followed by `savefig(file)`:
+
 ```
-savefig(v, file, title)           — line plot
-savebar(y, file, title)           — bar chart
-savescatter(x, y, file, title)    — scatter plot
-saveimagesc(M, file, title, cmap) — heatmap
-savehist(v, file, title)          — histogram
+figure()
+bar(y, "title")                    % or: scatter(x, y, "title")
+savefig("outputs/chart.svg")
+
+figure()
+imagesc(M, "viridis")
+title("Heatmap")
+savefig("outputs/heatmap.svg")
 ```
 
 ---

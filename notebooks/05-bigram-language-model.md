@@ -1,3 +1,8 @@
+---
+title: "Lesson 05 — The Bigram Language Model"
+order: 5
+---
+
 # Lesson 05 — The Bigram Language Model
 
 A language model assigns a probability to every possible next token. The **bigram
@@ -33,18 +38,17 @@ $$P_{ij} = \frac{C_{ij}}{\sum_{k=1}^{|\mathcal{V}|} C_{ik}}$$
 
 Let's build this for the corpus `"abcbabcba"`:
 
+<!-- hide -->
 ```rustlab
-% Corpus: "abcbabcba"  (9 characters)
-% Vocabulary: { a:1, b:2, c:3 }
-
+% Corpus: "abcbabcba" — vocabulary a=1, b=2, c=3
 vocab_size = 3;
 seq = [1, 2, 3, 2, 1, 2, 3, 2, 1];
-n_tokens = len(seq);
-n_bigrams = n_tokens - 1;
+tokens = {"a", "b", "c"};
+```
 
-print("Corpus: abcbabcba");
-print("Vocabulary: a=1  b=2  c=3");
-print("Number of bigrams:", n_bigrams);
+```rustlab
+n_tokens  = len(seq);
+n_bigrams = n_tokens - 1;
 
 % Build the count matrix
 C = zeros(vocab_size, vocab_size);
@@ -56,10 +60,10 @@ end
 
 print("Bigram count matrix C  (row=current, col=next):");
 print(C);
-
-total_counts = sum(reshape(C, 1, vocab_size * vocab_size));
-print("Total bigram count (should be 8):", total_counts);
 ```
+
+The corpus has ${n_tokens} tokens, producing ${n_bigrams} bigrams. Total counts
+sum to ${sum(reshape(C, 1, vocab_size * vocab_size))} — matches $n_{\text{bigrams}}$.
 
 ```rustlab
 % Row-normalise to probability matrix P
@@ -102,8 +106,10 @@ print("Laplace-smoothed probability matrix P_smooth:");
 print(P_smooth);
 
 min_smooth = min(reshape(P_smooth, 1, vocab_size * vocab_size));
-print("Minimum value in P_smooth (should be > 0):", min_smooth);
 ```
+
+Every entry in $P^{\text{smooth}}$ is now $\geq ${min_smooth:%.3f}$ — no more
+zero-probability bigrams.
 
 ### Row Entropy
 
@@ -116,18 +122,22 @@ for i = 1:vocab_size
   p = P(i);
   H(i) = max([0.0, -sum(p .* log2(p + eps))]);
 end
-
-print("Row entropy H(a):", H(1), "bits  (0 = deterministic)");
-print("Row entropy H(b):", H(2), "bits  (1 = maximum for 2 options)");
-print("Row entropy H(c):", H(3), "bits  (0 = deterministic)");
 ```
 
-```rustlab
-saveimagesc(C, "outputs/bigram_counts.svg", "Bigram Count Matrix C (a,b,c)", "viridis")
-print("Saved outputs/bigram_counts.svg");
+Row entropies: $H(a) = ${H(1):%.3f}$ bits (deterministic → `b`),
+$H(b) = ${H(2):%.3f}$ bits (max for 2 equal options),
+$H(c) = ${H(3):%.3f}$ bits (deterministic → `b`).
 
-saveimagesc(P, "outputs/bigram_probabilities.svg", "Bigram Probability Matrix P (row-normalised)", "viridis")
-print("Saved outputs/bigram_probabilities.svg");
+```rustlab
+figure()
+imagesc(C, "viridis")
+title("Bigram Count Matrix C (a,b,c)")
+savefig("outputs/bigram_counts.svg")
+
+figure()
+imagesc(P, "viridis")
+title("Bigram Probability Matrix P (row-normalised)")
+savefig("outputs/bigram_probabilities.svg")
 ```
 
 ---
@@ -185,33 +195,32 @@ $$\mathcal{L} = -\frac{1}{T-1} \sum_{t=1}^{T-1} \log P_{x_t, x_{t+1}}$$
 ```rustlab
 log_probs = [log(1.0), log(0.5), log(1.0), log(0.5), log(1.0), log(0.5), log(1.0), log(0.5)];
 mean_ce = -real(mean(log_probs));
-print("Mean cross-entropy loss on training corpus (nats):", mean_ce);
-print("Perplexity = exp(loss):", exp(mean_ce));
+ppl = exp(mean_ce);
 ```
+
+Mean cross-entropy on the training corpus: ${mean_ce:%.4f}$ nats, corresponding
+to perplexity ${ppl:%.3f}$ — the model's "effective branching factor" at each
+step.
 
 ```rustlab
 figure()
 subplot(3, 1, 1)
-plot(P(1), "color", "blue", "label", "P(next | a)")
-title("P(next | a) - deterministic: always b")
+bar(tokens, P(1), "P(next | a) — deterministic: always b")
 ylabel("Probability")
 ylim([0, 1])
 
 subplot(3, 1, 2)
-plot(P(2), "color", "green", "label", "P(next | b)")
-title("P(next | b) - equal: a or c")
+bar(tokens, P(2), "P(next | b) — equal: a or c")
 ylabel("Probability")
 ylim([0, 1])
 
 subplot(3, 1, 3)
-plot(P(3), "color", "red", "label", "P(next | c)")
-title("P(next | c) - deterministic: always b")
-xlabel("Token index (1=a, 2=b, 3=c)")
+bar(tokens, P(3), "P(next | c) — deterministic: always b")
+xlabel("Next token")
 ylabel("Probability")
 ylim([0, 1])
 
 savefig("outputs/bigram_row_distributions.svg")
-print("Saved outputs/bigram_row_distributions.svg");
 ```
 
 ---
@@ -226,3 +235,7 @@ print("Saved outputs/bigram_row_distributions.svg");
   model should beat it to justify its cost.
 - Its weakness: context is limited to one token. It cannot model dependencies spanning
   more than two positions.
+
+---
+
+← [Lesson 04 — Embeddings & Similarity](04-embeddings-and-similarity.md) · Next: [Lesson 06 — Linear Layers & Gradient Descent](06-linear-layers-and-gradient-descent.md) →

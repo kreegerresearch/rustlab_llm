@@ -50,5 +50,9 @@ print("Entropy of near-deterministic distribution:", H_det, "bits  (should be â‰
 # === Entropy vs Temperature bar chart ===
 # Four representative temperatures
 H_vec = [H05, H10, H20, H50];
-savebar(H_vec, "outputs/entropy_vs_temperature.svg", "Entropy (bits) at T = 0.5, 1.0, 2.0, 5.0")
+figure()
+bar(H_vec, "Entropy (bits) at T = 0.5, 1.0, 2.0, 5.0")
+hold("on")
+hline(log2(vocab_size), "red", "max = log2(4)")
+savefig("outputs/entropy_vs_temperature.svg")
 print("Saved outputs/entropy_vs_temperature.svg")

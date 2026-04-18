@@ -83,8 +83,14 @@ print("Row entropy H(b) bits:", H(2), "  (1 = maximum for 2 options)");
 print("Row entropy H(c) bits:", H(3), "  (0 = deterministic)");
 
 # === Heatmaps ===
-saveimagesc(C, "outputs/bigram_counts.svg", "Bigram Count Matrix C (a,b,c)", "viridis")
+figure()
+imagesc(C, "viridis")
+title("Bigram Count Matrix C (a,b,c)")
+savefig("outputs/bigram_counts.svg")
 print("Saved outputs/bigram_counts.svg");
 
-saveimagesc(P, "outputs/bigram_probabilities.svg", "Bigram Probability Matrix P (row-normalised)", "viridis")
+figure()
+imagesc(P, "viridis")
+title("Bigram Probability Matrix P (row-normalised)")
+savefig("outputs/bigram_probabilities.svg")
 print("Saved outputs/bigram_probabilities.svg");

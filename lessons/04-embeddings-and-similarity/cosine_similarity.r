@@ -79,5 +79,8 @@ print("Closest token should be 'queen'.");
 
 # === Heatmap of Similarity Matrix ===
 # Bright = similar (cos ~1), dark = dissimilar (cos ~0 or negative)
-saveimagesc(S, "outputs/cosine_similarity.svg", "Cosine Similarity: king, queen, man, woman", "viridis")
+figure()
+imagesc(S, "viridis")
+title("Cosine Similarity: king, queen, man, woman")
+savefig("outputs/cosine_similarity.svg")
 print("Saved outputs/cosine_similarity.svg")
