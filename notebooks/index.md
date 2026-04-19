@@ -18,8 +18,8 @@ algebra up to a complete decoder — nothing is a black box.
   softmax, cross-entropy, and embeddings.
 - **Phase 2 — First Working Model** *(Complete)* — Lessons 05–06 build a
   bigram model and introduce gradient descent on a linear layer.
-- **Phase 3 — Attention** *(Planned)* — Scaled dot-product and multi-head
-  attention.
+- **Phase 3 — Attention** *(Complete)* — Lessons 07–09 cover context-aware
+  aggregation, scaled dot-product attention, and multi-head attention.
 - **Phase 4 — Transformer Components** *(Planned)* — Positional encoding,
   MLP block, LayerNorm and residuals.
 - **Phase 5 — Full GPT** *(Planned)* — Assemble the transformer block and

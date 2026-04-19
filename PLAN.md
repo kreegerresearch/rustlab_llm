@@ -15,7 +15,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 |-------|-------|--------|
 | 1 | Foundations | Complete |
 | 2 | First Working Model | Complete |
-| 3 | Attention Mechanism | Not started |
+| 3 | Attention Mechanism | Complete |
 | 4 | Transformer Components | Not started |
 | 5 | Full GPT Architecture | Not started |
 | 6 | Training | Not started |
@@ -105,12 +105,12 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - The causal mask is explained as preventing information leakage from future tokens.
 - Multi-head attention motivation (different heads capture different patterns) is stated and illustrated.
 
-**Status:** Not started
+**Status:** Complete
 
 **Handoff notes:**
-- Last completed lesson: —
-- Next action: Start with `lessons/07-context-and-naive-averaging/lesson.md`.
-- Known blockers: None — `reshape(A, m, n)` now confirmed available.
+- Last completed lesson: 09-multi-head-attention
+- Next action: Start Phase 4 with `lessons/10-positional-encoding/lesson.md`.
+- Known blockers: None — matrix slicing (`V1(t,k) = X(t,k)`), `cos`/`sin` on scalars, `pi` constant, and horizontal concat `[A, B]` all confirmed working. Rustlab `function ... end` definitions support matrix returns and compose cleanly (see `causal_attention_weights` helper in lessons 09's scripts).
 
 ---
 

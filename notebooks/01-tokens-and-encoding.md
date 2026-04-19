@@ -75,7 +75,6 @@ ${max(freqs):%.3f} $\approx 5/18$ — exactly five spaces in
 ```rustlab
 figure()
 bar(chars, freqs, "Character Frequencies: 'to be or not to be'")
-savefig("outputs/char_frequencies.svg")
 ```
 
 The bar heights sum to 1.0 — this is a valid probability distribution over the
@@ -154,7 +153,6 @@ $\mathbf{e}_l \cdot \mathbf{e}_l = ${dot_l_l}$ — exactly $\delta_{ij}$.
 figure()
 imagesc(X, "viridis")
 title("One-Hot Matrix: 'hello' (5 tokens x 4 vocab)")
-savefig("outputs/one_hot_matrix.svg")
 ```
 
 In the heatmap, each row has one bright cell (value = 1) and three dark cells

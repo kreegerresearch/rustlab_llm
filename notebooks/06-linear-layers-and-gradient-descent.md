@@ -92,7 +92,6 @@ land exactly on $(2, 0)$.
 figure()
 imagesc(L_matrix, "viridis")
 title("MSE Loss L(w,b): y=2x  minimum at (w=2, b=0)")
-savefig("outputs/loss_landscape.svg")
 ```
 
 The dark region (minimum loss) is centred at $(w, b) \approx (2, 0)$. The elliptical
@@ -160,7 +159,6 @@ title("Gradient Descent: Loss vs. Step")
 xlabel("Step")
 ylabel("MSE Loss")
 legend()
-savefig("outputs/loss_curve.svg")
 ```
 
 The trajectory in $(w, b)$ space curves — it does not go straight to the minimum
@@ -169,7 +167,6 @@ because the loss surface has different curvature in the $w$ and $b$ directions:
 ```rustlab
 figure()
 scatter(w_path, b_path, "Gradient Descent Path in (w,b) Space - converges to (2, 0)")
-savefig("outputs/gd_path.svg")
 ```
 
 ---

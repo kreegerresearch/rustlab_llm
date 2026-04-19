@@ -54,14 +54,14 @@ make                    # show help
 make all                # run all scripts + render notebook site
 make scripts            # run all .r scripts
 make notebooks          # render notebooks to a site (HTML + auto-generated index.html)
-make lesson-01          # run only lesson 01's scripts (works for 01–06)
+make lesson-01          # run only lesson 01's scripts (works for 01–09)
 make notebook-03        # render only lesson 03's notebook
 make clean              # delete all generated SVGs and notebook HTML
 make clean-scripts      # delete only script SVG outputs
 make clean-notebooks    # delete only notebook HTML outputs
 ```
 
-The notebook render uses directory mode: `rustlab notebook render notebooks/ -o notebooks/outputs` produces one HTML per `.md` plus an `index.html` landing page. `notebooks/index.md` supplies the landing-page title and intro; per-lesson `.md` files carry YAML frontmatter with `title:` and `order:` so the index lists them in lesson order.
+The notebook render uses directory mode: `rustlab notebook render notebooks/ -o site` produces one HTML per `.md` plus an `index.html` landing page in `./site/`. `notebooks/index.md` supplies the landing-page title and intro; per-lesson `.md` files carry YAML frontmatter with `title:` and `order:` so the index lists them in lesson order.
 
 Single script:
 ```bash

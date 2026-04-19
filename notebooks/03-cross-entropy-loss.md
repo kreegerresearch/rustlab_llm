@@ -73,7 +73,6 @@ xlabel("Predicted probability of correct token (p_c)")
 ylabel("Loss L = -log(p_c)  [nats]")
 ylim([0, 6])
 legend()
-savefig("outputs/cross_entropy_surface.svg")
 ```
 
 At $\hat{p}_c = 1/|\mathcal{V}|$ (uniform prediction — the model knows nothing), the

@@ -65,7 +65,6 @@ tokens would cluster together:
 figure()
 imagesc(E, "viridis")
 title("Embedding Matrix E  (8 tokens x 6 dims)  - random init")
-savefig("outputs/embedding_matrix.svg")
 ```
 
 ---
@@ -149,7 +148,6 @@ The matrix is symmetric: $\max|S - S^\top| = ${sym_err:%.2e}$.
 figure()
 imagesc(S, "viridis")
 title("Cosine Similarity: king, queen, man, woman")
-savefig("outputs/cosine_similarity.svg")
 ```
 
 ---

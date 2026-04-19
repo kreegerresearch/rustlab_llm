@@ -94,7 +94,6 @@ ylabel("Probability")
 xlabel("Token index")
 ylim([0, 1])
 
-savefig("outputs/softmax_temperature.svg")
 ```
 
 ---
@@ -155,7 +154,6 @@ H_vec = [H05, H10, H20, H50];
 bar(T_labels, H_vec, "Entropy (bits) vs. Temperature")
 hold("on")
 hline(log2(vocab_size), "red", "max = log2(4)")
-savefig("outputs/entropy_vs_temperature.svg")
 ```
 
 Entropy increases monotonically with temperature — the model becomes harder to

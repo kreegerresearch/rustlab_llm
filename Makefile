@@ -38,15 +38,15 @@ lesson-%:
 
 # ── Notebooks ────────────────────────────────────────────────────────
 
-notebooks: $(NOTEBOOKS) | notebooks/outputs ## Render all notebooks to a site (HTML + index)
-	rustlab notebook render notebooks/ -o notebooks/outputs
+notebooks: $(NOTEBOOKS) | site ## Render all notebooks to a site (HTML + index)
+	rustlab notebook render notebooks/ -o site
 
 # Render a single notebook:  make notebook-03
-notebook-%: | notebooks/outputs
+notebook-%: | site
 	@f=$$(ls notebooks/$*-*.md | head -1); \
-	rustlab notebook render "$$f" -o "notebooks/outputs/$$(basename $$f .md).html"
+	rustlab notebook render "$$f" -o "site/$$(basename $$f .md).html"
 
-notebooks/outputs:
+site:
 	mkdir -p $@
 
 # ── Clean ────────────────────────────────────────────────────────────
@@ -59,4 +59,4 @@ clean-scripts: ## Delete only script SVG outputs
 	rm -rf lessons/*/outputs/*.svg
 
 clean-notebooks: ## Delete only notebook HTML outputs
-	rm -rf notebooks/outputs
+	rm -rf site

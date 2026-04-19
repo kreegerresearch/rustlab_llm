@@ -33,7 +33,7 @@ Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts
 | 05 | The Bigram Language Model | Count-based next-token prediction; train/sample loop |
 | 06 | Linear Layers & Gradient Descent | y = Wx + b; loss landscape; gradient step |
 
-### Phase 3 — Attention Mechanism
+### Phase 3 — Attention Mechanism `(Complete)`
 
 | # | Title | Core Concept |
 |---|-------|-------------|

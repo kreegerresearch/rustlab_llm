@@ -132,12 +132,10 @@ $H(c) = ${H(3):%.3f}$ bits (deterministic → `b`).
 figure()
 imagesc(C, "viridis")
 title("Bigram Count Matrix C (a,b,c)")
-savefig("outputs/bigram_counts.svg")
 
 figure()
 imagesc(P, "viridis")
 title("Bigram Probability Matrix P (row-normalised)")
-savefig("outputs/bigram_probabilities.svg")
 ```
 
 ---
@@ -220,7 +218,6 @@ xlabel("Next token")
 ylabel("Probability")
 ylim([0, 1])
 
-savefig("outputs/bigram_row_distributions.svg")
 ```
 
 ---
