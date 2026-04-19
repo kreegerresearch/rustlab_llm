@@ -62,3 +62,17 @@ imagesc(L_matrix, "viridis")
 title("MSE Loss L(w,b): y=2x  minimum at (w=2, b=0)")
 savefig("outputs/loss_landscape.svg")
 print("Saved outputs/loss_landscape.svg");
+
+# === 3D surface view ===
+# meshgrid(w_grid, b_grid) returns coordinate matrices aligned with L_matrix
+# (rows = b index, cols = w index) so surf can render the bowl directly.
+[W_mesh, B_mesh] = meshgrid(w_grid, b_grid);
+
+figure()
+surf(W_mesh, B_mesh, L_matrix, "viridis")
+title("MSE Loss Surface L(w,b) — convex paraboloid")
+xlabel("w")
+ylabel("b")
+savefig("outputs/loss_surface.svg")
+savefig("outputs/loss_surface.html")
+print("Saved outputs/loss_surface.svg and .html");

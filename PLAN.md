@@ -51,10 +51,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 **Handoff notes:**
 - Last completed lesson: 04-embeddings-and-similarity
 - Next action: Start Phase 2 with `lessons/05-bigram-language-model/lesson.md`.
-- Known blockers: None — all previously noted quirks have been resolved:
-  - `abs()` now supports matrix args natively.
-  - `ones(n)` is a row vector; for `M * ones(n)` use `M * ones(n)'` (transpose to column).
-  - `savebar(v, path, title)` is 3 args; preferred API is now `bar(y, title); savefig(path)`.
+- Known blockers: None.
 
 ---
 
@@ -67,9 +64,9 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - `06-linear-layers-and-gradient-descent`
 
 **Deliverables:**
-- [ ] Lesson 05 visualises a bigram frequency matrix and demonstrates the train → sample loop conceptually
-- [ ] Lesson 06 visualises a 2D loss landscape and shows gradient descent converging
-- [ ] Both lessons reference Lesson 04 (embeddings) as prior knowledge — no new prerequisites beyond Phase 1
+- [x] Lesson 05 visualises a bigram frequency matrix and demonstrates the train → sample loop conceptually
+- [x] Lesson 06 visualises a 2D loss landscape (heatmap + rotatable `surf`) and shows gradient descent converging
+- [x] Both lessons reference Lesson 04 (embeddings) as prior knowledge — no new prerequisites beyond Phase 1
 
 **Acceptance criteria:**
 - Students see generated text (even nonsensical) from a trained bigram model after Lesson 05.
@@ -95,10 +92,10 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - `09-multi-head-attention`
 
 **Deliverables:**
-- [ ] Lesson 07 shows the failure mode of context-free models and naive bag-of-tokens averaging
-- [ ] Lesson 08 shows a full attention computation: scores → softmax → weighted sum, with causal mask overlay
-- [ ] Lesson 09 shows 4+ attention heads side-by-side and explains what concatenation does
-- [ ] All attention weight visualisations use `saveimagesc` with `"viridis"` colormap
+- [x] Lesson 07 shows the failure mode of context-free models and naive bag-of-tokens averaging
+- [x] Lesson 08 shows a full attention computation: scores → softmax → weighted sum, with causal mask overlay
+- [x] Lesson 09 shows 4+ attention heads side-by-side and explains what concatenation does
+- [x] All attention weight visualisations use `imagesc(M, "viridis")` followed by `savefig(...)`
 
 **Acceptance criteria:**
 - Attention is derived step by step in Lesson 08 Theory section; Q/K/V dimensions are explicit.
@@ -165,7 +162,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 **Handoff notes:**
 - Last completed lesson: —
 - Next action: Start with `lessons/13-transformer-block/lesson.md`.
-- Known blockers: None — `savebar` and all math functions now available.
+- Known blockers: None.
 
 ---
 

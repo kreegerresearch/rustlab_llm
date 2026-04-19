@@ -97,6 +97,27 @@ title("MSE Loss L(w,b): y=2x  minimum at (w=2, b=0)")
 The dark region (minimum loss) is centred at $(w, b) \approx (2, 0)$. The elliptical
 contours show the loss is more sensitive to $w$ than $b$.
 
+### The Loss Surface in 3D
+
+`meshgrid` builds coordinate matrices aligned with the loss grid, and `surf` renders
+it as a rotatable 3D paraboloid — the "bowl" whose unique minimum is the thing
+gradient descent is rolling toward.
+
+```rustlab
+[W_mesh, B_mesh] = meshgrid(w_grid, b_grid);
+
+figure()
+surf(W_mesh, B_mesh, L_matrix, "viridis")
+title("MSE Loss Surface L(w,b)")
+xlabel("w")
+ylabel("b")
+```
+
+The surface is a **convex paraboloid**: one global minimum, no local minima, no
+plateaus. Anisotropy is visible as elongation along the $b$ axis — the bowl is
+steeper in $w$ than in $b$, which is why the gradient-descent trajectory curves
+rather than heading straight for $(2, 0)$.
+
 ---
 
 ## Gradient Descent

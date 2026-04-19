@@ -100,22 +100,22 @@ Every component of a language model — from the embedding lookup to the final o
 
 Understanding the loss landscape geometry is essential for understanding training dynamics: why models sometimes get stuck, why learning rates matter, and why techniques like gradient clipping (Lesson 18) are necessary. The simple 2D MSE case makes this geometry visible and verifiable.
 
-**Common misconception:** A linear layer is not the same as a neural network — it lacks the non-linearity needed to learn complex functions. Stacking linear layers without a non-linear activation is equivalent to a single linear layer (the composition of linear maps is linear). The non-linearity (GELU in Lessons 11–13) is what makes deep networks expressive.
+**Common misconception:** A linear layer is not the same as a neural network — it lacks the non-linearity needed to learn complex functions. Stacking linear layers without a non-linear activation is equivalent to a single linear layer (the composition of linear maps is linear). The non-linearity (GELU in Lesson 11) is what makes deep networks expressive.
 
 ---
 
 ## Simulations
 
-### `loss_landscape.r` — 2D Loss Surface Heatmap
+### `loss_landscape.r` — 2D Loss Surface
 
 **What it computes:**
-Evaluates the MSE loss $\mathcal{L}(w, b)$ on a $40 \times 40$ grid over the $(w, b)$ plane, using the dataset $x = [1,2,3,4]$, $y = [2,4,6,8]$ (true relationship: $y = 2x$, so $w^* = 2$, $b^* = 0$). Saves the loss surface as a heatmap.
+Evaluates the MSE loss $\mathcal{L}(w, b)$ on a $40 \times 40$ grid over the $(w, b)$ plane, using the dataset $x = [1,2,3,4]$, $y = [2,4,6,8]$ (true relationship: $y = 2x$, so $w^* = 2$, $b^* = 0$). Renders the loss as both a top-down heatmap and a rotatable 3D surface (`surf`).
 
 **What to observe:**
 - The dark region (minimum loss) is centred at $(w, b) \approx (2, 0)$.
 - The surface is bowl-shaped — a convex paraboloid.
 - Loss increases rapidly as $w$ moves away from 2, especially in the $w$ direction (because $w$ is multiplied by $x$ which has larger magnitude).
-- Elliptical contours show that the loss is more sensitive to $w$ than to $b$.
+- Elliptical contours (heatmap) and the elongation of the 3D bowl along the $b$ axis both show that the loss is more sensitive to $w$ than to $b$.
 
 **Verify by hand:**
 Evaluate $\mathcal{L}(2.0, 0.0)$ manually. Confirm it equals 0 (the model perfectly predicts all four data points).
@@ -125,7 +125,7 @@ Evaluate $\mathcal{L}(2.0, 0.0)$ manually. Confirm it equals 0 (the model perfec
 ### `gradient_descent.r` — Gradient Descent Path
 
 **What it computes:**
-Runs 30 steps of gradient descent starting at $(w_0, b_0) = (0, 0)$ with learning rate $\eta = 0.05$, using a `for` loop. At each step it computes predictions, residuals, gradients, and updated parameters. Plots the loss curve and the $(w, b)$ trajectory.
+Runs 200 steps of gradient descent starting at $(w_0, b_0) = (0, 0)$ with learning rate $\eta = 0.05$, using a `for` loop. At each step it computes predictions, residuals, gradients, and updated parameters. Plots the loss curve and the $(w, b)$ trajectory.
 
 **What to observe:**
 - The loss decreases monotonically (guaranteed for MSE with a suitable learning rate).

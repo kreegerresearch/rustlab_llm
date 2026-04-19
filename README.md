@@ -93,20 +93,28 @@ No prior deep learning experience is assumed.
 
 ## Running the Lessons
 
-Scripts are run from the project root with:
+Each lesson ships in two forms: **`.r` scripts** under `lessons/NN-topic/` that you can run individually, and **integrated notebooks** under `notebooks/` that weave the prose, math, and code into a single linear narrative rendered to HTML.
+
+The project root has a `Makefile` that drives both:
+
+```bash
+make                    # show help
+make all                # run all scripts + render notebook site
+make scripts            # run all .r scripts
+make notebooks          # render notebooks to ./site/ (HTML + auto-generated index.html)
+make lesson-06          # run just lesson 06's scripts
+make notebook-06        # render just lesson 06's notebook
+make clean              # delete all generated outputs
+```
+
+Or invoke Rustlab directly for a single script or REPL session:
 
 ```bash
 rustlab run lessons/01-tokens-and-encoding/char_frequencies.r
-rustlab run lessons/01-tokens-and-encoding/one_hot_encoding.r
+rustlab                 # interactive REPL
 ```
 
-Or explore interactively:
-
-```bash
-rustlab
-```
-
-Generated plots are saved as SVGs in `lessons/<NN-topic>/outputs/`. Open them in any browser or SVG viewer.
+Generated plots from scripts are saved as SVGs in `lessons/<NN-topic>/outputs/`. Rendered notebooks land in `./site/` — open `site/index.html` in a browser for the landing page, or any individual `site/NN-topic.html`.
 
 Each `.r` script is self-contained — you can run any single script without running previous ones first.
 
@@ -120,6 +128,11 @@ lessons/
     lesson.md        # theory, equations, learning objectives, exercises
     *.r              # Rustlab scripts — one script per concept
     outputs/         # generated SVGs — created at runtime, not committed
+notebooks/
+  index.md           # landing-page title and intro
+  NN-topic-name.md   # integrated prose + math + code notebooks
+site/                # rendered notebook HTML + index.html — created at runtime, not committed
+Makefile             # build targets for scripts, notebooks, and cleanup
 PLAN.md              # phase status and handoff notes
 AGENTS.md            # project conventions, Rustlab language reference
 ```

@@ -62,3 +62,30 @@ grad_at_low  = 1.0 / 0.01;
 grad_at_high = 1.0 / 0.99;
 print("Gradient magnitude |dL/dp_c| at p=0.01:", grad_at_low);
 print("Gradient magnitude |dL/dp_c| at p=0.99:", grad_at_high);
+
+# === CE loss as a 3D surface over logit space ===
+# Real language models optimise logits, not probabilities directly. For a
+# 3-class problem with logits z = (z1, z2, z3=0) and the correct class = 1:
+#   p1 = exp(z1) / (exp(z1) + exp(z2) + 1)
+#   L  = -log(p1) = -z1 + log(exp(z1) + exp(z2) + 1)
+# That is a 2-parameter surface — the canonical "loss bowl" in logit space.
+n = 60;
+z1_grid = linspace(-3.0, 5.0, n);
+z2_grid = linspace(-3.0, 5.0, n);
+[Z1, Z2] = meshgrid(z1_grid, z2_grid);
+
+L_surface = -Z1 + log(exp(Z1) + exp(Z2) + 1.0);
+
+print("CE surface computed on", n, "x", n, "logit grid.");
+L_flat = reshape(L_surface, 1, n * n);
+print("Min loss on grid:", min(L_flat), "  (approached as z1 → ∞)");
+print("Max loss on grid:", max(L_flat), "  (reached at z1 most negative, z2 most positive)");
+
+figure()
+surf(Z1, Z2, L_surface, "viridis")
+title("CE Loss over logit space (3-class, z3=0, correct=class 1)")
+xlabel("z1 (correct)")
+ylabel("z2 (distractor)")
+savefig("outputs/cross_entropy_logit_surface.svg")
+savefig("outputs/cross_entropy_logit_surface.html")
+print("Saved outputs/cross_entropy_logit_surface.svg and .html");

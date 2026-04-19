@@ -107,6 +107,57 @@ model to avoid confidently wrong predictions.
 
 ---
 
+## The Loss Surface in Logit Space
+
+Real language models don't optimise probabilities directly — they optimise
+**logits** $\mathbf{z}$, with softmax producing $\hat{\mathbf{p}}$ on the fly.
+For a 3-class problem with logits $\mathbf{z} = (z_1, z_2, z_3{=}0)$ and the
+correct class $c = 1$:
+
+$$\hat{p}_1 = \frac{e^{z_1}}{e^{z_1} + e^{z_2} + 1}, \qquad \mathcal{L}(z_1, z_2) = -z_1 + \log\!\left(e^{z_1} + e^{z_2} + 1\right)$$
+
+That is a 2-parameter surface — the canonical "loss bowl" gradient descent
+actually sees.
+
+```rustlab
+n = 60;
+z1_grid = linspace(-3.0, 5.0, n);
+z2_grid = linspace(-3.0, 5.0, n);
+[Z1, Z2] = meshgrid(z1_grid, z2_grid);
+
+L_surface = -Z1 + log(exp(Z1) + exp(Z2) + 1.0);
+```
+
+<!-- hide -->
+```rustlab
+L_flat = reshape(L_surface, 1, n * n);
+L_min = min(L_flat);
+L_max = max(L_flat);
+```
+
+Range on the grid: loss spans $[${L_min:%.3f}, ${L_max:%.3f}]$ nats —
+near-zero when $z_1$ dominates, linearly large when the distractor $z_2$ wins.
+
+```rustlab
+figure()
+surf(Z1, Z2, L_surface, "viridis")
+title("CE Loss over logit space (z3=0, correct=class 1)")
+xlabel("z1 (correct)")
+ylabel("z2 (distractor)")
+```
+
+Two features of this surface make the training dynamics legible:
+
+- **Asymptotic floor.** Push $z_1$ to infinity and the loss approaches 0 — but
+  never reaches it. There is no finite minimiser, which is why LM training
+  never converges to "zero loss" on a finite dataset without overfitting.
+- **Linear wall in the distractor direction.** When $z_2 \gg z_1$ the loss
+  grows like $z_2 - z_1$ — a linear ramp, not an exponential cliff. That
+  linearity is why the gradient through softmax is well-behaved even when
+  the model is catastrophically wrong.
+
+---
+
 ## Relationship to Entropy and KL Divergence
 
 Cross-entropy decomposes as:

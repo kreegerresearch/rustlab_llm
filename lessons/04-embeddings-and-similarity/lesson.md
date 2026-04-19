@@ -149,4 +149,4 @@ Compute $\cos(\text{king}, \text{queen})$ by hand using the printed embedding ve
 
 4. **Analogy arithmetic.** Using the vectors defined in `cosine_similarity.r`, compute `king - man + woman` and find which of the four defined tokens it is closest to (by cosine similarity). Does the result match `queen`?
 
-5. **Effect of dimension.** Edit `embedding_matrix.r` to use $d = 2$ instead of $d = 6$. Plot the 8 token embeddings as 2D scatter points (use `savescatter`). After random initialisation, do any tokens cluster together? Why or why not?
+5. **Effect of dimension.** Edit `embedding_matrix.r` to use $d = 2$ instead of $d = 6$. Plot the 8 token embeddings as 2D scatter points (`scatter(x, y)` followed by `savefig(...)`). After random initialisation, do any tokens cluster together? Why or why not?

@@ -35,9 +35,10 @@ lessons/
     outputs/           # generated SVGs — created at runtime, not committed
 
 notebooks/
+  index.md             # landing-page title and intro
   NN-topic-name.md     # rustlab-notebook files — integrated prose, math, and code
-  outputs/             # rendered HTML — created at runtime, not committed
 
+site/                  # rendered notebook HTML + index.html — created at runtime, not committed
 PLAN.md                # phase status, handoff notes, acceptance criteria
 README.md              # project overview and lesson roadmap
 Makefile               # build targets for scripts, notebooks, and cleanup
@@ -128,7 +129,7 @@ Notebooks use the `rustlab-notebook` format: standard Markdown files where fence
 - Use LaTeX math in prose: `$inline$` and `$$display$$`
 - Use `<!-- hide -->` before setup-only code blocks the reader doesn't need to see
 - Use template interpolation `${expr}` to embed computed values in prose (e.g. `${mean(v):%.3f}`)
-- Save plots to `outputs/` (same commands as scripts); inline Plotly plots are automatic for `figure()`/`savefig()` calls
+- **Do not call `savefig`** — every `figure()` in a notebook auto-embeds as an interactive Plotly chart at render time. `savefig` in a notebook would try to write to the render cwd and is unnecessary. (The `.r` scripts in `lessons/NN-*/` do call `savefig` to produce SVGs; notebooks and scripts are separate surfaces.)
 - Each notebook should be self-contained — a reader should not need to run the separate `.r` scripts first
 - Keep the narrative concise; the `lesson.md` has the full theory and exercises
 
@@ -190,6 +191,8 @@ plot(v)  /  plot(x, y, "color", "blue", "label", "name", "style", "dashed")
 bar(y)  /  bar(labels, y)  /  bar(M)        — bar / categorical / grouped
 scatter(x, y)
 imagesc(M, "viridis")                        — heatmap (colormaps: viridis, jet, hot, gray)
+[X, Y] = meshgrid(x, y)                      — coordinate matrices (size length(y) × length(x))
+surf(Z)  /  surf(X, Y, Z)  /  surf(X, Y, Z, "viridis")  — 3D surface (rotatable HTML, static SVG/PNG)
 histogram(v)
 savefig("file.svg")                          — save current figure to SVG, PNG, or HTML
 ```

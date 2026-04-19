@@ -93,13 +93,14 @@ Cross-entropy is the bridge between the probability output of a language model a
 ### `cross_entropy_surface.r` — Loss vs. Predicted Probability
 
 **What it computes:**
-Plots $\mathcal{L}(\hat{p}_c) = -\log(\hat{p}_c)$ as a function of $\hat{p}_c \in (0, 1]$. Also marks several specific probability values and their corresponding losses.
+Plots $\mathcal{L}(\hat{p}_c) = -\log(\hat{p}_c)$ as a function of $\hat{p}_c \in (0, 1]$ and marks reference values. Additionally renders the CE loss as a 3D surface over logit space $(z_1, z_2)$ with $z_3 = 0$ and the correct class fixed to 1 — the actual landscape gradient descent sees.
 
 **What to observe:**
 - The curve is **convex and steeply increasing** as $\hat{p}_c \to 0$.
 - At $\hat{p}_c = 1/|\mathcal{V}|$ (uniform prediction, the model knows nothing), the loss equals $\log |\mathcal{V}|$. This is the **baseline loss** at the start of training.
 - As $\hat{p}_c \to 1$ the loss approaches 0.
 - The gradient of the loss is $-1/\hat{p}_c$, which is large when $\hat{p}_c$ is small — meaning the model gets a strong training signal when it is very wrong.
+- In logit space the surface has **no finite minimiser** (loss $\to 0$ only as $z_1 \to \infty$) and grows **linearly** in the distractor direction — it is not the exponential cliff the probability-space view suggests.
 
 **Verify by hand:**
 Compute $-\ln(0.25)$, $-\ln(0.5)$, $-\ln(0.9)$ on a calculator. Compare to the printed values in the script.
