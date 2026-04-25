@@ -38,14 +38,16 @@ $$\mathbf{H} = \mathbf{X} \mathbf{E} \in \mathbb{R}^{T \times d}.$$
 
 The result $\mathbf{H}$ is the **embedded sequence**: each row is the dense embedding of the corresponding token.
 
-Initialise a random embedding matrix and verify the lookup:
+Initialise a random-looking embedding matrix and verify the lookup. In a real model these values come from `randn(vocab_size, d_embed) * 0.1`; here we use a deterministic sin/cos recipe so the rendered notebook reproduces bit-for-bit (rustlab v0.1.11 has no RNG seed — see `AGENTS.md` Rustlab Recommendations).
 
 ```rustlab
 vocab_size = 8;
 d_embed = 6;
 
-% Random initialisation (scaled by 0.1 — standard practice)
-E = randn(vocab_size, d_embed) * 0.1;
+% Deterministic pseudo-random init.
+% TODO: replace with `randn(vocab_size, d_embed) * 0.1` once rustlab adds an RNG seed API.
+[II, JJ] = meshgrid(1:d_embed, 1:vocab_size);
+E = 0.1 * (sin(2.7 * II + 1.3 * JJ) + cos(1.7 * II - 0.9 * JJ + 0.4));
 
 print("Embedding matrix E:");
 print(E);

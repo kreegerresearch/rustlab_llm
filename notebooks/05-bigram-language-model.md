@@ -163,7 +163,9 @@ n_generate = 12;
 generated = zeros(n_generate);
 generated(1) = 1;   % start with token a
 
-draws = rand(n_generate - 1);
+% Hand-set draws so the rendered output reproduces bit-for-bit.
+% TODO: replace with `draws = rand(n_generate - 1)` once rustlab adds an RNG seed API.
+draws = [0.42, 0.71, 0.13, 0.66, 0.28, 0.85, 0.19, 0.93, 0.51, 0.37, 0.64];
 
 for t = 1:(n_generate - 1)
   curr = generated(t);

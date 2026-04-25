@@ -202,7 +202,9 @@ n_generate = 12;
 generated = zeros(n_generate);
 generated(1) = 1;   % start with token a
 
-draws = rand(n_generate - 1);
+% Hand-set draws so the rendered output reproduces bit-for-bit.
+% TODO: replace with `draws = rand(n_generate - 1)` once rustlab adds an RNG seed API.
+draws = [0.42, 0.71, 0.13, 0.66, 0.28, 0.85, 0.19, 0.93, 0.51, 0.37, 0.64];
 
 for t = 1:(n_generate - 1)
   curr = generated(t);
@@ -215,8 +217,8 @@ print("Generated sequence (indices):", generated);
 ```
 
 ```text
-Uniform draws: [1×11]  0.069241  0.884153  0.882074  0.802882  0.422897  0.411975  0.822207  0.223983  ... (11 total)
-Generated sequence (indices): [1×12]  1.000000  2.000000  3.000000  2.000000  3.000000  2.000000  1.000000  2.000000  ... (12 total)
+Uniform draws: [1×11]  0.420000  0.710000  0.130000  0.660000  0.280000  0.850000  0.190000  0.930000  ... (11 total)
+Generated sequence (indices): [1×12]  1.000000  2.000000  3.000000  2.000000  3.000000  2.000000  3.000000  2.000000  ... (12 total)
 ```
 
 Notice the structure: `b` appears at every even position, because both `a` and `c` transition deterministically to `b`.
