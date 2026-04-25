@@ -66,5 +66,5 @@ bar(labels, p_after_bank)
 title("P(next | bank) — symmetric: water and safe are equally likely")
 ylabel("Probability")
 ylim([0, 1])
-savefig("outputs/bank_distribution.svg")
-print("Saved outputs/bank_distribution.svg");
+savefig("bank_distribution.svg")
+print("Saved bank_distribution.svg");

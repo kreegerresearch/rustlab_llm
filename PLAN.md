@@ -35,10 +35,10 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - `04-embeddings-and-similarity`
 
 **Deliverables — each lesson must have:**
-- [x] `lesson.md` with all 6 required sections (Learning Objectives, Background, Theory, Core Concepts, Simulations, Exercises)
-- [x] One or more `.r` scripts with the required header block
+- [x] `notebooks/<slug>.md` with the conventional sections (Learning Objectives, Background, Theory, Standalone Scripts, Expected Numerical Outputs, Exercises, What's next)
+- [x] One or more `.r` scripts under `lessons/<slug>/` with the required header block
 - [x] All scripts run without error via `rustlab run <path>`
-- [x] All plot outputs saved to `lessons/<NN-topic>/outputs/` (SVG)
+- [x] Each script calls `savefig("foo.svg")` next to itself (artefacts gitignored)
 - [x] Key numerical results printed with `print()` so a student can verify by hand
 
 **Acceptance criteria:**

@@ -80,8 +80,8 @@ print("Computed x̄_3:", X_bar_mm(3));
 figure()
 imagesc(W, "viridis")
 title("Causal Averaging Matrix W (T=6) — lower-triangular, row t = 1/t")
-savefig("outputs/averaging_matrix.svg")
-print("Saved outputs/averaging_matrix.svg");
+savefig("averaging_matrix.svg")
+print("Saved averaging_matrix.svg");
 
 # === Plot: Input vs Averaged Embeddings ===
 figure()
@@ -92,5 +92,5 @@ title("Input Embeddings X (distinct per token)")
 subplot(2, 1, 2)
 imagesc(X_bar_mm, "viridis")
 title("Prefix Averages X̄ = W*X (smoother; each row mixes all earlier tokens)")
-savefig("outputs/prefix_averages.svg")
-print("Saved outputs/prefix_averages.svg");
+savefig("prefix_averages.svg")
+print("Saved prefix_averages.svg");

@@ -93,48 +93,52 @@ No prior deep learning experience is assumed.
 
 ## Running the Lessons
 
-Each lesson ships in two forms: **`.r` scripts** under `lessons/NN-topic/` that you can run individually, and **integrated notebooks** under `notebooks/` that weave the prose, math, and code into a single linear narrative rendered to HTML.
+The lessons are integrated **notebooks** under `notebooks/<slug>.md` — prose, math, and code interleaved in a linear narrative. Optional standalone **`.r` scripts** under `lessons/<slug>/` mirror the notebook code blocks for shell-based experimentation.
 
-The project root has a `Makefile` that drives both:
+GitHub renders the executed lessons directly at [`site/`](site/) — that's the landing page. The source notebooks at [`notebooks/`](notebooks/) are what humans edit.
 
 ```bash
 make                    # show help
-make all                # run all scripts + render notebook site
-make scripts            # run all .r scripts
-make notebooks          # render notebooks to ./site/ (HTML + auto-generated index.html)
-make lesson-06          # run just lesson 06's scripts
-make notebook-06        # render just lesson 06's notebook
-make clean              # delete all generated outputs
+make all                # render committed site/<slug>.md + local site/*.html
+make notebooks          # regenerate site/<slug>.md from notebooks/<slug>.md
+make html               # build site/index.html for local Plotly view (gitignored)
+make notebooks-check    # CI drift guard
+make lesson-06          # run lesson 06's .r scripts (works for 01–09)
+make clean              # delete the interactive HTML build and .r artefacts
 ```
 
-Or invoke Rustlab directly for a single script or REPL session:
+Or invoke Rustlab directly:
 
 ```bash
 rustlab run lessons/01-tokens-and-encoding/char_frequencies.r
 rustlab                 # interactive REPL
 ```
 
-Generated plots from scripts are saved as SVGs in `lessons/<NN-topic>/outputs/`. Rendered notebooks land in `./site/` — open `site/index.html` in a browser for the landing page, or any individual `site/NN-topic.html`.
-
-Each `.r` script is self-contained — you can run any single script without running previous ones first.
+Standalone scripts call `savefig("foo.svg")` next to themselves (gitignored). Each `.r` script is self-contained — you can run any single script without running previous ones first.
 
 ---
 
 ## Repository Layout
 
+This repo follows the [Rustlab lesson-site pattern](../rustlab/docs/lesson-site-pattern.md) shared with [rustlab_em](../rustlab_em/) — sources flat in `notebooks/`, rendered output committed to a top-level `site/`.
+
 ```
-lessons/
-  NN-topic-name/
-    lesson.md        # theory, equations, learning objectives, exercises
-    *.r              # Rustlab scripts — one script per concept
-    outputs/         # generated SVGs — created at runtime, not committed
 notebooks/
-  index.md           # landing-page title and intro
-  NN-topic-name.md   # integrated prose + math + code notebooks
-site/                # rendered notebook HTML + index.html — created at runtime, not committed
-Makefile             # build targets for scripts, notebooks, and cleanup
-PLAN.md              # phase status and handoff notes
-AGENTS.md            # project conventions, Rustlab language reference
+  README.md            # editor-facing notes (skipped by renderer)
+  NN-topic-slug.md     # source notebooks (prose + math + ```rustlab``` blocks)
+lessons/
+  README.md            # explains the .r-script convention
+  NN-topic-slug/
+    *.r                # standalone rustlab scripts paralleling the notebook code blocks
+site/
+  README.md            # hand-written GitHub landing page
+  NN-topic-slug.md     # rendered notebook with inline SVG plots (committed)
+  plots/NN-topic-slug/ # captured figures (committed)
+  index.html           # auto-generated local entry page (gitignored)
+  *.html               # interactive Plotly per-notebook (gitignored)
+Makefile               # notebooks / html / lesson-NN / clean
+PLAN.md                # phase status and handoff notes
+AGENTS.md              # project conventions, Rustlab language reference
 ```
 
 ---

@@ -1,62 +1,40 @@
-# rustlab_llm — run lessons, render notebooks, clean generated files
+# rustlab_llm — render lesson sources to a top-level site/ for GitHub display.
+#
+#   notebooks/<slug>.md                   editable source notebook (committed)
+#   lessons/<slug>/*.r                    standalone shell scripts (committed)
+#   site/<slug>.md                        rendered for GitHub (committed)
+#   site/plots/<slug>/plot-N.svg          captured figures (committed)
+#   site/index.html, site/<slug>.html     interactive Plotly build (gitignored)
+#
+# Run `make help` for the target list.
 
-SCRIPTS := $(sort $(wildcard lessons/*/*.r))
-NOTEBOOKS := $(sort $(wildcard notebooks/*.md))
-
-# ── Help ────────────────────────────────────────────────────────────
-
-.PHONY: help
-help: ## Show this help
-	@grep -E '^[a-zA-Z_%-]+:.*##' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
-	@echo ""
-	@echo "  lesson-NN            Run scripts for a single lesson (e.g. make lesson-01)"
-	@echo "  notebook-NN          Render a single notebook (e.g. make notebook-03)"
+SITE := site
 
 .DEFAULT_GOAL := help
+.PHONY: help all notebooks notebooks-check html clean
 
-# ── Run all ──────────────────────────────────────────────────────────
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+	@echo "  lesson-NN          Run .r scripts for one lesson (e.g. make lesson-01)"
 
-.PHONY: all scripts notebooks
+all: notebooks html ## Regenerate the rendered site/ and the interactive HTML build
 
-all: scripts notebooks ## Run all scripts and render all notebooks
+notebooks: ## Render site/<slug>.md from notebooks/<slug>.md
+	rustlab notebook render notebooks --format markdown --output $(abspath $(SITE))
 
-# ── Scripts ──────────────────────────────────────────────────────────
+html: ## Build interactive HTML at site/index.html (auto-generated entry page + per-notebook html)
+	rustlab notebook render notebooks --format html --output $(abspath $(SITE)) --title "rustlab_llm"
 
-scripts: $(SCRIPTS) ## Run all .r scripts
-	@for f in $^; do \
-		echo "=== $$f ==="; \
-		rustlab run "$$f" || true; \
-	done
+notebooks-check: notebooks ## Fail if site/ drifted from sources
+	@if [ -n "$$(git status --porcelain -- $(SITE)/)" ]; then \
+		echo "site/ drifted from sources. Run 'make notebooks' and commit." >&2; \
+		git status --short -- $(SITE)/ >&2; exit 1; \
+	fi
 
-# Run a single lesson:  make lesson-01  or  make lesson-06
 lesson-%:
-	@for f in lessons/$*-*/*.r; do \
-		echo "=== $$f ==="; \
-		rustlab run "$$f" || true; \
-	done
+	@for f in lessons/$*-*/*.r; do echo "=== $$f ==="; rustlab run "$$f" || true; done
 
-# ── Notebooks ────────────────────────────────────────────────────────
-
-notebooks: $(NOTEBOOKS) | site ## Render all notebooks to a site (HTML + index)
-	rustlab notebook render notebooks/ -o site
-
-# Render a single notebook:  make notebook-03
-notebook-%: | site
-	@f=$$(ls notebooks/$*-*.md | head -1); \
-	rustlab notebook render "$$f" -o "site/$$(basename $$f .md).html"
-
-site:
-	mkdir -p $@
-
-# ── Clean ────────────────────────────────────────────────────────────
-
-.PHONY: clean clean-scripts clean-notebooks
-
-clean: clean-scripts clean-notebooks ## Delete all generated outputs
-
-clean-scripts: ## Delete only script SVG outputs
-	rm -rf lessons/*/outputs/*.svg
-
-clean-notebooks: ## Delete only notebook HTML outputs
-	rm -rf site
+clean: ## Delete the interactive HTML build and .r script artefacts
+	rm -f $(SITE)/*.html
+	rm -f lessons/*/*.svg lessons/*/*.html lessons/*/*.png

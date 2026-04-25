@@ -52,5 +52,5 @@ ylabel("Probability")
 xlabel("Token index")
 ylim([0, 1])
 
-savefig("outputs/softmax_temperature.svg")
-print("Saved outputs/softmax_temperature.svg")
+savefig("softmax_temperature.svg")
+print("Saved softmax_temperature.svg")

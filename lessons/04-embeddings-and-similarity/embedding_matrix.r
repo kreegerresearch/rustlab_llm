@@ -43,5 +43,5 @@ print("Max difference between lookup and direct row access (should be ~0):", dif
 figure()
 imagesc(E, "viridis")
 title("Embedding Matrix E  (8 tokens x 6 dims)  — random init")
-savefig("outputs/embedding_matrix.svg")
-print("Saved outputs/embedding_matrix.svg")
+savefig("embedding_matrix.svg")
+print("Saved embedding_matrix.svg")

@@ -48,5 +48,5 @@ print("Dot product l · l (should be 1):", dot_l_l);
 figure()
 imagesc(X, "viridis")
 title("One-Hot Matrix: 'hello' (5 tokens x 4 vocab)")
-savefig("outputs/one_hot_matrix.svg")
-print("Saved outputs/one_hot_matrix.svg")
+savefig("one_hot_matrix.svg")
+print("Saved one_hot_matrix.svg")

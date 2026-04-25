@@ -51,8 +51,8 @@ xlabel("Predicted probability of correct token (p_c)")
 ylabel("Loss L = -log(p_c)  [nats]")
 ylim([0, 6])
 legend()
-savefig("outputs/cross_entropy_surface.svg")
-print("Saved outputs/cross_entropy_surface.svg")
+savefig("cross_entropy_surface.svg")
+print("Saved cross_entropy_surface.svg")
 
 # === Gradient of loss ===
 # dL/dp_c = -1 / p_c
@@ -86,6 +86,6 @@ surf(Z1, Z2, L_surface, "viridis")
 title("CE Loss over logit space (3-class, z3=0, correct=class 1)")
 xlabel("z1 (correct)")
 ylabel("z2 (distractor)")
-savefig("outputs/cross_entropy_logit_surface.svg")
-savefig("outputs/cross_entropy_logit_surface.html")
-print("Saved outputs/cross_entropy_logit_surface.svg and .html");
+savefig("cross_entropy_logit_surface.svg")
+savefig("cross_entropy_logit_surface.html")
+print("Saved cross_entropy_logit_surface.svg and .html");

@@ -86,11 +86,11 @@ print("Row entropy H(c) bits:", H(3), "  (0 = deterministic)");
 figure()
 imagesc(C, "viridis")
 title("Bigram Count Matrix C (a,b,c)")
-savefig("outputs/bigram_counts.svg")
-print("Saved outputs/bigram_counts.svg");
+savefig("bigram_counts.svg")
+print("Saved bigram_counts.svg");
 
 figure()
 imagesc(P, "viridis")
 title("Bigram Probability Matrix P (row-normalised)")
-savefig("outputs/bigram_probabilities.svg")
-print("Saved outputs/bigram_probabilities.svg");
+savefig("bigram_probabilities.svg")
+print("Saved bigram_probabilities.svg");

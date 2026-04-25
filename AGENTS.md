@@ -27,22 +27,32 @@ This repo is **independent from rustlab** — never modify `../rustlab` from her
 
 ## Repository Layout
 
-```
-lessons/
-  NN-topic-name/
-    lesson.md          # theory, equations, learning objectives, exercises
-    *.r                # rustlab scripts — one script per concept
-    outputs/           # generated SVGs — created at runtime, not committed
+This repo follows the [Rustlab lesson-site pattern](../rustlab/docs/lesson-site-pattern.md) — sources flat in `notebooks/`, rendered output committed to a top-level `site/`, optional `.r` scripts in `lessons/<slug>/`.
 
+```
 notebooks/
-  index.md             # landing-page title and intro
-  NN-topic-name.md     # rustlab-notebook files — integrated prose, math, and code
+  README.md              # editor-facing notes (skipped by renderer)
+  NN-topic-slug.md       # source notebooks — prose + math + ```rustlab``` blocks
 
-site/                  # rendered notebook HTML + index.html — created at runtime, not committed
-PLAN.md                # phase status, handoff notes, acceptance criteria
-README.md              # project overview and lesson roadmap
-Makefile               # build targets for scripts, notebooks, and cleanup
+lessons/
+  README.md              # explains the .r-script convention
+  NN-topic-slug/
+    *.r                  # standalone shell-runnable rustlab scripts
+    *.svg|*.png|*.html   # script artefacts (gitignored)
+
+site/                    # rendered output for GitHub display
+  README.md              # hand-written GitHub landing page
+  NN-topic-slug.md       # rendered notebook with inline ![](plots/...) SVGs (committed)
+  plots/NN-topic-slug/   # captured figures (committed)
+  index.html             # auto-generated entry page (gitignored)
+  NN-topic-slug.html     # interactive Plotly per-notebook (gitignored)
+
+PLAN.md                  # phase status, handoff notes
+README.md                # project overview + lesson roadmap
+Makefile                 # notebooks / html / lesson-NN / clean
 ```
+
+There is no per-lesson `lesson.md` — the notebook *is* the lesson (theory, code, plots, exercises in one file). When `.r` scripts mirror notebook code blocks, they live under `lessons/<slug>/` and call `savefig("foo.svg")` next to themselves (artefacts gitignored).
 
 ---
 
@@ -52,17 +62,15 @@ All commands run from the project root:
 
 ```bash
 make                    # show help
-make all                # run all scripts + render notebook site
-make scripts            # run all .r scripts
-make notebooks          # render notebooks to a site (HTML + auto-generated index.html)
-make lesson-01          # run only lesson 01's scripts (works for 01–09)
-make notebook-03        # render only lesson 03's notebook
-make clean              # delete all generated SVGs and notebook HTML
-make clean-scripts      # delete only script SVG outputs
-make clean-notebooks    # delete only notebook HTML outputs
+make all                # render committed site/<slug>.md + interactive site/*.html
+make notebooks          # render site/<slug>.md from notebooks/<slug>.md (markdown)
+make html               # render site/index.html + per-notebook html (gitignored)
+make notebooks-check    # CI drift guard: fails if site/ is out of sync with sources
+make lesson-01          # run only lesson 01's .r scripts (works for 01–09)
+make clean              # delete the interactive HTML build and .r artefacts
 ```
 
-The notebook render uses directory mode: `rustlab notebook render notebooks/ -o site` produces one HTML per `.md` plus an `index.html` landing page in `./site/`. `notebooks/index.md` supplies the landing-page title and intro; per-lesson `.md` files carry YAML frontmatter with `title:` and `order:` so the index lists them in lesson order.
+The notebook render is directory-mode: `rustlab notebook render notebooks --format markdown --output site` produces `site/<slug>.md` plus `site/plots/<slug>/plot-N.svg` for each lesson. The hand-written `site/README.md` is preserved (the renderer skips files named `README.md` on input).
 
 Single script:
 ```bash
@@ -76,24 +84,37 @@ rustlab
 
 ---
 
-## Lesson Format (`lesson.md`)
+## Notebook Format (`notebooks/<slug>.md`)
 
-Use GitHub-flavored Markdown with LaTeX math: `$inline$` and `$$block$$`.
+Use GitHub-flavored Markdown with LaTeX math: `$inline$` and `$$block$$`. Each notebook follows this structure:
 
-**Required sections (in order):**
+1. `# Lesson NN: Title` — H1, no suffix
+2. Brief motivation paragraph
+3. `## Learning Objectives` — 3–5 bullets
+4. `## Background` — prerequisite knowledge assumed for this specific lesson
+5. Theory sections — prose interleaved with ` ```rustlab ` blocks; one concept per block
+6. `## Key Takeaways` (optional) — short summary
+7. `## Standalone Scripts` — table referencing the parallel `.r` files
+8. `## Expected Numerical Outputs Summary` — Markdown table of every `print()` value students should see
+9. `## Exercises` — 3–5 follow-up questions or script modifications
+10. `## What's next` — one paragraph forward link to the next lesson
 
-1. `## Learning Objectives` — 3–5 bullet points stating what the student will be able to do
-2. `## Background` — prerequisite knowledge assumed for this specific lesson
-3. `## Theory` — derivations and key equations; derive step-by-step, name every variable, state units
-4. `## Core Concepts` — the central idea expressed plainly in 1–2 paragraphs
-5. `## Simulations` — for each `.r` file: what it computes, what to observe, what to verify by hand
-6. `## Exercises` — 3–5 follow-up questions or script modifications
+**Authoring rules (renderer-specific):**
+
+- Variables persist across ` ```rustlab ` blocks within a notebook — define `[X, Y]`, `vocab_size`, etc. once, reuse below.
+- The renderer captures the active figure automatically. **Don't** call `savefig()` inside notebook code blocks.
+- Use `figure()` (not `clf;`) at the start of each plot block. `figure()` creates a fresh figure and avoids state leaking across notebooks in directory-mode rendering.
+- If a plot block uses `hold("on")`, close it with `hold("off")` at the end. Lingering `hold("on")` state leaks into the next notebook in directory mode and inflates the captured-plot count.
+- Use `<!-- hide -->` before setup-only code blocks the reader doesn't need to see.
+- Use template interpolation `${expr}` to embed computed values in prose (e.g. `${mean(v):%.3f}`).
+- Comments in notebook code blocks: `%`. Comments in `.r` files: `#`.
 
 **Style:**
-- Derive equations step-by-step; never skip a step without explanation
-- Name every variable and state units explicitly
-- Connect math to intuition: explain *why* the result looks the way it does
-- Call out common misconceptions explicitly
+
+- Derive equations step-by-step; never skip a step without explanation.
+- Name every variable and state units explicitly.
+- Connect math to intuition: explain *why* the result looks the way it does.
+- Call out common misconceptions explicitly.
 
 ---
 
@@ -110,28 +131,11 @@ Use GitHub-flavored Markdown with LaTeX math: `$inline$` and `$$block$$`.
 
 **Rules:**
 - Separate logical sections with `# === Section Name ===`
-- All plot output goes to `outputs/` relative to the script's directory
+- Plot output saves next to the script: `savefig("foo.svg")` (no `outputs/` prefix). The artefact is gitignored.
 - Always `print()` key numerical results a student should verify by hand
 - Name files descriptively: `gradient_descent.r`, not `script1.r`
 - Keep scripts short enough to read in one sitting (split if over ~60 lines)
 - Each script must run independently (no shared state between scripts)
-
----
-
-## Notebook Conventions (`.md` notebooks)
-
-Notebooks use the `rustlab-notebook` format: standard Markdown files where fenced code blocks tagged `` ```rustlab `` are executed. See `../rustlab/docs/notebooks.md` for the full spec.
-
-**Rules:**
-- One notebook per lesson, named to match: `NN-topic-name.md`
-- Weave prose and math with executable code blocks in a linear narrative
-- Variables persist across code blocks — define once, use in later blocks
-- Use LaTeX math in prose: `$inline$` and `$$display$$`
-- Use `<!-- hide -->` before setup-only code blocks the reader doesn't need to see
-- Use template interpolation `${expr}` to embed computed values in prose (e.g. `${mean(v):%.3f}`)
-- **Do not call `savefig`** — every `figure()` in a notebook auto-embeds as an interactive Plotly chart at render time. `savefig` in a notebook would try to write to the render cwd and is unnecessary. (The `.r` scripts in `lessons/NN-*/` do call `savefig` to produce SVGs; notebooks and scripts are separate surfaces.)
-- Each notebook should be self-contained — a reader should not need to run the separate `.r` scripts first
-- Keep the narrative concise; the `lesson.md` has the full theory and exercises
 
 ---
 

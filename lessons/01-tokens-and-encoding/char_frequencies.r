@@ -40,5 +40,5 @@ print("Highest frequency:", max_freq);
 # y-axis: relative frequency
 figure()
 bar(freqs, "Character Frequencies: 'to be or not to be'")
-savefig("outputs/char_frequencies.svg")
-print("Saved outputs/char_frequencies.svg")
+savefig("char_frequencies.svg")
+print("Saved char_frequencies.svg")

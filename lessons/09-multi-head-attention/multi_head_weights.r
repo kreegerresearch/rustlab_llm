@@ -153,5 +153,5 @@ title("Head 3 — self")
 subplot(2, 2, 4)
 imagesc(A4, "viridis")
 title("Head 4 — uniform")
-savefig("outputs/multi_head_attention.svg")
-print("Saved outputs/multi_head_attention.svg");
+savefig("multi_head_attention.svg")
+print("Saved multi_head_attention.svg");

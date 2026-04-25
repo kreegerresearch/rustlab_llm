@@ -72,5 +72,5 @@ xlabel("Token index (1=a, 2=b, 3=c)")
 ylabel("Probability")
 ylim([0, 1])
 
-savefig("outputs/bigram_row_distributions.svg")
-print("Saved outputs/bigram_row_distributions.svg");
+savefig("bigram_row_distributions.svg")
+print("Saved bigram_row_distributions.svg");

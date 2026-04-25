@@ -82,5 +82,5 @@ print("Closest token should be 'queen'.");
 figure()
 imagesc(S, "viridis")
 title("Cosine Similarity: king, queen, man, woman")
-savefig("outputs/cosine_similarity.svg")
-print("Saved outputs/cosine_similarity.svg")
+savefig("cosine_similarity.svg")
+print("Saved cosine_similarity.svg")

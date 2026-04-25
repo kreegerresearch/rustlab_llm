@@ -116,8 +116,8 @@ title("K = X W_K (keys)")
 subplot(3, 1, 3)
 imagesc(V, "viridis")
 title("V = X W_V (values)")
-savefig("outputs/qkv_projections.svg")
-print("Saved outputs/qkv_projections.svg");
+savefig("qkv_projections.svg")
+print("Saved qkv_projections.svg");
 
 figure()
 subplot(2, 1, 1)
@@ -127,5 +127,5 @@ title("Attention weights A")
 subplot(2, 1, 2)
 imagesc(O, "viridis")
 title("Output O = A V")
-savefig("outputs/attention_output.svg")
-print("Saved outputs/attention_output.svg");
+savefig("attention_output.svg")
+print("Saved attention_output.svg");

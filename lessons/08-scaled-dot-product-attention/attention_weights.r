@@ -100,12 +100,12 @@ title("After causal mask (upper triangle → -∞)")
 subplot(3, 1, 3)
 imagesc(A, "viridis")
 title("Attention weights A = softmax_row(S_masked)")
-savefig("outputs/attention_pipeline.svg")
-print("Saved outputs/attention_pipeline.svg");
+savefig("attention_pipeline.svg")
+print("Saved attention_pipeline.svg");
 
 # Standalone heatmap of the final weights
 figure()
 imagesc(A, "viridis")
 title("Causal Attention Weights — lower triangular, rows sum to 1")
-savefig("outputs/attention_weights.svg")
-print("Saved outputs/attention_weights.svg");
+savefig("attention_weights.svg")
+print("Saved attention_weights.svg");

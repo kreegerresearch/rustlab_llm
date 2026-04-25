@@ -139,5 +139,5 @@ title("Concatenated head outputs (T × H*d_v)")
 subplot(1, 2, 2)
 imagesc(O, "viridis")
 title("Final output O = Concat * W_O")
-savefig("outputs/head_concatenation.svg")
-print("Saved outputs/head_concatenation.svg");
+savefig("head_concatenation.svg")
+print("Saved head_concatenation.svg");

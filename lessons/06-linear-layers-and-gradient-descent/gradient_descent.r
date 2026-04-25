@@ -53,11 +53,11 @@ title("Gradient Descent: Loss vs. Step")
 xlabel("Step")
 ylabel("MSE Loss")
 legend()
-savefig("outputs/loss_curve.svg")
-print("Saved outputs/loss_curve.svg");
+savefig("loss_curve.svg")
+print("Saved loss_curve.svg");
 
 # === Gradient descent path in (w, b) space ===
 figure()
 scatter(w_path, b_path, "Gradient Descent Path in (w,b) Space — converges to (2, 0)")
-savefig("outputs/gd_path.svg")
-print("Saved outputs/gd_path.svg");
+savefig("gd_path.svg")
+print("Saved gd_path.svg");
