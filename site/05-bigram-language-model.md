@@ -215,8 +215,8 @@ print("Generated sequence (indices):", generated);
 ```
 
 ```text
-Uniform draws: [1×11]  0.638423  0.531485  0.961115  0.463213  0.803125  0.610399  0.645325  0.195284  ... (11 total)
-Generated sequence (indices): [1×12]  1.000000  2.000000  3.000000  2.000000  1.000000  2.000000  3.000000  2.000000  ... (12 total)
+Uniform draws: [1×11]  0.069241  0.884153  0.882074  0.802882  0.422897  0.411975  0.822207  0.223983  ... (11 total)
+Generated sequence (indices): [1×12]  1.000000  2.000000  3.000000  2.000000  3.000000  2.000000  1.000000  2.000000  ... (12 total)
 ```
 
 Notice the structure: `b` appears at every even position, because both `a` and `c` transition deterministically to `b`.
