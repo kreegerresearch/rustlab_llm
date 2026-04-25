@@ -4,6 +4,8 @@ A self-contained tutorial series for building large language models from first p
 
 Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts that produce visualisations. The series builds from raw probability and linear algebra all the way to a complete GPT-style decoder — nothing is a black box.
 
+> **📖 Read the rendered lessons:** [**`site/`**](site/README.md) — executed code, printed output, and inline plots, viewable directly on GitHub. No clone or build required.
+
 ---
 
 ## Goals
