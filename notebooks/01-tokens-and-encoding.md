@@ -148,11 +148,27 @@ title("One-Hot Matrix: 'hello' (5 tokens x 4 vocab)")
 
 In the heatmap, each row has one bright cell (value = 1) and three dark cells (value = 0). The column positions identify the character.
 
+## Connection to Information Theory
+
+Tokenisation is a **source coding** problem. Shannon's source coding theorem says the minimum average number of bits to losslessly encode symbols drawn from a distribution $p$ is the entropy
+
+$$H(p) = -\sum_{i=1}^{|\mathcal{V}|} p_i \log_2 p_i \quad [\text{bits/symbol}].$$
+
+Two reference points for the corpus `"to be or not to be"`:
+
+- **Uniform-vocabulary baseline.** If every character were equally likely, each token would need $\log_2 |\mathcal{V}| = \log_2 7 \approx 2.807$ bits — pure $\log_2$ of vocabulary size. This is what fixed-width binary encoding achieves.
+- **Frequency-aware bound.** With the actual frequencies $f_i$ from the bar chart above, $H(f) \approx 2.55$ bits/symbol — about $0.25$ bits less per token. A variable-length code (Huffman, arithmetic) could reach that bound; a fixed-width binary code cannot.
+
+**One-hot encoding is the opposite of compressed.** A one-hot vector spends $|\mathcal{V}|$ bits to carry $\log_2 |\mathcal{V}|$ bits of information — like representing the number 5 as `00000100000` instead of `101`. We accept this overhead because one-hot vectors plug directly into matrix algebra (Lesson 04 onwards). The embedding layer ([Lesson 04](04-embeddings-and-similarity.md)) is, viewed information-theoretically, a learned dimensionality reduction back toward the entropy bound — a *dense* code where each dimension carries fractional bits of information about the token.
+
+A language model's job is to predict the *next* token, not encode the current one. But the same machinery applies: the cross-entropy loss ([Lesson 03](03-cross-entropy-loss.md)) measures how many bits per token the model "wastes" relative to the true (unknown) entropy of the language, and **perplexity** ([Lesson 05](05-bigram-language-model.md)) is just $2^H$ in disguise.
+
 ## Key Takeaways
 
 - **Tokenisation** converts symbols to integers to matrices — the bridge from text to linear algebra.
 - A character-level vocabulary is tiny (~100 in English) but forces the model to learn spelling from scratch. Larger vocabularies reduce sequence length but increase memory.
 - One-hot encoding does *not* imply characters are independent — it is only the starting point. The embedding layer ([Lesson 04](04-embeddings-and-similarity.md)) will project these orthogonal vectors into a dense space where learned relationships emerge.
+- Information theory frames the whole pipeline: tokenisation as source coding, cross-entropy as expected codelength, perplexity as $2^H$.
 
 ## Standalone Scripts
 

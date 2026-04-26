@@ -290,12 +290,33 @@ ylim([0, 1])
 
 ![plot 3](plots/05-bigram-language-model/plot-3.svg)
 
+## Connection to Information Theory
+
+The bigram model is a self-contained information-theoretic object — every quantity above has a direct counterpart in Shannon's framework.
+
+**Conditional entropy is the per-token bit budget.** The model's average cross-entropy on the training corpus is
+
+$$\mathcal{L} \;=\; -\frac{1}{T-1}\sum_t \log P_{x_t,\, x_{t+1}} \;\approx\; H(X_{t+1} \mid X_t) \quad [\text{nats}],$$
+
+the **conditional entropy** of the next token given the current one. For our `"abcbabcba"` example you measured 0.3466$ nats $\approx 0.5000$ bits per token. Shannon's source coding theorem says no compressor that sees only the current token can do better — this is the **fundamental bit floor for any Markov-1 model** of this corpus.
+
+**Perplexity = $2^H$ (or $e^H$).** The perplexity 1.414$ you printed above is the **effective branching factor**: the model is, on average, as uncertain as if it had to choose uniformly among 1.414$ tokens. A perfect bigram on this corpus would reach $2^{H(X_{t+1}\mid X_t)} = 2^{0.5} \approx 1.414$ — and it does. There is no slack left to close at the Markov-1 horizon.
+
+**The Markov assumption is a structural ceiling.** The chain rule of entropy gives
+
+$$H(X_1, \dots, X_T) \;=\; \sum_{t=1}^{T} H(X_t \mid X_1, \dots, X_{t-1}).$$
+
+A bigram approximates each conditional with $H(X_t \mid X_{t-1})$, dropping all earlier context. By the data processing inequality $H(X_t \mid X_{t-1}) \ge H(X_t \mid X_1, \dots, X_{t-1})$ — extra context never *increases* entropy. The bigram's loss therefore upper-bounds the loss of any longer-context model. **Every later lesson** — n-grams, attention, transformers — is a method to close that gap, recovering more of the conditional entropy that bigrams discarded.
+
+**Compression equivalence.** Train a bigram on Wikipedia, plug its conditional distributions into an arithmetic coder, and you have a working text compressor. Its compression ratio (in bits/byte) equals exactly the cross-entropy loss above. "Better language model" and "better text compressor" are not analogies — they are synonyms under arithmetic coding.
+
 ## Key Takeaways
 
 - The bigram model encodes corpus statistics in a single matrix — reading a row tells you exactly what the model "thinks" will follow a given token.
 - The CDF-based sampling algorithm is foundational — it reappears in every sampling strategy in Lesson 21 (top-K, nucleus).
 - A bigram model is fast, interpretable, and sets a performance floor. Any neural model should beat it to justify its cost.
 - Its weakness: context is limited to one token. It cannot model dependencies spanning more than two positions.
+- Perplexity = $e^{\mathcal{L}}$ = effective branching factor. The bigram's perplexity is the Shannon lower bound for any Markov-1 model of the corpus.
 
 ## Standalone Scripts
 

@@ -245,6 +245,19 @@ Attention and the Lesson 07 averaging matrix have the **same shape**:
 
 If $\mathbf{W}_Q = \mathbf{W}_K = \mathbf{0}$ then every score is 0, softmax produces uniform weights over the first $t$ positions, and the output reduces to the Lesson 07 prefix average of the value vectors. Attention is a **strict generalisation** of uniform averaging.
 
+## Information-Theoretic View
+
+### Theory
+
+Attention is **soft information routing**. Each row $\mathbf{A}_t$ is a probability distribution over prior positions; the output $\mathbf{o}_t = \sum_i A_{t,i} \mathbf{v}_i$ is a weighted summary that the next layer (and ultimately the LM head) uses to predict $X_{t+1}$.
+
+Two quantities make this concrete:
+
+- **Per-row entropy.** $H(\mathbf{A}_t) = -\sum_i A_{t,i} \log A_{t,i}$ measures how concentrated row $t$ is. A uniform row over $t$ positions has $H = \log_2 t$ bits — the [Lesson 07](07-context-and-naive-averaging.md) baseline. A peaked row picking out one position has $H \to 0$. **Trained attention heads typically have much lower row entropy than the uniform baseline**, meaning they have learned that a small subset of past tokens carries the relevant information for predicting the next.
+- **Mutual information between context and target.** The earlier-lesson conditional entropy $H(X_{t+1} \mid X_{1..t})$ is the floor any next-token predictor can reach. Uniform averaging from [Lesson 07](07-context-and-naive-averaging.md) collapses the prior context into a single bag-of-tokens vector and discards most of $I(X_{t+1};\, X_{1..t})$. Attention preserves it: by re-weighting per-token at every step, the model can keep $\mathbf{o}_t$ informative about $X_{t+1}$ for any prior token whose mutual information was non-trivial. This is the mechanism by which attention reduces the cross-entropy loss below the bigram floor of [Lesson 05](05-bigram-language-model.md).
+
+Viewed this way, the $1/\sqrt{d_k}$ scale is also information-theoretic: too-large scores → near-deterministic softmax → row entropy collapses to 0 → the head selects a single token and ignores all others. Stable variance keeps row entropy in a usable range so the head can reweight rather than commit.
+
 ## Key Takeaways
 
 - **Queries, keys, values** are three linear projections of the same input $\mathbf{X}$ — self-attention means they all come from the same sequence.

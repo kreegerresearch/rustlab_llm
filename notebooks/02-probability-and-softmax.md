@@ -163,11 +163,28 @@ hold("off")
 
 Entropy increases monotonically with temperature — the model becomes harder to predict from.
 
+## Connection to Information Theory
+
+Both objects in this lesson — softmax and entropy — are direct lifts from statistical physics and information theory; transformer-era ML did not invent either.
+
+**Entropy is the source-coding bound.** Shannon's source coding theorem states that the minimum expected code length to losslessly transmit symbols drawn from $p$ is exactly $H(p)$ bits per symbol. The optimal code for symbol $i$ has length $-\log_2 p_i$ bits — common symbols get short codes, rare ones get long codes. So the entropies you computed above aren't abstract uncertainty scores; they are the unavoidable bit-budget for transmitting a sample from each distribution.
+
+| Distribution | $H$ (bits) | Optimal avg bits/token |
+|---|---|---|
+| `p_cold`  ($T{=}0.5$) | ${H05:%.3f}$ | ${H05:%.3f}$ |
+| `p_neutral` ($T{=}1.0$) | ${H10:%.3f}$ | ${H10:%.3f}$ |
+| `p_uniform` (4 tokens) | $2.0$ (= $\log_2 4$) | $2.0$ — fixed-width is already optimal |
+
+**Softmax is the Boltzmann distribution.** The form $p_i = e^{z_i/T} / \sum_j e^{z_j/T}$ is identical to the probability of microstate $i$ at temperature $T$ in statistical mechanics, with logits $z_i$ playing the role of negative energies. The "temperature" name is not metaphor: as $T \to 0$ the distribution collapses onto the lowest-energy (highest-logit) state, exactly as a physical system freezes into its ground state. The maximum-entropy principle then recovers softmax as the *unique* distribution that maximises $H(p)$ subject to a constraint on $\mathbb{E}[z]$ — softmax is the "least committed" distribution consistent with the logits.
+
+These two facts return in [Lesson 03](03-cross-entropy-loss.md) (cross-entropy as expected code length under the model) and [Lesson 05](05-bigram-language-model.md) (perplexity as $2^H$).
+
 ## Key Takeaways
 
 - Softmax converts arbitrary logits to a valid probability distribution via exponentiation and normalisation.
 - Exponentiating means a logit $k$ units larger produces probability $e^k$ times larger (before normalisation) — this amplification is what makes the top token dominate at low temperature.
 - At every sequence position the model must output a full distribution over all next tokens. Everything that follows — loss functions, training, sampling — depends on softmax.
+- Entropy is the Shannon source-coding bound; softmax is the Boltzmann distribution. ML borrowed both names exactly.
 
 ## Standalone Scripts
 

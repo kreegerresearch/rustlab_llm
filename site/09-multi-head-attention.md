@@ -263,6 +263,8 @@ For the toy $d_{\text{model}} = 4$ that is $3 \cdot 16 + 16 = 64$ parameters.
 
 Each head sees the full input $\mathbf{X}$ but projects it down to a $d_k$-dimensional subspace before computing attention. Different projections emphasise different features of $\mathbf{X}$, so each head sees a different "view" of the sequence. With enough heads and sufficient training, the heads specialise — some learn positional patterns, some learn semantic patterns, some learn long-range structure. Specialisation is not engineered: because all heads share the same input and loss, gradient descent finds projections that cover *complementary* patterns (two heads learning the same thing would waste capacity).
 
+**Information-theoretic framing.** Each head extracts a fragment of the mutual information $I(X_{t+1} ; X_{1..t})$ that the [Lesson 08](08-scaled-dot-product-attention.md) "Information-Theoretic View" section identified as attention's prediction signal. Two heads that recover the *same* fragment are redundant — the joint extracted information $I(X_{t+1} ; \mathbf{o}_t^{(h_1)}, \mathbf{o}_t^{(h_2)})$ would equal each head's individual contribution, and the second head buys nothing. Two heads recovering *different* fragments add up: a syntactic head and a coreference head together carry more information about $X_{t+1}$ than either does alone. Cross-entropy training pushes heads toward orthogonal information streams because that is the configuration that minimises loss given the parameter budget. The output projection $\mathbf{W}_O$ then re-mixes those fragments into a single dense representation the next layer can use.
+
 ## Key Takeaways
 
 - **Why multiple heads:** one softmax-weighted sum can only express one kind of relationship; $H$ heads can express $H$.

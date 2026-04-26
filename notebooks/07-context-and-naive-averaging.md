@@ -169,7 +169,9 @@ $\bar{\mathbf{X}}$ is smoother than $\mathbf{X}$. Row $t$ of $\bar{\mathbf{X}}$ 
 
 Uniform $1/t$ weights treat every past token as equally informative. In a sentence like *"the cat sat on the mat, it was soft"*, the pronoun *it* refers to a specific token (`mat`), not the average of everything before it. We need **data-dependent** weights — weights that concentrate mass on the relevant tokens based on what each token actually says.
 
-That is exactly what **attention** does. It replaces the fixed $1/t$ entries of $\mathbf{W}$ with $\mathrm{softmax}(\mathrm{scores})$, where the scores depend on the query and key vectors derived from the embeddings themselves. The lower-triangular (causal) structure and per-row weighted sum stay identical.
+**Information-theoretic framing.** Let $X_t$ be the next token and $X_{1..t-1}$ the prior context. Each prior token $X_i$ carries some **mutual information** $I(X_t ; X_i \mid X_{<i})$ about $X_t$ — and that quantity varies hugely across positions. For *"the cat sat on the mat, it was soft"*, $I(X_{\text{soft}} ; X_{\text{mat}})$ is large (mat is what *it* refers to) while $I(X_{\text{soft}} ; X_{\text{the}})$ is essentially zero. Uniform averaging — assigning weight $1/t$ to every prior token — wastes capacity on low-information tokens and dilutes the high-information ones, raising the conditional entropy $H(X_t \mid \bar{\mathbf{x}}_t)$ above what a smart, data-dependent aggregator could achieve. From the [Lesson 05](05-bigram-language-model.md) entropy-chain view, every dropped bit of mutual information is a dropped bit of compressibility.
+
+That is exactly what **attention** does. It replaces the fixed $1/t$ entries of $\mathbf{W}$ with $\mathrm{softmax}(\mathrm{scores})$, where the scores depend on the query and key vectors derived from the embeddings themselves — so the model can route weight toward whichever past tokens carry the most information about the next. The lower-triangular (causal) structure and per-row weighted sum stay identical.
 
 ## Key Takeaways
 

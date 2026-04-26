@@ -143,7 +143,7 @@ Two features of this surface make the training dynamics legible:
 - **Asymptotic floor.** Push $z_1$ to infinity and the loss approaches 0 — but never reaches it. There is no finite minimiser, which is why LM training never converges to "zero loss" on a finite dataset without overfitting.
 - **Linear wall in the distractor direction.** When $z_2 \gg z_1$ the loss grows like $z_2 - z_1$ — a linear ramp, not an exponential cliff. That linearity is why the gradient through softmax is well-behaved even when the model is catastrophically wrong.
 
-## Relationship to Entropy and KL Divergence
+## Connection to Information Theory
 
 ### Theory
 
@@ -152,6 +152,22 @@ Cross-entropy decomposes as
 $$H(\mathbf{y}, \hat{\mathbf{p}}) = H(\mathbf{y}) + D_{\text{KL}}(\mathbf{y} \,\|\, \hat{\mathbf{p}}),$$
 
 where $H(\mathbf{y})$ is the (constant) entropy of the true distribution and $D_{\text{KL}}$ is the Kullback-Leibler divergence — a non-negative measure of how different $\hat{\mathbf{p}}$ is from $\mathbf{y}$. For a one-hot $\mathbf{y}$, $H(\mathbf{y}) = 0$, so minimising cross-entropy directly minimises the KL divergence — pushing the model's distribution toward the true data distribution.
+
+**Cross-entropy is an expected code length.** From the Shannon source coding bound ([Lesson 02](02-probability-and-softmax.md) §"Connection to Information Theory"), the optimal code for symbol $i$ under distribution $p$ has length $-\log p_i$. If the *true* distribution is $p$ but you build your code using the *model's* distribution $\hat p$, then your expected code length is
+
+$$\mathbb{E}_{i \sim p}[-\log \hat p_i] \;=\; H(p, \hat p) \;=\; \mathcal{L}.$$
+
+In other words, **the training loss is literally the average number of bits (or nats) per token your model would spend to compress text from the true source.** Shannon's theorem says this is bounded below by $H(p)$ — the entropy of the language itself. The "$D_{\text{KL}}$ gap" in the decomposition above is exactly the bits *wasted* by using $\hat p$ instead of the optimal $p$-aware code.
+
+**Bits vs. nats — the $\ln 2$ factor.** This lesson uses the natural log, so loss is in **nats**. To convert to bits, divide by $\ln 2 \approx 0.693$:
+
+$$\mathcal{L}_{\text{bits}} = \mathcal{L}_{\text{nats}} \,/\, \ln 2.$$
+
+Modern language modelling reports **bits per byte** (BPB) or **bits per character** (BPC) for cross-corpus comparison. State-of-the-art LLMs reach ~0.6 BPB on English; estimates of English's true entropy sit around 0.5–0.6 BPB — current models are within an information-theoretic stone's throw of the floor.
+
+**Maximum likelihood is minimum description length.** Minimising $-\sum_t \log \hat p_{x_t}$ is equivalent to minimising the total number of bits needed to transmit the corpus under the model. The "best" model in this framework is the one that compresses the data the most — and **better language models are, by definition, better text compressors**. This isn't a metaphor; teams have used trained transformers as drop-in arithmetic coders for general-purpose compression and beat gzip on text by a wide margin.
+
+**Forward link.** [Lesson 05](05-bigram-language-model.md) introduces **perplexity** $= e^{\mathcal{L}}$ (or $2^{\mathcal{L}_{\text{bits}}}$). Perplexity is just $2^H$ wearing different clothes — the "effective branching factor" interpretation is the source-coding bound stated as an effective alphabet size.
 
 ## Key Takeaways
 
