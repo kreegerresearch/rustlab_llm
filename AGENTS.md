@@ -92,12 +92,13 @@ Use GitHub-flavored Markdown with LaTeX math: `$inline$` and `$$block$$`. Each n
 2. Brief motivation paragraph
 3. `## Learning Objectives` — 3–5 bullets
 4. `## Background` — prerequisite knowledge assumed for this specific lesson
-5. Theory sections — prose interleaved with ` ```rustlab ` blocks; one concept per block
-6. `## Key Takeaways` (optional) — short summary
-7. `## Standalone Scripts` — table referencing the parallel `.r` files
-8. `## Expected Numerical Outputs Summary` — Markdown table of every `print()` value students should see
-9. `## Exercises` — 3–5 follow-up questions or script modifications
-10. `## What's next` — one paragraph forward link to the next lesson
+5. Pure-reference H2s when needed (formal definitions, vocabulary tables, dimension conventions) — these stay flat with no H3 split
+6. One H2 per concept, each split into `### Theory` (prose + math, no code) and one or more `### Example — <descriptor>` (rustlab block plus a short setup paragraph). One H3 per logically distinct example — if a concept has both a frequency bar chart and a one-hot heatmap, each gets its own `### Example — ...`. The H3 markers should always be present so readers can tell theory from examples at a glance; only genuinely all-reference sections keep flat H2s
+7. `## Key Takeaways` (optional) — short summary
+8. `## Standalone Scripts` — table referencing the parallel `.r` files
+9. `## Expected Numerical Outputs Summary` — Markdown table of every `print()` value students should see
+10. `## Exercises` — 3–5 follow-up questions or script modifications
+11. `## What's next` — one paragraph forward link to the next lesson
 
 **Authoring rules (renderer-specific):**
 

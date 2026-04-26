@@ -22,6 +22,8 @@ Logits can be any real number, positive or negative. We need a mapping that:
 2. Makes them sum to 1.
 3. Preserves the relative ordering (higher logit $\to$ higher probability).
 
+This section is pure reference — the softmax definition and its numerical-stability shift. Every later section pairs `### Theory` with `### Example — <descriptor>`.
+
 ### The Softmax Function
 
 **Step 1 — Exponentiate.** Apply $e^{z_i}$ to each logit, mapping any real number to a strictly positive one:
@@ -40,6 +42,8 @@ The output $\mathbf{p} = \text{softmax}(\mathbf{z})$ satisfies $p_i > 0$ and $\s
 
 ## Temperature Scaling
 
+### Theory
+
 The **temperature** $T > 0$ scales the logits before softmax:
 
 $$p_i(T) = \frac{e^{z_i / T}}{\sum_{j} e^{z_j / T}}.$$
@@ -51,6 +55,8 @@ $$p_i(T) = \frac{e^{z_i / T}}{\sum_{j} e^{z_j / T}}.$$
 | $T \to \infty$ (hot) | Approaches uniform: $p_i \to 1/|\mathcal{V}|$ |
 
 Temperature does not change *which* token has the highest probability — it changes *how much* higher it is relative to the others. Temperature is the knob the **generation** stage (Lesson 21) uses to trade off deterministic (focused) vs. random (creative) output.
+
+### Example — Softmax of four logits at three temperatures
 
 See it in action with logits $\mathbf{z} = [2.0, 1.0, 0.5, -0.5]$:
 
@@ -67,6 +73,8 @@ print("T=2.0 (warm)   :", p_warm);
 ```
 
 Each row sums to ${sum(p_cold):%.3f} — a valid distribution. At $T = 0.5$ token 1 gets ${p_cold(1):%.3f}$ of the mass; at $T = 2.0$ it gets only ${p_warm(1):%.3f}$ — the distribution flattens as temperature rises.
+
+### Example — Stacked subplots: cold / neutral / warm
 
 ```rustlab
 figure()
@@ -92,6 +100,8 @@ ylim([0, 1])
 
 ## Shannon Entropy
 
+### Theory
+
 The **entropy** of a distribution $\mathbf{p}$ measures how uncertain or spread-out it is:
 
 $$H(\mathbf{p}) = -\sum_{i=1}^{|\mathcal{V}|} p_i \log_2 p_i \quad [\text{bits}].$$
@@ -99,7 +109,9 @@ $$H(\mathbf{p}) = -\sum_{i=1}^{|\mathcal{V}|} p_i \log_2 p_i \quad [\text{bits}]
 - $H = 0$: all mass on one token (perfectly certain).
 - $H = \log_2 |\mathcal{V}|$: uniform distribution (maximally uncertain).
 
-Higher temperature $\to$ higher entropy. Measure it:
+Higher temperature $\to$ higher entropy.
+
+### Example — Entropy at four temperatures
 
 <!-- hide -->
 ```rustlab
@@ -121,7 +133,9 @@ H50 = -sum(p50 .* log2(p50 + eps));
 
 Entropy climbs with temperature: $H(T{=}0.5) = ${H05:%.3f}$ bits, $H(T{=}1.0) = ${H10:%.3f}$ bits, $H(T{=}2.0) = ${H20:%.3f}$ bits, $H(T{=}5.0) = ${H50:%.3f}$ bits.
 
-The theoretical maximum for 4 tokens is $\log_2(4) = 2$ bits. Two sanity checks:
+### Example — Sanity checks: uniform vs. near-deterministic
+
+The theoretical maximum for 4 tokens is $\log_2(4) = 2$ bits.
 
 ```rustlab
 % Uniform distribution — should hit the maximum of log2(4) = 2 bits
@@ -134,6 +148,8 @@ H_det = -sum(p_det .* log2(p_det + eps));
 ```
 
 Uniform over 4 tokens: $H = ${H_uniform:%.3f}$ bits (matches $\log_2 4 = 2$). Near-deterministic: $H = ${H_det:%.4f}$ bits (near zero, as expected).
+
+### Example — Entropy bar chart vs. the maximum
 
 ```rustlab
 figure()

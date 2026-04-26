@@ -24,9 +24,11 @@ $$\mathbf{y} = \mathbf{W}\mathbf{x} + \mathbf{b}.$$
 - $\mathbf{b} \in \mathbb{R}^{d_{\text{out}}}$ — the **bias vector** (learnable).
 - $\mathbf{y}$ is a linear combination of the input features, one per output dimension.
 
-The embedding lookup from [Lesson 04](04-embeddings-and-similarity.md) is a special case: multiplying the embedding matrix by a one-hot input selects one row — exactly a linear layer applied to a one-hot input.
+The embedding lookup from [Lesson 04](04-embeddings-and-similarity.md) is a special case: multiplying the embedding matrix by a one-hot input selects one row — exactly a linear layer applied to a one-hot input. This section is pure reference; every later H2 pairs `### Theory` with `### Example — <descriptor>`.
 
 ## Loss Function: Mean Squared Error
+
+### Theory
 
 For regression tasks (fitting a curve to data) the **mean squared error** loss is
 
@@ -34,9 +36,7 @@ $$\mathcal{L}(w, b) = \frac{1}{N} \sum_{i=1}^{N} (\hat{y}_i - y_i)^2 = \frac{1}{
 
 where $(x_i, y_i)$ are data points and $\hat{y}_i = w x_i + b$ is the model's prediction. For language models the loss is cross-entropy ([Lesson 03](03-cross-entropy-loss.md)), but MSE makes the geometry of the loss landscape transparent and is ideal for building intuition.
 
-## The Loss Landscape
-
-The loss $\mathcal{L}(w, b)$ defines a 2-D surface over the $(w, b)$ plane. For MSE with a linear model this surface is a **convex paraboloid** — a bowl with a unique global minimum and no local minima. Gradient descent is guaranteed to converge to the global optimum.
+### Example — Loss at the optimum vs. at the origin
 
 Visualise it for the dataset $x = [1,2,3,4]$, $y = [2,4,6,8]$ where the true relationship is $y = 2x$ (so $w^* = 2$, $b^* = 0$):
 
@@ -51,9 +51,17 @@ L_init = real(mean((0.0 * x + 0.0 - y) .^ 2));
 
 At the optimum, $\mathcal{L}(2, 0) = ${L_true:%.3f}$ — zero loss because $y = 2x$ exactly. Starting from $(w, b) = (0, 0)$ the loss is ${L_init:%.2f}$, the distance we need gradient descent to close.
 
-The analytic expansion for this dataset is
+## The Loss Landscape
+
+### Theory
+
+The loss $\mathcal{L}(w, b)$ defines a 2-D surface over the $(w, b)$ plane. For MSE with a linear model this surface is a **convex paraboloid** — a bowl with a unique global minimum and no local minima. Gradient descent is guaranteed to converge to the global optimum.
+
+The analytic expansion for the dataset $x = [1,2,3,4]$, $y = [2,4,6,8]$ is
 
 $$\mathcal{L}(w,b) = 7.5w^2 + b^2 + 5wb - 30w - 10b + 30.$$
+
+### Example — 2-D loss heatmap over (w, b)
 
 <!-- hide -->
 ```rustlab
@@ -87,7 +95,7 @@ title("MSE Loss L(w,b): y=2x  minimum at (w=2, b=0)")
 
 The dark region (minimum loss) is centred at $(w, b) \approx (2, 0)$. The elliptical contours show the loss is more sensitive to $w$ than $b$.
 
-### The Loss Surface in 3D
+### Example — Rotatable 3-D paraboloid
 
 `meshgrid` builds coordinate matrices aligned with the loss grid, and `surf` renders it as a rotatable 3-D paraboloid — the "bowl" gradient descent is rolling toward.
 
@@ -105,6 +113,8 @@ The surface is a **convex paraboloid**: one global minimum, no local minima, no 
 
 ## Gradient Descent
 
+### Theory
+
 The **gradient** $\nabla \mathcal{L} = [\partial \mathcal{L}/\partial w,\; \partial \mathcal{L}/\partial b]$ points toward steepest ascent. We move in the opposite direction:
 
 $$w \leftarrow w - \eta \frac{\partial \mathcal{L}}{\partial w}, \qquad b \leftarrow b - \eta \frac{\partial \mathcal{L}}{\partial b},$$
@@ -113,9 +123,7 @@ where $\eta > 0$ is the **learning rate**. The partial derivatives, by the chain
 
 $$\frac{\partial \mathcal{L}}{\partial w} = \frac{2}{N} \sum_{i=1}^{N} (\hat{y}_i - y_i) \cdot x_i, \qquad \frac{\partial \mathcal{L}}{\partial b} = \frac{2}{N} \sum_{i=1}^{N} (\hat{y}_i - y_i).$$
 
-### Running gradient descent
-
-Starting at $(w_0, b_0) = (0, 0)$ with $\eta = 0.05$:
+### Example — 200 steps from (0, 0) at η = 0.05
 
 ```rustlab
 npts = 4.0;
@@ -148,6 +156,8 @@ end
 
 After ${n_steps} steps with $\eta = ${lr}$: $w = ${w:%.4f}$ (true $w^* = 2$), $b = ${b:%.4f}$ (true $b^* = 0$), $\mathcal{L} = ${loss_path(n_steps + 1):%.2e}$ — effectively zero.
 
+### Example — Loss vs. step
+
 The loss decreases monotonically — guaranteed for MSE with a suitable learning rate. Early steps are large (steep gradients far from the minimum); later steps are small.
 
 ```rustlab
@@ -162,6 +172,8 @@ legend()
 hold("off")
 ```
 
+### Example — Trajectory in (w, b) space
+
 The trajectory in $(w, b)$ space curves — it does not go straight to the minimum because the loss surface has different curvature in the $w$ and $b$ directions:
 
 ```rustlab
@@ -171,18 +183,22 @@ scatter(w_path, b_path, "Gradient Descent Path in (w,b) Space - converges to (2,
 
 ## Learning Rate Sensitivity
 
+### Theory
+
 | $\eta$ | Behaviour |
 |--------|-----------|
 | Too large | Overshoots the minimum; loss oscillates or diverges |
 | Too small | Convergence is slow; many iterations needed |
 | Well-chosen | Loss decreases smoothly to the minimum |
 
-### Verify the first step by hand
+### Example — One step verified by hand
 
 - Initial: $w_0 = 0$, $b_0 = 0$, predictions $= [0,0,0,0]$, residuals $= [-2,-4,-6,-8]$.
 - $\partial \mathcal{L}/\partial w = 0.5 \times ((-2)(1) + (-4)(2) + (-6)(3) + (-8)(4)) = -30$.
 - $\partial \mathcal{L}/\partial b = 0.5 \times (-2-4-6-8) = -10$.
 - $w_1 = 0 - 0.05 \times (-30) = 1.5,\;\; b_1 = 0 - 0.05 \times (-10) = 0.5$.
+
+These match the first row of `w_path` / `b_path` from the descent loop above.
 
 ## Key Takeaways
 

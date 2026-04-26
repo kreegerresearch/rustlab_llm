@@ -18,7 +18,7 @@ Vectors (a list of numbers) and matrices (a 2-D grid of numbers). The concept of
 
 ## What is a Token?
 
-A **token** is the basic unit of text a language model operates on. At the character level every character becomes one token. The pipeline has two steps:
+A **token** is the basic unit of text a language model operates on. At the character level every character becomes one token. The pipeline has two steps. This section is pure reference — formal definitions and the vocabulary table; every later section pairs `### Theory` with `### Example — <descriptor>`.
 
 **Step 1 — Collect the vocabulary.** Given a corpus, collect every unique character and sort them. This ordered set is the vocabulary $\mathcal{V}$, with size $|\mathcal{V}|$.
 
@@ -42,11 +42,15 @@ The string `"hello"` would encode to $[4, 3, 5, 5, 6]$ under a similar scheme. T
 
 ## Character Frequencies
 
+### Theory
+
 Before building a model it helps to understand the **frequency distribution** of tokens. If $c_i$ is the count of character $i$ in the corpus, the relative frequency is
 
 $$f_i = \frac{c_i}{\sum_{j=1}^{|\mathcal{V}|} c_j}.$$
 
-This is a discrete probability distribution over the vocabulary — high-frequency characters appear often, and a good model must predict them reliably.
+This is a discrete probability distribution over the vocabulary — every $f_i \in [0, 1]$ and $\sum_i f_i = 1$. High-frequency characters appear often, and a good model must predict them reliably.
+
+### Example — Computing relative frequencies
 
 ```rustlab
 total = sum(counts);
@@ -65,6 +69,8 @@ Sum of frequencies (should be 1.0): 1
 
 The corpus has **18** characters across a vocabulary of size **7**. The highest-frequency character is the space at 0.278 $\approx 5/18$ — exactly five spaces in `"to be or not to be"`.
 
+### Example — Frequency bar chart
+
 ```rustlab
 figure()
 bar(chars, freqs, "Character Frequencies: 'to be or not to be'")
@@ -80,6 +86,8 @@ The bar heights sum to 1.0 — this is a valid probability distribution over the
 
 ## One-Hot Encoding
 
+### Theory
+
 An integer index like $4$ carries no useful geometric meaning — a model might infer that character 4 is "greater than" character 3, which is meaningless. Instead, each token is represented as a **one-hot vector**: a vector of length $|\mathcal{V}|$ that is 0 everywhere except at position $i$:
 
 $$(\mathbf{e}_i)_j = \begin{cases} 1 & \text{if } j = i \\ 0 & \text{otherwise.} \end{cases}$$
@@ -90,13 +98,13 @@ $$\mathbf{e}_i \cdot \mathbf{e}_j = \delta_{ij}.$$
 
 No two tokens share any geometric similarity — a clean slate before the model learns its own representations ([Lesson 04](04-embeddings-and-similarity.md)).
 
-### Building the one-hot matrix
-
 To encode a sequence of $T$ tokens, stack their one-hot vectors as rows of a matrix $\mathbf{X} \in \{0, 1\}^{T \times |\mathcal{V}|}$:
 
 $$\mathbf{X} = \begin{bmatrix} \mathbf{e}_{i_1} \\ \mathbf{e}_{i_2} \\ \vdots \\ \mathbf{e}_{i_T} \end{bmatrix}.$$
 
-Build this for `"hello"` with vocabulary $\{e{:}1,\; h{:}2,\; l{:}3,\; o{:}4\}$:
+### Example — Stacking one-hots into a matrix X
+
+Build $\mathbf{X}$ for `"hello"` with vocabulary $\{e{:}1,\; h{:}2,\; l{:}3,\; o{:}4\}$:
 
 ```rustlab
 % Vocabulary for "hello": e=1, h=2, l=3, o=4
@@ -127,7 +135,7 @@ Matrix(5x4)
 
 The matrix is 5 $\times$ 4 — one row per token, one column per vocabulary slot. Each row has exactly one non-zero entry. Rows 3 and 4 (both `l`) are identical — the model sees them as the same token.
 
-### Verification
+### Example — Row sums and orthogonality
 
 Row sums must all equal 1, and distinct one-hot vectors must be orthogonal:
 
@@ -153,6 +161,8 @@ Dot product h . e: 0   l . l: 1
 ```
 
 Orthogonality confirmed: $\mathbf{e}_h \cdot \mathbf{e}_e = 0$ and $\mathbf{e}_l \cdot \mathbf{e}_l = 1$ — exactly $\delta_{ij}$.
+
+### Example — One-hot matrix heatmap
 
 ```rustlab
 figure()

@@ -18,12 +18,16 @@ Bigram language models and row-normalised probability matrices from [Lesson 05](
 
 ## Where the Bigram Fails
 
+### Theory
+
 Consider two sentences sharing an ambiguous token:
 
 - `river bank water`
 - `money bank safe`
 
-`bank` is the same token in both, but its continuation depends on the history. A bigram sees only the previous token, so both histories collapse to the same row of $P$.
+`bank` is the same token in both, but its continuation depends on the history. A bigram sees only the previous token, so both histories collapse to the same row of $P$. This section's H2s pair `### Theory` with `### Example — <descriptor>`.
+
+### Example — P(next | bank) collapses to a 50/50
 
 ```rustlab
 vocab_size = 5;
@@ -54,6 +58,8 @@ $$P(\text{next} \mid \text{bank}) = [0, 0, 0.5, 0, 0.5].$$
 
 P(water | bank) = 0.50$, P(safe | bank) = 0.50$ — whether the history was `river bank` or `money bank`. The model has no mechanism to tell them apart.
 
+### Example — Bar of P(next | bank)
+
 ```rustlab
 figure()
 labels = {"river", "bank", "water", "money", "safe"};
@@ -73,6 +79,8 @@ This is a structural failure, not a data failure.
 
 ## The Fix: Summarise the Whole Prefix
 
+### Theory
+
 If the prediction depends only on the *last* token, it can't see prior context. So let the state at position $t$ summarise *every* earlier token. The simplest summary is the average
 
 $$\bar{\mathbf{x}}_t \;=\; \frac{1}{t}\sum_{i=1}^{t} \mathbf{x}_i.$$
@@ -80,6 +88,8 @@ $$\bar{\mathbf{x}}_t \;=\; \frac{1}{t}\sum_{i=1}^{t} \mathbf{x}_i.$$
 Each $\bar{\mathbf{x}}_t$ is a "bag of past tokens" — every prior embedding blended in with equal weight.
 
 ## Rewrite as a Matrix Multiply
+
+### Theory
 
 Stack embeddings into $\mathbf{X} \in \mathbb{R}^{T \times d}$ and define a **lower-triangular** averaging matrix $\mathbf{W}$:
 
@@ -90,6 +100,8 @@ Then the entire stack of prefix averages is a single matrix multiply
 $$\bar{\mathbf{X}} \;=\; \mathbf{W}\mathbf{X}.$$
 
 The upper triangle is zero — this is the **causal** constraint: position $t$ cannot see a future token.
+
+### Example — Build W and the input embeddings X
 
 ```rustlab
 T = 6;
@@ -113,6 +125,8 @@ end
 
 For $T = 6$, $\mathbf{W}$ is shown below.
 
+### Example — Causal averaging matrix W heatmap
+
 ```rustlab
 figure()
 imagesc(W, "viridis")
@@ -127,13 +141,13 @@ title("Causal Averaging Matrix W — row t = 1/t, zero above diagonal")
 
 Row $t$ has $t$ non-zero entries each equal to $1/t$, so every row sums to 1.
 
-### Verify Against the Loop
+### Example — Loop vs. matmul agreement
 
 The matrix multiply produces the same result as an explicit running-sum loop:
 
 Max absolute difference between loop and matrix multiply: 0.00e+00$ — identical to machine precision.
 
-### The Averaged Sequence
+### Example — X vs. X̄ side by side
 
 ```rustlab
 figure()
@@ -155,6 +169,8 @@ title("Prefix Averages X̄ = W*X (each row mixes all earlier tokens)")
 $\bar{\mathbf{X}}$ is smoother than $\mathbf{X}$. Row $t$ of $\bar{\mathbf{X}}$ is a blend of the first $t$ rows of $\mathbf{X}$ — position $t$ now carries information from every earlier token.
 
 ## The Remaining Weakness
+
+### Theory
 
 Uniform $1/t$ weights treat every past token as equally informative. In a sentence like *"the cat sat on the mat, it was soft"*, the pronoun *it* refers to a specific token (`mat`), not the average of everything before it. We need **data-dependent** weights — weights that concentrate mass on the relevant tokens based on what each token actually says.
 

@@ -19,10 +19,32 @@ for that convention.
 - Variables persist across ` ```rustlab ` blocks within a notebook.
   Define `vocab_size`, embedding matrices, etc. once, reuse below.
 - The renderer captures the active figure automatically. **Don't** call
-  `figure()` or `savefig()` inside notebook code blocks — those belong
-  in `.r` scripts.
-- Use `clf;` at the start of each plot block to clear before drawing.
+  `savefig()` inside notebook code blocks — that belongs in `.r` scripts.
+- Use `figure()` (not `clf;`) at the start of each plot block. `figure()`
+  creates a fresh figure and avoids state leaking across notebooks in
+  directory-mode rendering.
+- If a plot block uses `hold("on")`, close it with `hold("off")` at the
+  end. Lingering `hold("on")` state leaks into the next notebook in
+  directory mode and inflates the captured-plot count.
+- Use `<!-- hide -->` before setup-only code blocks the reader doesn't
+  need to see — the renderer evaluates the block but omits it from
+  the output.
+- Use template interpolation `${expr}` to embed computed values in
+  prose (e.g. `${mean(v):%.3f}`).
 - Comments in notebook code blocks: `%`. Comments in `.r` files: `#`.
+
+## Section structure
+
+Within each conceptual `## <Concept>`, split prose theory from rustlab
+code with explicit H3 subsections: `### Theory` (math, derivations,
+intuition — no code) and `### Example — <descriptor>` (one ` ```rustlab `
+block plus a short setup paragraph). One H3 per logically distinct
+example — if a concept has both a frequency bar chart and a one-hot
+heatmap, each gets its own `### Example — ...`. Pure-reference H2s
+(formal definitions, vocabulary tables, dimension conventions) can stay
+flat. See [`01-tokens-and-encoding.md`](01-tokens-and-encoding.md) for
+the worked pattern, and [`../AGENTS.md`](../AGENTS.md) §"Notebook
+Format" for the full template.
 
 This file (named `README.md`) is skipped by the renderer, so it never
 shows up under `site/`.

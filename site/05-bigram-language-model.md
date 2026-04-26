@@ -26,9 +26,11 @@ The full history can be arbitrarily long. The bigram model makes the **Markov as
 
 $$P(x_{t+1} \mid x_1, \ldots, x_t) \approx P(x_{t+1} \mid x_t).$$
 
-This reduces the problem to estimating $|\mathcal{V}|^2$ conditional probabilities — one for every ordered pair of tokens.
+This reduces the problem to estimating $|\mathcal{V}|^2$ conditional probabilities — one for every ordered pair of tokens. This section is pure framing; every later H2 pairs `### Theory` with `### Example — <descriptor>`.
 
 ## Building the Bigram Matrix
+
+### Theory
 
 **Step 1 — Count.** Scan the corpus and tally every consecutive pair $(x_t, x_{t+1})$ into the count matrix $\mathbf{C} \in \mathbb{Z}_{\geq 0}^{|\mathcal{V}| \times |\mathcal{V}|}$:
 
@@ -38,7 +40,9 @@ $$C_{ij} = \text{number of times token } j \text{ follows token } i.$$
 
 $$P_{ij} = \frac{C_{ij}}{\sum_{k=1}^{|\mathcal{V}|} C_{ik}}.$$
 
-Build this for the corpus `"abcbabcba"`:
+We work the corpus `"abcbabcba"` end-to-end below.
+
+### Example — Counting bigrams in "abcbabcba"
 
 ```rustlab
 n_tokens  = len(seq);
@@ -65,6 +69,8 @@ Matrix(3x3)
 ```
 
 The corpus has 9 tokens, producing 8 bigrams. Total counts sum to 8 — matches $n_{\text{bigrams}}$.
+
+### Example — Row-normalising counts to probabilities
 
 ```rustlab
 % Row-normalise to probability matrix P
@@ -94,11 +100,15 @@ Row sums (each should be 1): [1×3]  1.000000  1.000000  1.000000
 
 Token `a` always goes to `b`. Token `c` always goes to `b`. Token `b` goes to either `a` or `c` with equal probability.
 
-### Laplace Smoothing
+## Laplace Smoothing
+
+### Theory
 
 If a pair never appeared, $P_{ij} = 0$ and the cross-entropy loss is infinite on that bigram. **Add-one smoothing** ensures every pair has non-zero probability:
 
 $$P_{ij}^{\text{smooth}} = \frac{C_{ij} + 1}{\sum_k (C_{ik} + 1)} = \frac{C_{ij} + 1}{\sum_k C_{ik} + |\mathcal{V}|}.$$
+
+### Example — Smoothed probability matrix
 
 ```rustlab
 C_smooth = C + ones(vocab_size, vocab_size);
@@ -126,9 +136,13 @@ Matrix(3x3)
 
 Every entry in $P^{\text{smooth}}$ is now $\geq 0.143$ — no more zero-probability bigrams.
 
-### Row Entropy
+## Row Entropy
 
-The entropy of each row tells us how predictable the next token is:
+### Theory
+
+The entropy of each row of $\mathbf{P}$ tells us how predictable the next token is. A deterministic row (all mass on one column) has $H = 0$; an equally-spread 2-option row has $H = 1$ bit; a uniform $|\mathcal{V}|$-option row has $H = \log_2 |\mathcal{V}|$.
+
+### Example — Per-row entropies for the abc corpus
 
 ```rustlab
 eps = 1e-12;
@@ -140,6 +154,8 @@ end
 ```
 
 Row entropies: $H(a) = 0.000$ bits (deterministic → `b`), $H(b) = 1.000$ bits (max for 2 equal options), $H(c) = 0.000$ bits (deterministic → `b`).
+
+### Example — Count and probability heatmaps
 
 ```rustlab
 figure()
@@ -167,12 +183,16 @@ title("Bigram Probability Matrix P (row-normalised)")
 
 ## Sampling from the Model
 
+### Theory
+
 To generate text, repeatedly sample the next token using the **CDF method**:
 
 1. Look up the row $\mathbf{P}_i$ for the current token.
 2. Compute the cumulative distribution: $\text{CDF}_j = \sum_{k=1}^{j} P_{ik}$.
 3. Draw $u \sim \text{Uniform}(0, 1)$.
 4. The sampled token is $x_{t+1} = \min\{j : \text{CDF}_j \geq u\}$.
+
+### Example — CDF lookup for two uniform draws
 
 ```rustlab
 % Use the probability matrix from above
@@ -195,7 +215,7 @@ Sampling mechanism demonstration:
   u=0.7 -> sum(CDF < 0.7) + 1 = 3   (expect 3 = c)
 ```
 
-### Generate a sequence
+### Example — Generating a 12-token sequence
 
 ```rustlab
 n_generate = 12;
@@ -223,13 +243,17 @@ Generated sequence (indices): [1×12]  1.000000  2.000000  3.000000  2.000000  3
 
 Notice the structure: `b` appears at every even position, because both `a` and `c` transition deterministically to `b`.
 
-### Training Loss and Perplexity
+## Training Loss and Perplexity
+
+### Theory
 
 The count-based bigram model is the **maximum likelihood estimator** of the Markov model:
 
 $$\mathcal{L} = -\frac{1}{T-1} \sum_{t=1}^{T-1} \log P_{x_t, x_{t+1}}.$$
 
 The **perplexity** of the model on a sequence is $\exp(\mathcal{L})$ — the model's "effective branching factor" at each step.
+
+### Example — Mean cross-entropy and perplexity on the corpus
 
 ```rustlab
 log_probs = [log(1.0), log(0.5), log(1.0), log(0.5), log(1.0), log(0.5), log(1.0), log(0.5)];
@@ -238,6 +262,8 @@ ppl = exp(mean_ce);
 ```
 
 Mean cross-entropy on the training corpus: 0.3466$ nats, corresponding to perplexity 1.414$.
+
+### Example — Per-row probability bars
 
 ```rustlab
 figure()

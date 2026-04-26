@@ -18,9 +18,11 @@ Scaled dot-product attention, the causal mask, and the $\mathbf{Q}, \mathbf{K}, 
 
 A single attention head can compute *one* way of relating tokens — for example, "each token attends to the previous one". But language has many relationships: syntactic (subject-verb agreement), coreference (*it* → *mat*), long-range dependencies (quotes), positional (first-token, last-token). A single softmax-weighted sum collapses all of them into one pattern.
 
-**Multi-head attention** runs $H$ independent attention computations in parallel, each with its own projection matrices. Each head can specialise in a different relationship, and the outputs are combined at the end.
+**Multi-head attention** runs $H$ independent attention computations in parallel, each with its own projection matrices. Each head can specialise in a different relationship, and the outputs are combined at the end. This section is pure motivation; every later H2 pairs `### Theory` with `### Example — <descriptor>`.
 
 ## Per-Head Projections
+
+### Theory
 
 For each head $h = 1, \dots, H$, project the input $\mathbf{X}$ through its own weight matrices:
 
@@ -34,7 +36,11 @@ The causal mask $\mathbf{M}$ is shared across heads — every head must respect 
 
 ## Four Heads, Four Patterns
 
-Four heads with hand-set $(\mathbf{Q}_h, \mathbf{K}_h)$ designed to reveal distinct patterns:
+### Theory
+
+Four heads with hand-set $(\mathbf{Q}_h, \mathbf{K}_h)$ designed to reveal distinct attention patterns: first-token, previous-token, self, uniform. Each pattern is what gradient descent might recover after training; here we hand-set the projections so the patterns are deterministic and visible.
+
+### Example — Shared causal mask and helper
 
 ```rustlab
 T = 6;
@@ -63,7 +69,9 @@ function A = causal_attention_weights(Q, K, scale, M, T)
 end
 ```
 
-**Head 1 — "look at the first token":** $\mathbf{K}_1$ has a strong feature only in row 1; every query asks for that feature.
+### Example — Head 1: "look at the first token"
+
+$\mathbf{K}_1$ has a strong feature only in row 1; every query asks for that feature.
 
 ```rustlab
 K1 = zeros(T, d_k);
@@ -75,7 +83,9 @@ end
 A1 = causal_attention_weights(Q1, K1, scale, M, T);
 ```
 
-**Head 2 — "previous token":** Encode position on the unit circle so $\mathbf{Q}_t \cdot \mathbf{K}_i$ peaks at $i = t-1$.
+### Example — Head 2: "previous token"
+
+Encode position on the unit circle so $\mathbf{Q}_t \cdot \mathbf{K}_i$ peaks at $i = t-1$.
 
 ```rustlab
 K2 = zeros(T, d_k);
@@ -91,13 +101,17 @@ end
 A2 = causal_attention_weights(Q2, K2, scale, M, T);
 ```
 
-**Head 3 — "self":** same encoding, but $\mathbf{Q}_t = \mathbf{K}_t$.
+### Example — Head 3: "self"
+
+Same encoding as Head 2, but $\mathbf{Q}_t = \mathbf{K}_t$.
 
 ```rustlab
 A3 = causal_attention_weights(K2, K2, scale, M, T);
 ```
 
-**Head 4 — "uniform over past":** all scores zero → softmax produces uniform weights.
+### Example — Head 4: "uniform over past"
+
+All scores zero → softmax produces uniform weights over the available past.
 
 ```rustlab
 Q4 = zeros(T, d_k);
@@ -112,7 +126,7 @@ A4_row4 = A4(4);
 
 Head 4 row 4 should equal $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case is exactly the Lesson 07 averaging matrix. Computed: ${A4_row4(1):%.3f}, ${A4_row4(2):%.3f}, ${A4_row4(3):%.3f}, ${A4_row4(4):%.3f}, ${A4_row4(5):%.3f}, ${A4_row4(6):%.3f}$.
 
-### Plot all four heads
+### Example — 2×2 grid of head heatmaps
 
 ```rustlab
 figure()
@@ -137,11 +151,15 @@ All four are lower-triangular (same causal mask) with rows summing to 1 (softmax
 
 ## Concatenation and Output Projection
 
+### Theory
+
 Per-head outputs $\mathbf{O}_h \in \mathbb{R}^{T \times d_v}$ are stacked along the feature axis and projected back to $d_{\text{model}}$:
 
 $$\mathrm{Concat} = [\mathbf{O}_1, \mathbf{O}_2, \dots, \mathbf{O}_H] \in \mathbb{R}^{T \times H d_v}, \qquad \mathbf{O} = \mathrm{Concat} \cdot \mathbf{W}_O.$$
 
 When $d_v = d_{\text{model}}/H$ the concatenation already has the right shape, but $\mathbf{W}_O$ is essential: it mixes features *across* heads so later layers can combine what each head discovered. Without it, slices of $\mathbf{O}$ come from unrelated heads and the $H$ parallel computations never interact.
+
+### Example — Two-head pipeline with explicit values
 
 The full pipeline in compact form ($T=4$, $H=2$, $d_k=d_v=2$, $d_{\text{model}}=4$):
 
@@ -214,7 +232,7 @@ n_tot = n_qkv + n_wo;
 
 Shapes: $\mathrm{Concat} \in \mathbb{R}^{${concat_shape(1)} \times ${concat_shape(2)}}$, $\mathbf{O} \in \mathbb{R}^{${out_shape(1)} \times ${out_shape(2)}}$.
 
-### Plot
+### Example — Concat and final output heatmaps
 
 ```rustlab
 figure()
@@ -229,6 +247,8 @@ title("Final MHA output O = Concat * W_O")
 
 ## Parameter Count
 
+### Theory
+
 Pack the per-head projections into three combined $d_{\text{model}} \times d_{\text{model}}$ matrices; each head uses a slice of width $d_k$. The total is
 
 $$\underbrace{3 d_{\text{model}}^2}_{\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V} + \underbrace{d_{\text{model}}^2}_{\mathbf{W}_O} \;=\; 4 d_{\text{model}}^2.$$
@@ -238,6 +258,8 @@ For the toy $d_{\text{model}} = 4$ that is $3 \cdot 16 + 16 = ${n_tot}$ paramete
 **$H$ does not appear.** More heads at fixed $d_{\text{model}}$ means narrower heads ($d_k = d_{\text{model}}/H$), not more parameters. Head *count* is an architectural choice; head *width* is what determines capacity.
 
 ## Why Does This Work?
+
+### Theory
 
 Each head sees the full input $\mathbf{X}$ but projects it down to a $d_k$-dimensional subspace before computing attention. Different projections emphasise different features of $\mathbf{X}$, so each head sees a different "view" of the sequence. With enough heads and sufficient training, the heads specialise — some learn positional patterns, some learn semantic patterns, some learn long-range structure. Specialisation is not engineered: because all heads share the same input and loss, gradient descent finds projections that cover *complementary* patterns (two heads learning the same thing would waste capacity).
 

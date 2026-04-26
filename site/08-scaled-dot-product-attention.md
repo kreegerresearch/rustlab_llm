@@ -20,6 +20,8 @@ Embeddings as dense row vectors from [Lesson 04](04-embeddings-and-similarity.md
 
 ## Queries, Keys, Values
 
+### Theory
+
 Given an input $\mathbf{X} \in \mathbb{R}^{T \times d_{\text{model}}}$ (row $t$ is the embedding of token $t$), three learned linear projections produce three matrices:
 
 $$\mathbf{Q} = \mathbf{X}\mathbf{W}_Q \in \mathbb{R}^{T \times d_k}, \quad \mathbf{K} = \mathbf{X}\mathbf{W}_K \in \mathbb{R}^{T \times d_k}, \quad \mathbf{V} = \mathbf{X}\mathbf{W}_V \in \mathbb{R}^{T \times d_v}.$$
@@ -28,6 +30,8 @@ $$\mathbf{Q} = \mathbf{X}\mathbf{W}_Q \in \mathbb{R}^{T \times d_k}, \quad \math
 - $\mathbf{W}_V \in \mathbb{R}^{d_{\text{model}} \times d_v}$ — project into a **value** vector.
 
 Each token emits three vectors: a **query** (what it's looking for), a **key** (what it advertises), a **value** (what it contributes if selected). The parameters $\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V$ are learned by gradient descent ([Lesson 06](06-linear-layers-and-gradient-descent.md)); once trained, they encode which features matter for prediction.
+
+### Example — Hand-crafted Q and K with an interpretable pattern
 
 ```rustlab
 T = 5;
@@ -51,13 +55,15 @@ Q = [ 1.0, 0.0, 0.0, 0.0;
 
 ## The Score Matrix
 
+### Theory
+
 Entry $(t, i)$ of $\mathbf{S} = \mathbf{Q}\mathbf{K}^\top$ is the dot product $\mathbf{q}_t \cdot \mathbf{k}_i$ — a raw similarity between query $t$ and key $i$.
 
-### Why divide by $\sqrt{d_k}$?
-
-If $\mathbf{q}$ and $\mathbf{k}$ each have $d_k$ i.i.d. components with mean 0 and variance 1, then $\mathbf{q}\cdot\mathbf{k} = \sum_{j=1}^{d_k} q_j k_j$ has variance $d_k$ (sum of $d_k$ independent products) and so standard deviation $\sqrt{d_k}$. As $d_k$ grows, raw dot products grow too, softmax becomes razor-sharp (one entry approaches 1, others approach 0), and gradients vanish. Scaling by $1/\sqrt{d_k}$ keeps the input to softmax at roughly unit variance regardless of dimension:
+**Why divide by $\sqrt{d_k}$?** If $\mathbf{q}$ and $\mathbf{k}$ each have $d_k$ i.i.d. components with mean 0 and variance 1, then $\mathbf{q}\cdot\mathbf{k} = \sum_{j=1}^{d_k} q_j k_j$ has variance $d_k$ (sum of $d_k$ independent products) and so standard deviation $\sqrt{d_k}$. As $d_k$ grows, raw dot products grow too, softmax becomes razor-sharp (one entry approaches 1, others approach 0), and gradients vanish. Scaling by $1/\sqrt{d_k}$ keeps the input to softmax at roughly unit variance regardless of dimension:
 
 $$\mathbf{S}_{\text{scaled}} = \frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}}.$$
+
+### Example — Compute the scaled score matrix
 
 ```rustlab
 S = Q * K' * scale;
@@ -65,11 +71,15 @@ S = Q * K' * scale;
 
 ## The Causal Mask
 
+### Theory
+
 For a language model, token $t$ must not see tokens at positions $i > t$. Add a mask $\mathbf{M}$ with entries $-\infty$ above the diagonal and 0 elsewhere:
 
 $$M_{t, i} = \begin{cases} 0 & i \le t \\ -\infty & i > t. \end{cases}$$
 
 In practice we use a large negative value (e.g. $-10^9$) to avoid `NaN` from $\exp(-\infty)$.
+
+### Example — Apply the mask to S
 
 ```rustlab
 NEG_INF = -1.0e9;
@@ -84,9 +94,13 @@ S_masked = S + M;
 
 ## Row-wise Softmax → Attention Weights
 
+### Theory
+
 Applying softmax to each row turns the scores into a probability distribution. The $-10^9$ entries become exactly 0:
 
 $$A_{t, i} = \frac{\exp(\tilde S_{t, i})}{\sum_{j=1}^{T} \exp(\tilde S_{t, j})}.$$
+
+### Example — Build A and verify causality + row sums
 
 ```rustlab
 A = zeros(T, T);
@@ -100,7 +114,7 @@ end
 
 Token 1 can only attend to itself, so $A_{1,1} = 1.0000$. Every row sums to 1. The maximum attention weight in the upper triangle is 0.00e+00$ — effectively zero, as required for causality.
 
-### The three-stage pipeline
+### Example — Three-stage pipeline heatmap
 
 ```rustlab
 figure()
@@ -127,7 +141,11 @@ The final attention matrix is **lower-triangular** (causality) with **rows summi
 
 ## Full Pipeline: X → Q, K, V → Output
 
+### Theory
+
 Wire it all together. Add a value matrix $\mathbf{V}$ and produce $\mathbf{O} = \mathbf{A}\mathbf{V}$.
+
+### Example — Project X into Q, K, V
 
 ```rustlab
 d_model = 6;
@@ -162,7 +180,7 @@ K2 = X * W_K;
 V2 = X * W_V;
 ```
 
-Compute attention weights and output:
+### Example — Compute attention weights and output
 
 ```rustlab
 S2 = Q2 * K2' * scale;
@@ -187,6 +205,8 @@ O = A2 * V2;
 
 Row 1 of $\mathbf{O}$ equals row 1 of $\mathbf{V}$ (token 1 only attends to itself): $\max|\mathbf{O}_1 - \mathbf{V}_1| = 0.00e+00$. The block's learnable parameters are $3 \cdot d_{\text{model}} \cdot d_k = 3 \cdot 6$ \cdot 4$ = 72$ — and this count does **not** depend on sequence length $T$.
 
+### Example — Attention weights and output heatmaps
+
 ```rustlab
 figure()
 subplot(2, 1, 1)
@@ -204,6 +224,8 @@ title("Output O = A V")
 ![plot 2](plots/08-scaled-dot-product-attention/plot-2.svg)
 
 ## Connection to Lesson 07
+
+### Theory
 
 Attention and the Lesson 07 averaging matrix have the **same shape**:
 

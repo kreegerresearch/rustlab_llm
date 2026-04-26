@@ -16,9 +16,11 @@ Probability distributions and softmax from [Lesson 02](02-probability-and-softma
 
 ## The Setup
 
-At each position in a sequence the model outputs $\hat{\mathbf{p}} \in \mathbb{R}^{|\mathcal{V}|}$ (a probability distribution from softmax, [Lesson 02](02-probability-and-softmax.md)). The ground truth is the actual next token — a one-hot vector $\mathbf{y}$ ([Lesson 01](01-tokens-and-encoding.md)).
+At each position in a sequence the model outputs $\hat{\mathbf{p}} \in \mathbb{R}^{|\mathcal{V}|}$ (a probability distribution from softmax, [Lesson 02](02-probability-and-softmax.md)). The ground truth is the actual next token — a one-hot vector $\mathbf{y}$ ([Lesson 01](01-tokens-and-encoding.md)). This section is pure reference; every later H2 pairs `### Theory` with `### Example — <descriptor>`.
 
 ## Cross-Entropy
+
+### Theory
 
 The **cross-entropy** between the true distribution $\mathbf{y}$ and predicted distribution $\hat{\mathbf{p}}$ is
 
@@ -28,9 +30,7 @@ Because $\mathbf{y}$ is one-hot, only the term for the correct token $c$ survive
 
 $$\mathcal{L} = -\log \hat{p}_c.$$
 
-This is the **negative log-probability of the correct token** — the standard loss for language model training.
-
-### Intuition
+This is the **negative log-probability of the correct token** — the standard loss for language model training. Reference values:
 
 | $\hat{p}_c$ | $\mathcal{L} = -\log(\hat{p}_c)$ | Meaning |
 |------|------|---------|
@@ -39,7 +39,9 @@ This is the **negative log-probability of the correct token** — the standard l
 | 0.01 | 4.605 | Nearly zero probability on the right answer |
 | $\to 0$ | $\to \infty$ | Catastrophically wrong |
 
-The loss is a **convex, decreasing function** of $\hat{p}_c$. Plot it:
+The loss is a **convex, decreasing function** of $\hat{p}_c$.
+
+### Example — Loss curve and reference points
 
 ```rustlab
 % Sample p_hat across (0.01, 1.0] and compute L = -log(p_hat_c) in nats
@@ -75,6 +77,8 @@ At $\hat{p}_c = 1/|\mathcal{V}|$ (uniform prediction — the model knows nothing
 
 ## Connection to Maximum Likelihood
 
+### Theory
+
 For a training sequence of $T$ tokens, the average loss is
 
 $$\mathcal{L}_{\text{avg}} = -\frac{1}{T} \sum_{t=1}^{T} \log \hat{p}_{x_t}^{(t)}.$$
@@ -83,7 +87,11 @@ This is exactly the negative log-likelihood divided by $T$. Minimising cross-ent
 
 ## Gradient of the Loss
 
-The gradient $\frac{d\mathcal{L}}{d\hat{p}_c} = -\frac{1}{\hat{p}_c}$ is large when $\hat{p}_c$ is small — the model gets a strong training signal when it is very wrong:
+### Theory
+
+The gradient $\frac{d\mathcal{L}}{d\hat{p}_c} = -\frac{1}{\hat{p}_c}$ is large when $\hat{p}_c$ is small — the model gets a strong training signal when it is very wrong.
+
+### Example — Gradient magnitude at low vs. high probability
 
 ```rustlab
 grad_at_low  = 1.0 / 0.01;
@@ -94,11 +102,15 @@ At $p{=}0.01$, $|dL/dp_c| = ${grad_at_low:%.2f}$; at $p{=}0.99$, $|dL/dp_c| = ${
 
 ## The Loss Surface in Logit Space
 
+### Theory
+
 Real language models don't optimise probabilities directly — they optimise **logits** $\mathbf{z}$, with softmax producing $\hat{\mathbf{p}}$ on the fly. For a 3-class problem with logits $\mathbf{z} = (z_1, z_2, z_3{=}0)$ and the correct class $c = 1$:
 
 $$\hat{p}_1 = \frac{e^{z_1}}{e^{z_1} + e^{z_2} + 1}, \qquad \mathcal{L}(z_1, z_2) = -z_1 + \log\!\left(e^{z_1} + e^{z_2} + 1\right).$$
 
 That is a 2-parameter surface — the canonical "loss bowl" gradient descent actually sees.
+
+### Example — 2-D loss surface over $(z_1, z_2)$
 
 ```rustlab
 n = 60;
@@ -132,6 +144,8 @@ Two features of this surface make the training dynamics legible:
 - **Linear wall in the distractor direction.** When $z_2 \gg z_1$ the loss grows like $z_2 - z_1$ — a linear ramp, not an exponential cliff. That linearity is why the gradient through softmax is well-behaved even when the model is catastrophically wrong.
 
 ## Relationship to Entropy and KL Divergence
+
+### Theory
 
 Cross-entropy decomposes as
 

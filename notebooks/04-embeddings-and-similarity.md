@@ -16,9 +16,11 @@ One-hot encoding from [Lesson 01](01-tokens-and-encoding.md) (tokens as sparse i
 
 ## The Problem with One-Hot Vectors
 
-One-hot vectors (Lesson 01) are orthogonal — every pair of tokens is equally "distant". A model operating on one-hot vectors cannot leverage any prior knowledge that `king` and `queen` are semantically closer to each other than to `table`. They also have dimension $|\mathcal{V}|$ (potentially tens of thousands), which is expensive to process.
+One-hot vectors (Lesson 01) are orthogonal — every pair of tokens is equally "distant". A model operating on one-hot vectors cannot leverage any prior knowledge that `king` and `queen` are semantically closer to each other than to `table`. They also have dimension $|\mathcal{V}|$ (potentially tens of thousands), which is expensive to process. This section is pure motivation — every later H2 pairs `### Theory` with `### Example — <descriptor>`.
 
 ## The Embedding Matrix
+
+### Theory
 
 The fix is to learn a **dense, low-dimensional representation** for each token. The **embedding matrix** is
 
@@ -38,7 +40,9 @@ $$\mathbf{H} = \mathbf{X} \mathbf{E} \in \mathbb{R}^{T \times d}.$$
 
 The result $\mathbf{H}$ is the **embedded sequence**: each row is the dense embedding of the corresponding token.
 
-Initialise a random-looking embedding matrix and verify the lookup. In a real model these values come from `randn(vocab_size, d_embed) * 0.1`; here we use a deterministic sin/cos recipe so the rendered notebook reproduces bit-for-bit (rustlab v0.1.11 has no RNG seed — see `AGENTS.md` Rustlab Recommendations).
+### Example — Building a deterministic 8×6 embedding matrix
+
+In a real model these values come from `randn(vocab_size, d_embed) * 0.1`; here we use a deterministic sin/cos recipe so the rendered notebook reproduces bit-for-bit (rustlab v0.1.11 has no RNG seed — see `AGENTS.md` Rustlab Recommendations).
 
 ```rustlab
 vocab_size = 8;
@@ -55,6 +59,8 @@ print(E);
 
 Shape: ${size(E, 1)} $\times$ ${size(E, 2)} — one row per token in a ${d_embed}-dimensional embedding space.
 
+### Example — One-hot lookup recovers a row
+
 ```rustlab
 % Token index 3 → one-hot e3 selects row 3 via  h = e3 * E
 e3 = [0, 0, 1, 0, 0, 0, 0, 0];
@@ -67,6 +73,8 @@ print("Row 3 of E:", E(3));
 
 The lookup matches the direct row access exactly — $\max|h_3 - E_3| = ${diff:%.2e}$ (machine epsilon).
 
+### Example — Embedding matrix heatmap
+
 At random initialisation all rows look similar. After training, semantically related tokens would cluster together:
 
 ```rustlab
@@ -76,6 +84,8 @@ title("Embedding Matrix E  (8 tokens x 6 dims)  - random init")
 ```
 
 ## Cosine Similarity
+
+### Theory
 
 In embedding space, **direction** is the signal. Two tokens are related if their vectors point the same way. The measure is **cosine similarity**:
 
@@ -95,7 +105,7 @@ $$\mathbf{S} = \hat{\mathbf{E}} \, \hat{\mathbf{E}}^\top \in \mathbb{R}^{N \time
 
 Entry $S_{ij}$ is the cosine similarity between tokens $i$ and $j$. The diagonal is always 1.
 
-### Worked example: king, queen, man, woman
+### Example — Hand-crafted king/queen/man/woman vectors
 
 Use hand-crafted embeddings with dimensions encoding $[\text{royalty}, \text{femininity}, \text{age}, \text{authority}]$:
 
@@ -115,6 +125,8 @@ function s = cos_sim(a, b)
   s = sum(a .* b) / (sqrt(sum(a .^ 2)) * sqrt(sum(b .^ 2)))
 end
 ```
+
+### Example — 4×4 cosine-similarity matrix
 
 ```rustlab
 % Compute the full 4x4 similarity matrix
@@ -146,6 +158,8 @@ sym_err = max(reshape(abs(S - transpose(S)), 1, 16));
 
 Key pairs: king/queen = ${s_kq:%.3f}$ (both royal), king/man = ${s_km:%.3f}$ (same gender), queen/woman = ${s_qw:%.3f}$ (same gender). The matrix is symmetric: $\max|S - S^\top| = ${sym_err:%.2e}$.
 
+### Example — Similarity heatmap
+
 ```rustlab
 figure()
 imagesc(S, "viridis")
@@ -154,9 +168,13 @@ title("Cosine Similarity: king, queen, man, woman")
 
 ## Analogy Arithmetic
 
+### Theory
+
 Trained embeddings organise so that semantic relationships correspond to geometric ones. The classic example:
 
 $$\mathbf{E}_{\text{king}} - \mathbf{E}_{\text{man}} + \mathbf{E}_{\text{woman}} \approx \mathbf{E}_{\text{queen}}.$$
+
+### Example — Closest token to king − man + woman
 
 ```rustlab
 analogy = king - man + woman;
