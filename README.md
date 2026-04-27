@@ -43,7 +43,7 @@ Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts
 | 08 | Scaled Dot-Product Attention | Q, K, V; attention scores; softmax; causal masking |
 | 09 | Multi-Head Attention | Parallel attention heads; concatenation & projection |
 
-### Phase 4 — Transformer Components
+### Phase 4 — Transformer Components `(Complete)`
 
 | # | Title | Core Concept |
 |---|-------|-------------|

@@ -250,3 +250,36 @@ When a needed function is missing from rustlab, record it here with the format:
 seed(42);
 E = randn(8, 6) * 0.1;   % bit-identical across runs
 ```
+
+### `M(idx)` row gather with an integer-vector index → matrix
+**Needed for:** Lesson 11 (FFN per-position independence check) and any later lesson that wants to permute, gather, or sample a subset of rows of a matrix.
+**Current behaviour:** `M(2)` returns row 2, `M(2, 3)` returns the scalar at (2, 3), but `M([3, 1, 2])` raises `runtime error: matrix single-index with vector not supported; use M(i,j) for element access`.
+**Workaround in use:** Build a permutation/selection matrix `P` and compute `P * M`. Works correctly but is allocation-heavy ($N^2$ memory for an $N$-row gather) and requires the user to construct the permutation matrix by hand. See `lessons/11-feed-forward-block/ffn_forward.r` for the worked pattern.
+**Wanted:** Standard MATLAB/Octave-style row gather, accepting an integer vector or range and returning the gathered rows.
+**Example (target):**
+```
+H_perm = H([3, 1, 2, 5, 4]);          % gather rows in any order
+batch  = X(rand_indices);             % minibatch sampling for SGD lessons (Phase 6)
+```
+
+### Vector vs. 1×N matrix type distinction in arithmetic
+**Hit while writing:** Lesson 12 (residual signal demo).
+**Symptom:** `(W * x')'` and `x * W'` are mathematically identical (both produce a row of length $d$), but the first returns a `matrix` of shape $1 \times d$ while the second returns a `vector`. Adding a `vector` to a `matrix` raises `type error: operator Add not defined for vector and matrix`. Surfaces whenever you mix the two patterns in a per-step update like `x = x + alpha * f(x)`.
+**Workaround in use:** Always project via `x * W'` (or use `reshape(M, 1, d)` to coerce a 1×$d$ matrix back to a vector) so types stay aligned. See `lessons/12-layer-norm-and-residuals/residual_signal.r`.
+**Wanted:** Either treat `1 × N` matrices as auto-promotable to vectors for `+`/`-`, or — more conservatively — accept vector + 1×N-matrix and broadcast. Without one of these, intermediate transposes silently change a value's type and the error appears far from the root cause.
+**Example (target):**
+```
+y = (W * x')';             % current: returns matrix
+z = x + 0.1 * gelu(y);     % current: errors; want: just works
+```
+
+### `layernorm(M)` row-wise on a matrix → matrix
+**Needed for:** Lesson 12 (LayerNorm sublayer) and every later transformer lesson — every transformer block applies LN per token vector to the full $T \times d_{\text{model}}$ residual stream.
+**Current behaviour:** `layernorm(v)` works on a vector or scalar; `layernorm(M)` raises `type error: layernorm: argument must be a non-empty vector or scalar`.
+**Workaround in use:** Loop per row — `for t = 1:T; LN(t) = layernorm(X(t)); end` — leveraging that `M(t) = vec` assigns a row. Correct and readable, but $O(T)$ scalar dispatches instead of one vectorised call. See `lessons/12-layer-norm-and-residuals/layernorm_distribution.r`.
+**Wanted:** Matrix overload that normalises each row independently, matching the convention every transformer uses.
+**Example (target):**
+```
+H_normed = layernorm(H);                    % shape (T, d_model), per-row mean=0 std=1
+H_affine = layernorm(H, eps, gamma, beta);  % optional learned scale + bias
+```

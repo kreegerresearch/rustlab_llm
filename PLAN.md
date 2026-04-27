@@ -16,7 +16,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 | 1 | Foundations | Complete |
 | 2 | First Working Model | Complete |
 | 3 | Attention Mechanism | Complete |
-| 4 | Transformer Components | Not started |
+| 4 | Transformer Components | Complete |
 | 5 | Full GPT Architecture | Not started |
 | 6 | Training | Not started |
 | 7 | Tokenization & Evaluation | Not started |
@@ -121,21 +121,25 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - `12-layer-norm-and-residuals`
 
 **Deliverables:**
-- [ ] Lesson 10 plots the full sinusoidal PE matrix as a heatmap and a dot-product similarity vs. distance line plot
-- [ ] Lesson 11 plots GELU vs. ReLU on the same axes and shows pre/post-activation histograms
-- [ ] Lesson 12 plots activation distributions before and after LayerNorm and illustrates residual magnitude
+- [x] Lesson 10 plots the full sinusoidal PE matrix as a heatmap and a dot-product similarity vs. distance line plot
+- [x] Lesson 11 plots GELU vs. ReLU on the same axes and shows pre/post-activation histograms
+- [x] Lesson 12 plots activation distributions before and after LayerNorm and illustrates residual magnitude
 
 **Acceptance criteria:**
-- Lesson 10 explains *why* attention without positional encoding is permutation-invariant.
-- Lesson 11 states why GELU is preferred over ReLU in modern transformers (smooth gradient near zero).
-- Lesson 12 explains vanishing gradients and why residual connections solve them.
+- Lesson 10 explains *why* attention without positional encoding is permutation-invariant — proven numerically with a permutation-matrix demo.
+- Lesson 11 states why GELU is preferred over ReLU in modern transformers (smooth gradient near zero) — derivative at $x = -0.5$ printed for both.
+- Lesson 12 explains vanishing gradients and why residual connections solve them — forward-magnitude collapse vs. preservation across 24 random sublayers.
 
-**Status:** Not started
+**Status:** Complete
 
 **Handoff notes:**
-- Last completed lesson: —
-- Next action: Start with `lessons/10-positional-encoding/lesson.md`.
-- Known blockers: None — `tanh(v)` now confirmed available.
+- Last completed lesson: 12-layer-norm-and-residuals
+- Next action: Start Phase 5 with `notebooks/13-transformer-block.md`.
+- Known blockers: None for Phase 5 — `softmax`, `gelu`, `layernorm` (per-vector), `randn`, `seed`, matrix arithmetic all in place.
+- New rustlab gaps recorded in AGENTS.md Rustlab Recommendations during Phase 4:
+  1. `M([3, 1, 2])` row-vector indexing (workaround: permutation matrix).
+  2. `layernorm(M)` matrix overload (workaround: per-row loop with `M(t) = layernorm(M(t))`).
+  3. Vector vs. 1×N matrix type distinction in arithmetic — `(W*x')'` returns matrix, breaks `x + ...`. Workaround: use `x * W'` to keep the result a vector. **Worth resolving before Phase 5/6, since the transformer block (Lesson 13) and training loop (Lesson 18) will hit this on every step.**
 
 ---
 
