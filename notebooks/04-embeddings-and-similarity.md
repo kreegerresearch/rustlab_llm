@@ -42,16 +42,14 @@ The result $\mathbf{H}$ is the **embedded sequence**: each row is the dense embe
 
 ### Example — Building a deterministic 8×6 embedding matrix
 
-In a real model these values come from `randn(vocab_size, d_embed) * 0.1`; here we use a deterministic sin/cos recipe so the rendered notebook reproduces bit-for-bit (rustlab v0.1.11 has no RNG seed — see `AGENTS.md` Rustlab Recommendations).
+`seed(N)` re-seeds rustlab's shared RNG with a fixed value, so subsequent `randn` draws are bit-stable across re-renders — exactly what we need for the committed gallery.
 
 ```rustlab
 vocab_size = 8;
 d_embed = 6;
 
-% Deterministic pseudo-random init.
-% TODO: replace with `randn(vocab_size, d_embed) * 0.1` once rustlab adds an RNG seed API.
-[II, JJ] = meshgrid(1:d_embed, 1:vocab_size);
-E = 0.1 * (sin(2.7 * II + 1.3 * JJ) + cos(1.7 * II - 0.9 * JJ + 0.4));
+seed(42);                                    % deterministic init for the gallery
+E = randn(vocab_size, d_embed) * 0.1;
 
 print("Embedding matrix E:");
 print(E);

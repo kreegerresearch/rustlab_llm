@@ -44,16 +44,14 @@ The result $\mathbf{H}$ is the **embedded sequence**: each row is the dense embe
 
 ### Example — Building a deterministic 8×6 embedding matrix
 
-In a real model these values come from `randn(vocab_size, d_embed) * 0.1`; here we use a deterministic sin/cos recipe so the rendered notebook reproduces bit-for-bit (rustlab v0.1.11 has no RNG seed — see `AGENTS.md` Rustlab Recommendations).
+`seed(N)` re-seeds rustlab's shared RNG with a fixed value, so subsequent `randn` draws are bit-stable across re-renders — exactly what we need for the committed gallery.
 
 ```rustlab
 vocab_size = 8;
 d_embed = 6;
 
-% Deterministic pseudo-random init.
-% TODO: replace with `randn(vocab_size, d_embed) * 0.1` once rustlab adds an RNG seed API.
-[II, JJ] = meshgrid(1:d_embed, 1:vocab_size);
-E = 0.1 * (sin(2.7 * II + 1.3 * JJ) + cos(1.7 * II - 0.9 * JJ + 0.4));
+seed(42);                                    % deterministic init for the gallery
+E = randn(vocab_size, d_embed) * 0.1;
 
 print("Embedding matrix E:");
 print(E);
@@ -62,14 +60,14 @@ print(E);
 ```text
 Embedding matrix E:
 Matrix(8x6)
-  [-0.039444, -0.056611, -0.008738, 0.055021, 0.064275, -0.193799]
-  [0.012307, 0.057321, -0.180474, 0.137507, 0.030248, -0.086063]
-  [0.113688, 0.057805, -0.147880, 0.063495, 0.000388, 0.090312]
-  [0.106968, 0.005729, 0.034628, -0.118466, 0.040538, 0.131122]
-  [-0.051450, 0.014671, 0.143509, -0.190385, 0.060561, 0.033231]
-  [-0.186718, 0.056287, 0.080415, -0.047418, -0.029903, -0.043706]
-  [-0.118379, 0.013375, -0.030019, 0.148925, -0.142881, -0.023432]
-  [0.088664, -0.105871, -0.047133, 0.171116, -0.107225, 0.002785]
+  [0.006943, 0.013294, 0.026258, -0.022530, -0.066422, -0.021539]
+  [0.019392, 0.147642, -0.131004, -0.241089, 0.182684, 0.003609]
+  [-0.040899, -0.063393, 0.001728, -0.080328, -0.099360, 0.002251]
+  [-0.070393, 0.070619, 0.076319, -0.000985, 0.001283, -0.205239]
+  [-0.056209, -0.019614, 0.054621, -0.063203, -0.011816, 0.029221]
+  [-0.012380, 0.053437, 0.106295, 0.201838, 0.028142, -0.120393]
+  [0.018009, -0.021512, -0.148168, -0.026601, 0.113074, 0.056558]
+  [-0.013213, -0.177213, -0.147622, -0.041186, -0.002510, 0.080970]
 ```
 
 Shape: 8 $\times$ 6 — one row per token in a 6-dimensional embedding space.
@@ -87,8 +85,8 @@ print("Row 3 of E:", E(3));
 ```
 
 ```text
-Embedded representation h3: [1×6]  0.113688  0.057805  -0.147880  0.063495  0.000388  0.090312
-Row 3 of E: [1×6]  0.113688  0.057805  -0.147880  0.063495  0.000388  0.090312
+Embedded representation h3: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
+Row 3 of E: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
 ```
 
 The lookup matches the direct row access exactly — $\max|h_3 - E_3| = 0.00e+00$ (machine epsilon).

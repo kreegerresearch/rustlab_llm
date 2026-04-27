@@ -241,12 +241,12 @@ When a needed function is missing from rustlab, record it here with the format:
 **Example:** result = function_name(arg1, arg2)
 ```
 
-### rng_seed(n) -> none  (or rand("seed", n) / randn("seed", n))
-**Needed for:** Lessons 04 (embeddings) and 05 (bigram sampling), and any later lesson that uses `rand()`/`randn()`.
-**Purpose:** Make the global RNG deterministic so the committed `site/<slug>.md` and `site/plots/<slug>/*.svg` reproduce bit-for-bit on re-render. Without it, every `make notebooks-check` flags drift on lessons that touch random numbers, defeating the CI drift guard.
-**Workaround in use:** Lessons that need stochastic-looking values currently use deterministic recipes (e.g. a sin/cos-based pseudo-random matrix in lesson 04, a hand-set `draws` vector in lesson 05) with a `% TODO: replace with rand/randn once rustlab adds an RNG seed API` comment.
+### ✅ `seed(n)` — **landed in rustlab** (commit `2bf8156`)
+**Was needed for:** Lessons 04 (embeddings) and 05 (bigram sampling), and any later lesson that uses `rand()` / `randn()`.
+**Use:** `seed(N)` sets the global RNG to a deterministic state; subsequent `rand` / `randn` / `randi` / `sprand` calls are bit-stable. `seed()` (no argument) re-randomizes from system entropy.
+**Migrated:** Lessons 04 and 05 originally used a sin/cos-based pseudo-random matrix and a hand-set `draws` vector with TODO markers; both have been updated to use `seed(N)` followed by `randn` / `rand`.
 **Example:**
 ```
-rng_seed(42);            % or: rand("seed", 42)
+seed(42);
 E = randn(8, 6) * 0.1;   % bit-identical across runs
 ```
