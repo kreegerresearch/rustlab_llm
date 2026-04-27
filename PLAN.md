@@ -17,7 +17,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 | 2 | First Working Model | Complete |
 | 3 | Attention Mechanism | Complete |
 | 4 | Transformer Components | Complete |
-| 5 | Full GPT Architecture | Not started |
+| 5 | Full GPT Architecture | Complete |
 | 6 | Training | Not started |
 | 7 | Tokenization & Evaluation | Not started |
 | 8 | Generation & Capstone | Not started |
@@ -152,21 +152,22 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - `14-full-gpt-architecture`
 
 **Deliverables:**
-- [ ] Lesson 13 traces data dimensions through one transformer block (MHA → Add&Norm → MLP → Add&Norm) using print statements and a flow diagram as comments
-- [ ] Lesson 14 scripts print the parameter count of each component and a total, matching a known small GPT config (e.g. 6 layers, 6 heads, d_model=384)
-- [ ] Lesson 14 includes a bar chart of parameter distribution across embedding, attention, MLP, and output layers
+- [x] Lesson 13 traces data dimensions through one transformer block (MHA → Add&Norm → MLP → Add&Norm) using `print(size(...))` calls and an ASCII flow diagram in the Theory section
+- [x] Lesson 14 scripts print the parameter count of each component and a total. The formula reproduces GPT-2 small at 124,402,944 params (paper: 124,439,808 — within 0.03 %) and GPT-2 medium at 354,724,864 (paper: 354,823,168 — within 0.03 %)
+- [x] Lesson 14 includes a bar chart of parameter distribution across embedding, blocks, final LN, and LM head
 
 **Acceptance criteria:**
-- A student can derive the parameter count formula for a GPT with N layers, H heads, d_model dimensions from Lesson 14 alone.
+- A student can derive the parameter count formula $n \approx N \cdot 12 d_{\text{model}}^2 + 2 |\mathcal{V}| d_{\text{model}}$ from Lesson 14 alone.
 - No new mathematical concepts introduced — only assembly of previously learned pieces.
-- Scripts reference specific lesson numbers when reusing concepts (e.g. `# Softmax: see Lesson 02`).
+- Scripts and notebooks reference specific lesson numbers when reusing concepts (Pre-LN convention from L12, MHA from L09, FFN from L11, etc.).
 
-**Status:** Not started
+**Status:** Complete
 
 **Handoff notes:**
-- Last completed lesson: —
-- Next action: Start with `lessons/13-transformer-block/lesson.md`.
-- Known blockers: None.
+- Last completed lesson: 14-full-gpt-architecture
+- Next action: Start Phase 6 with `notebooks/15-backpropagation.md`.
+- Known blockers for Phase 6: same three rustlab gaps logged for Phase 4 (`M([3,1,2])` row gather, `layernorm(M)` matrix overload, vector vs 1×N matrix arithmetic) plus the two new ones below. Backprop will need analytical gradient derivations until autodiff is available.
+- New Phase 6 blocker: **No automatic differentiation in rustlab.** Lesson 15 will derive gradients analytically and code them by hand for one transformer block. Lessons 16–18 (AdamW, LR scheduling, training loop) will need every gradient written out manually until `grad()` or a similar API exists. Worth recording as the next major rustlab feature request.
 
 ---
 

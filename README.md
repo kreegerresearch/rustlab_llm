@@ -51,7 +51,7 @@ Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts
 | 11 | Feed-Forward Block (MLP) | Position-wise 2-layer MLP; GELU activation |
 | 12 | Layer Norm & Residual Connections | LayerNorm stabilises activations; skip connections enable depth |
 
-### Phase 5 — Full GPT Architecture
+### Phase 5 — Full GPT Architecture `(Complete)`
 
 | # | Title | Core Concept |
 |---|-------|-------------|
