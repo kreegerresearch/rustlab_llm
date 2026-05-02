@@ -42,7 +42,7 @@ W = randn(d_emb, vocab) * 0.3;
 
 % Encode "abc...": a=1, b=2, c=3
 function L = forward_one(x_curr, x_next, E, W)
-  h = E(x_curr);                 % vector of length d_emb (row gather)
+  h = E(x_curr, :);                 % vector of length d_emb (row gather)
   pvec = softmax(h * W);          % vector of length vocab
   L = -log(pvec(x_next));
 end
@@ -68,27 +68,24 @@ The total parameter gradient on a batch is the **sum** over all training pairs.
 ### Example — Backward pass + finite-difference check
 
 ```rustlab
-% Multi-output return packed as a struct (rustlab functions take 1 output).
-function r = backward_one(x_curr, x_next, E, W, vocab, d_emb)
-  h = E(x_curr);
+% rustlab 0.3 native multi-output: [dE, dW, L] = backward_one(...).
+function [dE, dW, L] = backward_one(x_curr, x_next, E, W, vocab, d_emb)
+  h = E(x_curr, :);
   pvec = softmax(h * W);
-  L_step = -log(pvec(x_next));
+  L = -log(pvec(x_next));
 
   e_y = zeros(vocab); e_y(x_next) = 1.0;
   dlogits = pvec - e_y;            % vector of length vocab
-  dW_local = h' * dlogits;          % d_emb × vocab
+  dW = h' * dlogits;                % d_emb × vocab
   dh = dlogits * W';                % vector of length d_emb
 
-  dE_local = zeros(vocab, d_emb);
+  dE = zeros(vocab, d_emb);
   for k = 1:d_emb
-    dE_local(x_curr, k) = dh(k);
+    dE(x_curr, k) = dh(k);
   end
-  r = struct("dE", dE_local, "dW", dW_local, "L", L_step);
 end
 
-g = backward_one(1, 2, E, W, vocab, d_emb);
-dE_ab = g.dE;
-dW_ab = g.dW;
+[dE_ab, dW_ab, L_ab] = backward_one(1, 2, E, W, vocab, d_emb);
 print("dL/dW shape:", size(dW_ab));
 print("dL/dE shape:", size(dE_ab));
 

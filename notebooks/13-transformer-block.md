@@ -92,7 +92,7 @@ The MHA computation is exactly Lesson 09's: per head, score → mask → softmax
 % Recommendations on the matrix overload.
 H_norm1 = zeros(T, d_model);
 for t = 1:T
-  H_norm1(t) = layernorm(H_in(t));
+  H_norm1(t) = layernorm(H_in(t, :));
 end
 
 % Project: same equations as Lesson 08, but applied to the LN'd input
@@ -129,7 +129,7 @@ for h = 1:H_heads
   S = Q_h * K_h' * scale + M_mask;
   A_h = zeros(T, T);
   for t = 1:T
-    A_h(t) = softmax(S(t));
+    A_h(t) = softmax(S(t, :));
   end
   O_h = A_h * V_h;
 
@@ -173,7 +173,7 @@ FFN applies $\mathbf{W}_2 \, \mathrm{GELU}(\mathbf{W}_1 \mathbf{x} + \mathbf{b}_
 ```rustlab
 H_norm2 = zeros(T, d_model);
 for t = 1:T
-  H_norm2(t) = layernorm(H_mid(t));
+  H_norm2(t) = layernorm(H_mid(t, :));
 end
 
 F_pre  = H_norm2 * W_ff1;     % (T, d_ff)
@@ -243,7 +243,7 @@ W_ff2_2 = randn(d_ff,    d_model) * sqrt(2.0 / d_ff);
 H_in2 = H_out;
 H_norm1b = zeros(T, d_model);
 for t = 1:T
-  H_norm1b(t) = layernorm(H_in2(t));
+  H_norm1b(t) = layernorm(H_in2(t, :));
 end
 
 Q2 = H_norm1b * W_Q2;
@@ -266,7 +266,7 @@ for h = 1:H_heads
   S = Q_h * K_h' * scale + M_mask;
   A_h = zeros(T, T);
   for t = 1:T
-    A_h(t) = softmax(S(t));
+    A_h(t) = softmax(S(t, :));
   end
   O_h = A_h * V_h;
   for t = 1:T
@@ -280,7 +280,7 @@ H_mid2 = H_in2 + A_out2;
 
 H_norm2b = zeros(T, d_model);
 for t = 1:T
-  H_norm2b(t) = layernorm(H_mid2(t));
+  H_norm2b(t) = layernorm(H_mid2(t, :));
 end
 F_pre2  = H_norm2b * W_ff1_2;
 F_out2  = gelu(F_pre2) * W_ff2_2;

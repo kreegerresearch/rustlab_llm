@@ -38,7 +38,7 @@ function L = head_loss(X, W_Q, W_K, W_V, Mmat, scale, dL_dO, T)
   S = Q * K' * scale + Mmat;
   A = zeros(T, T);
   for t = 1:T
-    row = softmax(S(t));
+    row = softmax(S(t, :));
     for j = 1:size(row, 2)
       A(t, j) = row(j);
     end
@@ -56,7 +56,7 @@ S = Q * K' * scale + Mmat;
 
 A = zeros(T, T);
 for t = 1:T
-  row = softmax(S(t));
+  row = softmax(S(t, :));
   for j = 1:T
     A(t, j) = row(j);
   end
@@ -80,8 +80,8 @@ dL_dA = dL_dO * V';
 #   dL/ds = a .* (dL/da - sum(dL/da .* a))
 dL_dS = zeros(T, T);
 for t = 1:T
-  a   = A(t);
-  da  = dL_dA(t);
+  a   = A(t, :);
+  da  = dL_dA(t, :);
   m   = sum(a .* da);
   for j = 1:T
     dL_dS(t, j) = a(j) * (da(j) - m);

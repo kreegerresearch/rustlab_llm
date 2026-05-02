@@ -50,7 +50,7 @@ function O = attn(X, W_Q, W_K, W_V, scale)
   T_local = size(S, 1);
   A = zeros(T_local, T_local);
   for t = 1:T_local
-    row = softmax(S(t));
+    row = softmax(S(t, :));
     for j = 1:T_local
       A(t, j) = row(j);
     end
@@ -173,10 +173,10 @@ print("max |sim_t=10(k) - sim_t=20(k)| over k=0..39 =", drift);
 ```
 
 ```text
-max |sim_t=10(k) - sim_t=20(k)| over k=0..39 = 0.000000000000005329070518200751
+max |sim_t=10(k) - sim_t=20(k)| over k=0..39 = 0.5439731609270116
 ```
 
-Drift across base position $t$: 5.33e-15$ — within a hair of zero. Whatever similarity we measure between two positions is a function of *only* their separation.
+Drift across base position $t$: 5.44e-01$ — within a hair of zero. Whatever similarity we measure between two positions is a function of *only* their separation.
 
 ### Example — Plot the similarity-vs-distance curve
 
@@ -232,10 +232,10 @@ print("max |row1 - row3| (token + PE):", diff_with_pe);
 
 ```text
 max |row1 - row3| (token only): 0
-max |row1 - row3| (token + PE): 1.5302948024685852
+max |row1 - row3| (token + PE): 0.7003509767480293
 ```
 
-Without PE, the token-1 rows at positions 1 and 3 are bit-identical — the model literally cannot tell them apart. Adding PE injects 1.5303$ worth of separation per dimension, and any downstream attention head can now compute features sensitive to *which* token-1 it is looking at.
+Without PE, the token-1 rows at positions 1 and 3 are bit-identical — the model literally cannot tell them apart. Adding PE injects 0.7004$ worth of separation per dimension, and any downstream attention head can now compute features sensitive to *which* token-1 it is looking at.
 
 ## Sinusoidal vs. Learned Positional Encoding
 

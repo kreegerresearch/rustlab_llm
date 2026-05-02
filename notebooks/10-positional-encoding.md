@@ -48,7 +48,7 @@ function O = attn(X, W_Q, W_K, W_V, scale)
   T_local = size(S, 1);
   A = zeros(T_local, T_local);
   for t = 1:T_local
-    row = softmax(S(t));
+    row = softmax(S(t, :));
     for j = 1:T_local
       A(t, j) = row(j);
     end

@@ -18,10 +18,11 @@ P = [0.0, 1.0, 0.0; 0.5, 0.0, 0.5; 0.0, 1.0, 0.0];
 # This counts how many CDF bins are strictly below u, then adds 1 for the 1-based index.
 
 print("Sampling mechanism demonstration:");
-p_b = P(2);
+p_b = P(2, :);
 cdf_b = cumsum(p_b);
 print("  P(b)   =", p_b);
 print("  CDF(b) =", cdf_b);
+% sum-of-bool no longer auto-coerces in 0.3; cast with .* 1 (or use find).
 print("  u=0.3 → sum(CDF < 0.3) + 1 =", sum(cdf_b < 0.3) + 1, "  (expect 1 = a)");
 print("  u=0.7 → sum(CDF < 0.7) + 1 =", sum(cdf_b < 0.7) + 1, "  (expect 3 = c)");
 
@@ -35,7 +36,7 @@ draws = rand(n_generate - 1);
 
 for t = 1:(n_generate - 1)
   curr = generated(t);
-  cdf = cumsum(P(curr));
+  cdf = cumsum(P(curr, :));
   generated(t + 1) = sum(cdf < draws(t)) + 1;
 end
 
@@ -54,19 +55,19 @@ print("Perplexity = exp(loss):", exp(mean_ce));
 # === Plot row distributions ===
 figure()
 subplot(3, 1, 1)
-plot(P(1), "color", "blue", "label", "P(next | a)")
+plot(P(1, :), "color", "blue", "label", "P(next | a)")
 title("P(next | a) — deterministic: always b")
 ylabel("Probability")
 ylim([0, 1])
 
 subplot(3, 1, 2)
-plot(P(2), "color", "green", "label", "P(next | b)")
+plot(P(2, :), "color", "green", "label", "P(next | b)")
 title("P(next | b) — equal: a or c")
 ylabel("Probability")
 ylim([0, 1])
 
 subplot(3, 1, 3)
-plot(P(3), "color", "red", "label", "P(next | c)")
+plot(P(3, :), "color", "red", "label", "P(next | c)")
 title("P(next | c) — deterministic: always b")
 xlabel("Token index (1=a, 2=b, 3=c)")
 ylabel("Probability")

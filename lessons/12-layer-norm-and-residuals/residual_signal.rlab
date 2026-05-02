@@ -19,7 +19,9 @@ W_stack = zeros(n_layers * d, d);
 for L = 1:n_layers
   W_L = randn(d, d) * (1.0 / sqrt(d));            % spectral norm ≈ 1
   for r = 1:d
-    W_stack((L - 1) * d + r) = W_L(r);
+    for c = 1:d
+      W_stack((L - 1) * d + r, c) = W_L(r, c);
+    end
   end
 end
 
@@ -35,7 +37,9 @@ x_resi  = x0;
 for L = 1:n_layers
   W_L = zeros(d, d);
   for r = 1:d
-    W_L(r) = W_stack((L - 1) * d + r);
+    for c = 1:d
+      W_L(r, c) = W_stack((L - 1) * d + r, c);
+    end
   end
 
   % Use x * W' (right-multiply) so the result stays a vector, not a 1xN matrix.

@@ -65,7 +65,7 @@ function A = attn_weights(Q, K, scale, M, T)
   S_masked = S + M;
   A = zeros(T, T);
   for t = 1:T
-    row = softmax(S_masked(t));
+    row = softmax(S_masked(t, :));
     for j = 1:T
       A(t, j) = row(j);
     end

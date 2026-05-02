@@ -257,7 +257,7 @@ V = X * W_V;
 S = Q * K' * scale2 + Mmat;
 A = zeros(T2, T2);
 for t = 1:T2
-  row = softmax(S(t));
+  row = softmax(S(t, :));
   for j = 1:T2
     A(t, j) = row(j);
   end
@@ -275,8 +275,8 @@ dL_dA = dL_dO * V';
 % Backward — Step 2 (softmax row by row)
 dL_dS = zeros(T2, T2);
 for t = 1:T2
-  a    = A(t);
-  da   = dL_dA(t);
+  a    = A(t, :);
+  da   = dL_dA(t, :);
   dot  = sum(a .* da);
   dL_dS(t, 1) = a(1) * (da(1) - dot);
   dL_dS(t, 2) = a(2) * (da(2) - dot);

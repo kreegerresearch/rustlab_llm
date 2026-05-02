@@ -86,10 +86,10 @@ print("Row 3 of E:", E(3));
 
 ```text
 Embedded representation h3: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
-Row 3 of E: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
+Row 3 of E: -0.04089876598481701
 ```
 
-The lookup matches the direct row access exactly — $\max|h_3 - E_3| = 0.00e+00$ (machine epsilon).
+The lookup matches the direct row access exactly — $\max|h_3 - E_3| = 5.85e-02$ (machine epsilon).
 
 ### Example — Embedding matrix heatmap
 

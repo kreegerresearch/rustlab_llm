@@ -75,7 +75,7 @@ S_masked = S + M;
 
 A = zeros(T, T);
 for t = 1:T
-  row = softmax(S_masked(t));
+  row = softmax(S_masked(t, :));
   for j = 1:T
     A(t, j) = row(j);
   end
@@ -92,9 +92,9 @@ print("O (context-aware representations):");
 print(O);
 
 # === Verify: row 1 of O equals row 1 of V ===
-# Token 1 attends only to itself (A(1,1) = 1), so O(1) must equal V(1).
-diff_row1 = max(abs(O(1) - V(1)));
-print("max|O(1) - V(1)| (should be 0 — token 1 attends only to itself):", diff_row1);
+# Token 1 attends only to itself (A(1,1) = 1), so O(1, :) must equal V(1, :).
+diff_row1 = max(abs(O(1, :) - V(1, :)));
+print("max|O(1, :) - V(1, :)| (should be 0 — token 1 attends only to itself):", diff_row1);
 
 # === Parameter count ===
 # One self-attention block: W_Q, W_K, W_V   (no output projection yet — Lesson 09).

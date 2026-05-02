@@ -57,20 +57,18 @@ T_demo = 4;
 d_demo = 6;
 H_pre = randn(T_demo, d_demo) * 3.0 + 1.5;       % deliberately mean ≠ 0, var ≠ 1
 
-H_ln = zeros(T_demo, d_demo);
-for t = 1:T_demo
-  H_ln(t) = layernorm(H_pre(t));
-end
+% rustlab 0.3 layernorm(M) standardises each row independently.
+H_ln = layernorm(H_pre);
 
 means_pre  = zeros(T_demo);
 means_post = zeros(T_demo);
 stds_pre   = zeros(T_demo);
 stds_post  = zeros(T_demo);
 for t = 1:T_demo
-  means_pre(t)  = mean(H_pre(t));
-  means_post(t) = mean(H_ln(t));
-  stds_pre(t)   = sqrt(mean((H_pre(t) - mean(H_pre(t))) .^ 2));
-  stds_post(t)  = sqrt(mean((H_ln(t)  - mean(H_ln(t))) .^ 2));
+  means_pre(t)  = mean(H_pre(t, :));
+  means_post(t) = mean(H_ln(t, :));
+  stds_pre(t)   = sqrt(mean((H_pre(t, :) - mean(H_pre(t, :))) .^ 2));
+  stds_post(t)  = sqrt(mean((H_ln(t, :)  - mean(H_ln(t, :))) .^ 2));
 end
 
 print("Per-row mean before LN:", means_pre);
@@ -129,7 +127,9 @@ W_stack = zeros(n_layers * d_res, d_res);
 for L = 1:n_layers
   W_L = randn(d_res, d_res) * (1.0 / sqrt(d_res));   % spectral norm ≈ 1
   for r = 1:d_res
-    W_stack((L - 1) * d_res + r) = W_L(r);
+    for c = 1:d_res
+      W_stack((L - 1) * d_res + r, c) = W_L(r, c);
+    end
   end
 end
 
@@ -144,7 +144,9 @@ x_resi  = x0;
 for L = 1:n_layers
   W_L = zeros(d_res, d_res);
   for r = 1:d_res
-    W_L(r) = W_stack((L - 1) * d_res + r);
+    for c = 1:d_res
+      W_L(r, c) = W_stack((L - 1) * d_res + r, c);
+    end
   end
 
   % Use right-multiply x * W' so the result stays a vector and the residual

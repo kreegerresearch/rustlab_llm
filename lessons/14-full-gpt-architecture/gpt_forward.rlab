@@ -50,10 +50,8 @@ end
 
 # === One Pre-LN transformer block ===
 function H_out = block_fwd(H_in, W_Q, W_K, W_V, W_O, W_ff1, W_ff2, T, d_model, H_heads, d_k, d_ff, scale, M_mask)
-  H_norm1 = zeros(T, d_model);
-  for t = 1:T
-    H_norm1(t) = layernorm(H_in(t));
-  end
+  % Pre-LN: rustlab 0.3 layernorm(M) standardises each row in one call.
+  H_norm1 = layernorm(H_in);
   Q = H_norm1 * W_Q;
   K = H_norm1 * W_K;
   V = H_norm1 * W_V;
@@ -74,7 +72,7 @@ function H_out = block_fwd(H_in, W_Q, W_K, W_V, W_O, W_ff1, W_ff2, T, d_model, H
     S = Q_h * K_h' * scale + M_mask;
     A_h = zeros(T, T);
     for t = 1:T
-      A_h(t) = softmax(S(t));
+      A_h(t) = softmax(S(t, :));
     end
     O_h = A_h * V_h;
     for t = 1:T
@@ -85,10 +83,7 @@ function H_out = block_fwd(H_in, W_Q, W_K, W_V, W_O, W_ff1, W_ff2, T, d_model, H
   end
   H_mid = H_in + out_concat * W_O;
 
-  H_norm2 = zeros(T, d_model);
-  for t = 1:T
-    H_norm2(t) = layernorm(H_mid(t));
-  end
+  H_norm2 = layernorm(H_mid);
   H_out = H_mid + gelu(H_norm2 * W_ff1) * W_ff2;
 end
 
@@ -99,7 +94,7 @@ print("Token ids:", ids);
 # Embed + PE
 H = zeros(T, d_model);
 for t = 1:T
-  H(t) = E_tok(ids(t)) + PE(t);
+  H(t) = E_tok(ids(t), :) + PE(t, :);
 end
 print("H^{(0)} shape:", size(H));
 
@@ -115,11 +110,8 @@ for ell = 1:N_blocks
 end
 print("H^{(N)} shape after", N_blocks, "blocks:", size(H));
 
-# Final LN
-H_f = zeros(T, d_model);
-for t = 1:T
-  H_f(t) = layernorm(H(t));
-end
+# Final LN (matrix overload)
+H_f = layernorm(H);
 
 # LM head
 W_U = randn(d_model, vocab) * (1.0 / sqrt(d_model));
@@ -127,7 +119,7 @@ logits = H_f * W_U;
 print("logits shape:", size(logits));
 
 # Sample distribution at the last position
-probs_last = softmax(logits(T));
+probs_last = softmax(logits(T, :));
 print("sum(probs_last):", sum(probs_last));
 print("argmax next token id:", argmax(probs_last));
 print("max prob value:      ", max(probs_last));

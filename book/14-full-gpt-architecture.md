@@ -98,7 +98,7 @@ The corpus could be anything; what matters is that `ids(t)` is an integer index 
 ```rustlab
 H = zeros(T, d_model);
 for t = 1:T
-  H(t) = E_tok(ids(t)) + PE(t);    % token embedding lookup + PE for position t
+  H(t) = E_tok(ids(t), :) + PE(t, :);    % token embedding lookup + PE for position t
 end
 
 print("H^{(0)} shape:", size(H));
@@ -146,7 +146,7 @@ The shape stays $(T, d_{\text{model}}) = (8, 64)$ across all $N$ blocks — that
 % Final LN (γ = 1, β = 0 here; real models learn them)
 H_f = zeros(T, d_model);
 for t = 1:T
-  H_f(t) = layernorm(H(t));
+  H_f(t) = layernorm(H(t, :));
 end
 
 % LM head: project (T, d_model) → (T, |V|) logits
@@ -156,7 +156,7 @@ logits = H_f * W_U;
 print("logits shape:", size(logits));
 
 % Convert the last position's logits to a probability distribution over the vocab
-probs_last = softmax(logits(T));
+probs_last = softmax(logits(T, :));
 print("sum(probs_last):", sum(probs_last));
 print("argmax next token:", argmax(probs_last));
 ```

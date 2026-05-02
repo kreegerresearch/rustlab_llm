@@ -31,10 +31,8 @@ print("==== Input ====");
 print("H_in shape:                      ", size(H_in));
 
 # === Sublayer 1: Pre-LN MHA ===
-H_norm1 = zeros(T, d_model);
-for t = 1:T
-  H_norm1(t) = layernorm(H_in(t));
-end
+% layernorm(M) standardises each row independently — rustlab 0.3 matrix overload.
+H_norm1 = layernorm(H_in);
 print("LN1(H_in) shape:                 ", size(H_norm1));
 
 Q = H_norm1 * W_Q;
@@ -66,7 +64,7 @@ for h = 1:H_heads
   S = Q_h * K_h' * scale + M_mask;
   A_h = zeros(T, T);
   for t = 1:T
-    A_h(t) = softmax(S(t));
+    A_h(t) = softmax(S(t, :));
   end
   O_h = A_h * V_h;
   for t = 1:T
@@ -83,10 +81,7 @@ H_mid = H_in + A_out;
 print("H_mid shape (after residual 1):  ", size(H_mid));
 
 # === Sublayer 2: Pre-LN FFN ===
-H_norm2 = zeros(T, d_model);
-for t = 1:T
-  H_norm2(t) = layernorm(H_mid(t));
-end
+H_norm2 = layernorm(H_mid);
 print("LN2(H_mid) shape:                ", size(H_norm2));
 
 F_pre  = H_norm2 * W_ff1;

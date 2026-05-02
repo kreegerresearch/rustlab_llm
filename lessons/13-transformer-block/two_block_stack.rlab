@@ -24,10 +24,8 @@ end
 
 # === Helper: one Pre-LN block forward pass ===
 function H_out = block_fwd(H_in, W_Q, W_K, W_V, W_O, W_ff1, W_ff2, T, d_model, H_heads, d_k, d_ff, scale, M_mask)
-  H_norm1 = zeros(T, d_model);
-  for t = 1:T
-    H_norm1(t) = layernorm(H_in(t));
-  end
+  % Pre-LN: rustlab 0.3 layernorm(M) standardises each row in one call.
+  H_norm1 = layernorm(H_in);
   Q = H_norm1 * W_Q;
   K = H_norm1 * W_K;
   V = H_norm1 * W_V;
@@ -48,7 +46,7 @@ function H_out = block_fwd(H_in, W_Q, W_K, W_V, W_O, W_ff1, W_ff2, T, d_model, H
     S = Q_h * K_h' * scale + M_mask;
     A_h = zeros(T, T);
     for t = 1:T
-      A_h(t) = softmax(S(t));
+      A_h(t) = softmax(S(t, :));
     end
     O_h = A_h * V_h;
     for t = 1:T
@@ -60,10 +58,7 @@ function H_out = block_fwd(H_in, W_Q, W_K, W_V, W_O, W_ff1, W_ff2, T, d_model, H
   A_out = out_concat * W_O;
   H_mid = H_in + A_out;
 
-  H_norm2 = zeros(T, d_model);
-  for t = 1:T
-    H_norm2(t) = layernorm(H_mid(t));
-  end
+  H_norm2 = layernorm(H_mid);
   F_out = gelu(H_norm2 * W_ff1) * W_ff2;
   H_out = H_mid + F_out;
 end

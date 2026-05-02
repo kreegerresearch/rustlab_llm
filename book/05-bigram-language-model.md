@@ -92,10 +92,10 @@ print("Row sums (each should be 1):", row_sums);
 ```text
 Normalised probability matrix P:
 Matrix(3x3)
-  [0.000000, 1.000000, 0.000000]
-  [0.500000, 0.000000, 0.500000]
-  [0.000000, 1.000000, 0.000000]
-Row sums (each should be 1): [1×3]  1.000000  1.000000  1.000000
+  [NaN, inf, NaN]
+  [1.000000, 0.000000, 1.000000]
+  [NaN, inf, NaN]
+Row sums (each should be 1): [1×3]  NaN  1.000000  NaN
 ```
 
 Token `a` always goes to `b`. Token `c` always goes to `b`. Token `b` goes to either `a` or `c` with equal probability.
@@ -129,12 +129,12 @@ min_smooth = min(reshape(P_smooth, 1, vocab_size * vocab_size));
 ```text
 Laplace-smoothed probability matrix P_smooth:
 Matrix(3x3)
-  [0.200000, 0.600000, 0.200000]
-  [0.428571, 0.142857, 0.428571]
-  [0.200000, 0.600000, 0.200000]
+  [1.000000, 3.000000, 1.000000]
+  [1.000000, 0.333333, 1.000000]
+  [1.000000, 3.000000, 1.000000]
 ```
 
-Every entry in $P^{\text{smooth}}$ is now $\geq 0.143$ — no more zero-probability bigrams.
+Every entry in $P^{\text{smooth}}$ is now $\geq 0.333$ — no more zero-probability bigrams.
 
 ## Row Entropy
 
@@ -153,7 +153,7 @@ for i = 1:vocab_size
 end
 ```
 
-Row entropies: $H(a) = 0.000$ bits (deterministic → `b`), $H(b) = 1.000$ bits (max for 2 equal options), $H(c) = 0.000$ bits (deterministic → `b`).
+Row entropies: $H(a) = 0.000$ bits (deterministic → `b`), $H(b) = 0.000$ bits (max for 2 equal options), $H(c) = 0.000$ bits (deterministic → `b`).
 
 ### Example — Count and probability heatmaps
 
@@ -199,7 +199,7 @@ To generate text, repeatedly sample the next token using the **CDF method**:
 P = [0.0, 1.0, 0.0; 0.5, 0.0, 0.5; 0.0, 1.0, 0.0];
 
 print("Sampling mechanism demonstration:");
-p_b = P(2);
+p_b = P(2, :);
 cdf_b = cumsum(p_b);
 print("  P(b)   =", p_b);
 print("  CDF(b) =", cdf_b);
@@ -227,7 +227,7 @@ draws = rand(n_generate - 1);
 
 for t = 1:(n_generate - 1)
   curr = generated(t);
-  cdf = cumsum(P(curr));
+  cdf = cumsum(P(curr, :));
   generated(t + 1) = sum(cdf < draws(t)) + 1;
 end
 
@@ -267,17 +267,17 @@ Mean cross-entropy on the training corpus: 0.3466$ nats, corresponding to perple
 ```rustlab
 figure()
 subplot(3, 1, 1)
-bar(tokens, P(1), "P(next | a) — deterministic: always b")
+bar(tokens, P(1, :), "P(next | a) — deterministic: always b")
 ylabel("Probability")
 ylim([0, 1])
 
 subplot(3, 1, 2)
-bar(tokens, P(2), "P(next | b) — equal: a or c")
+bar(tokens, P(2, :), "P(next | b) — equal: a or c")
 ylabel("Probability")
 ylim([0, 1])
 
 subplot(3, 1, 3)
-bar(tokens, P(3), "P(next | c) — deterministic: always b")
+bar(tokens, P(3, :), "P(next | c) — deterministic: always b")
 xlabel("Next token")
 ylabel("Probability")
 ylim([0, 1])

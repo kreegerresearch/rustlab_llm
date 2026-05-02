@@ -47,7 +47,7 @@ for i = 1:vocab_size
   end
 end
 
-p_after_bank = P(2);
+p_after_bank = P(2, :);
 ```
 
 The bigram's continuation distribution after `bank` is

@@ -39,7 +39,7 @@ print("Total bigram count (should be 8):", total_counts);
 # P_ij = C_ij / row_sum_i
 P = zeros(vocab_size, vocab_size);
 for i = 1:vocab_size
-  row_sum = sum(C(i));
+  row_sum = sum(C(i, :));
   P(i, 1) = C(i, 1) / row_sum;
   P(i, 2) = C(i, 2) / row_sum;
   P(i, 3) = C(i, 3) / row_sum;
@@ -49,7 +49,7 @@ print("Normalised probability matrix P:");
 print(P);
 
 # Verify row sums
-row_sums = [sum(P(1)), sum(P(2)), sum(P(3))];
+row_sums = [sum(P(1, :)), sum(P(2, :)), sum(P(3, :))];
 print("Row sums (each should be 1):", row_sums);
 
 # === Laplace-Smoothed Probability Matrix P_smooth ===
@@ -58,7 +58,7 @@ print("Row sums (each should be 1):", row_sums);
 C_smooth = C + ones(vocab_size, vocab_size);
 P_smooth = zeros(vocab_size, vocab_size);
 for i = 1:vocab_size
-  row_sum_s = sum(C_smooth(i));
+  row_sum_s = sum(C_smooth(i, :));
   P_smooth(i, 1) = C_smooth(i, 1) / row_sum_s;
   P_smooth(i, 2) = C_smooth(i, 2) / row_sum_s;
   P_smooth(i, 3) = C_smooth(i, 3) / row_sum_s;
@@ -75,7 +75,7 @@ print("Minimum value in P_smooth (should be > 0):", min_smooth);
 eps = 1e-12;
 H = zeros(vocab_size);
 for i = 1:vocab_size
-  p = P(i);
+  p = P(i, :);
   H(i) = max([0.0, -sum(p .* log2(p + eps))]);
 end
 

@@ -33,7 +33,7 @@ print(C);
 # Only rows with non-zero counts can be normalised; others stay all-zero.
 P = zeros(vocab_size, vocab_size);
 for i = 1:vocab_size
-  row_sum = sum(C(i));
+  row_sum = sum(C(i, :));
   if row_sum > 0
     for j = 1:vocab_size
       P(i, j) = C(i, j) / row_sum;
@@ -46,7 +46,7 @@ print(P);
 
 # === The Failure: P(next | bank) is Identical in Both Contexts ===
 # Whatever preceded 'bank', the model returns the same row.
-p_after_bank = P(2);
+p_after_bank = P(2, :);
 print("P(next | bank) =", p_after_bank);
 print("  P(water | bank) =", p_after_bank(3), "  (should be 0.5)");
 print("  P(safe  | bank) =", p_after_bank(5), "  (should be 0.5)");

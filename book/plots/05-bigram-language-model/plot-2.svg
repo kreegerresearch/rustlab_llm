@@ -54,15 +54,15 @@ c
 <polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="241,429 241,44 "/>
 <polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="317,429 317,44 "/>
 <polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="393,429 393,44 "/>
-<rect x="90" y="44" width="126" height="129" opacity="1" fill="#440154" stroke="none"/>
+<rect x="90" y="44" width="126" height="129" opacity="1" fill="#FDE725" stroke="none"/>
 <rect x="216" y="44" width="126" height="129" opacity="1" fill="#FDE725" stroke="none"/>
-<rect x="342" y="44" width="127" height="129" opacity="1" fill="#440154" stroke="none"/>
-<rect x="90" y="173" width="126" height="128" opacity="1" fill="#21918C" stroke="none"/>
+<rect x="342" y="44" width="127" height="129" opacity="1" fill="#FDE725" stroke="none"/>
+<rect x="90" y="173" width="126" height="128" opacity="1" fill="#440154" stroke="none"/>
 <rect x="216" y="173" width="126" height="128" opacity="1" fill="#440154" stroke="none"/>
-<rect x="342" y="173" width="127" height="128" opacity="1" fill="#21918C" stroke="none"/>
-<rect x="90" y="301" width="126" height="128" opacity="1" fill="#440154" stroke="none"/>
+<rect x="342" y="173" width="127" height="128" opacity="1" fill="#440154" stroke="none"/>
+<rect x="90" y="301" width="126" height="128" opacity="1" fill="#FDE725" stroke="none"/>
 <rect x="216" y="301" width="126" height="128" opacity="1" fill="#FDE725" stroke="none"/>
-<rect x="342" y="301" width="127" height="128" opacity="1" fill="#440154" stroke="none"/>
+<rect x="342" y="301" width="127" height="128" opacity="1" fill="#FDE725" stroke="none"/>
 <rect x="816" y="50" width="28" height="5" opacity="1" fill="#F8E627" stroke="none"/>
 <rect x="816" y="55" width="28" height="6" opacity="1" fill="#EEE42B" stroke="none"/>
 <rect x="816" y="61" width="28" height="6" opacity="1" fill="#E4E22F" stroke="none"/>
@@ -130,22 +130,22 @@ c
 <rect x="816" y="50" width="28" height="380" opacity="1" fill="none" stroke="#CDD6F4"/>
 <polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="844,430 848,430 "/>
 <text x="850" y="424" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="8.870967741935484" opacity="1" fill="#CDD6F4">
-0.000
+NaN
 </text>
 <polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="844,335 848,335 "/>
 <text x="850" y="329" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="8.870967741935484" opacity="1" fill="#CDD6F4">
-0.250
+inf
 </text>
 <polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="844,240 848,240 "/>
 <text x="850" y="234" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="8.870967741935484" opacity="1" fill="#CDD6F4">
-0.500
+inf
 </text>
 <polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="844,145 848,145 "/>
 <text x="850" y="139" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="8.870967741935484" opacity="1" fill="#CDD6F4">
-0.750
+inf
 </text>
 <polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="844,50 848,50 "/>
 <text x="850" y="44" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="8.870967741935484" opacity="1" fill="#CDD6F4">
-1.000
+inf
 </text>
 </svg>

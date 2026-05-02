@@ -13,19 +13,17 @@ T = 4;
 d = 6;
 H_pre = randn(T, d) * 3.0 + 1.5;        % mean ≈ 1.5, std ≈ 3.0
 
-# === Per-row LayerNorm via loop (matrix overload not yet in rustlab) ===
-H_ln = zeros(T, d);
-for t = 1:T
-  H_ln(t) = layernorm(H_pre(t));
-end
+# === LayerNorm via the matrix overload (rustlab 0.3) ===
+# layernorm(M) standardises each row independently — no per-row loop needed.
+H_ln = layernorm(H_pre);
 
 # === Per-row stats ===
 print("Per-row diagnostics:");
 for t = 1:T
-  mu_pre  = mean(H_pre(t));
-  mu_post = mean(H_ln(t));
-  sd_pre  = sqrt(mean((H_pre(t) - mu_pre)  .^ 2));
-  sd_post = sqrt(mean((H_ln(t)  - mu_post) .^ 2));
+  mu_pre  = mean(H_pre(t, :));
+  mu_post = mean(H_ln(t, :));
+  sd_pre  = sqrt(mean((H_pre(t, :) - mu_pre)  .^ 2));
+  sd_post = sqrt(mean((H_ln(t, :)  - mu_post) .^ 2));
   print("  row", t, "  mean pre=", mu_pre, "  std pre=", sd_pre, "  mean post=", mu_post, "  std post=", sd_post);
 end
 

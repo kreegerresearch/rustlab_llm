@@ -30,20 +30,19 @@ corpus = build_seq(60);
 n_train_pairs = 49;
 n_val_pairs = 9;
 
-# === Forward + backward (struct return) ===
-function r = step_grad(curr, nxt, E, W, vocab, d_emb)
-  h_m = E(curr);
+# === Forward + backward (rustlab 0.3 multi-output) ===
+function [dE, dW, L] = step_grad(curr, nxt, E, W, vocab, d_emb)
+  h_m = E(curr, :);
   p = softmax(h_m * W);
-  L_step = -log(p(nxt));
+  L = -log(p(nxt));
   e_y = zeros(vocab); e_y(nxt) = 1.0;
   dlogits = p - e_y;
-  dW_acc = h_m' * dlogits;
+  dW = h_m' * dlogits;
   dh = dlogits * W';
-  dE_acc = zeros(vocab, d_emb);
+  dE = zeros(vocab, d_emb);
   for k = 1:d_emb
-    dE_acc(curr, k) = dh(k);
+    dE(curr, k) = dh(k);
   end
-  r = struct("dE", dE_acc, "dW", dW_acc, "L", L_step);
 end
 
 function L = mean_loss(start_idx, n_pairs, corpus, E, W)
@@ -51,7 +50,7 @@ function L = mean_loss(start_idx, n_pairs, corpus, E, W)
   for k = 0:(n_pairs - 1)
     curr = corpus(start_idx + k);
     nxt  = corpus(start_idx + k + 1);
-    h_m = E(curr);
+    h_m = E(curr, :);
     p = softmax(h_m * W);
     L = L + (-log(p(nxt)));
   end
@@ -91,9 +90,9 @@ for t = 1:n_train
   dE_sum = zeros(vocab, d_emb);
   dW_sum = zeros(d_emb, vocab);
   for k = 0:(n_train_pairs - 1)
-    r = step_grad(corpus(1 + k), corpus(2 + k), E, W, vocab, d_emb);
-    dE_sum = dE_sum + r.dE;
-    dW_sum = dW_sum + r.dW;
+    [dE_k, dW_k, L_k] = step_grad(corpus(1 + k), corpus(2 + k), E, W, vocab, d_emb);
+    dE_sum = dE_sum + dE_k;
+    dW_sum = dW_sum + dW_k;
   end
   dE_avg = dE_sum / n_train_pairs;
   dW_avg = dW_sum / n_train_pairs;

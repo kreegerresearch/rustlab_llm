@@ -43,15 +43,7 @@ function r = bpe_step(seq, vocab_size)
   k = 1;
   i = 1;
   while i <= L
-    matched = 0;
-    if i < L
-      if seq(i) == best_a
-        if seq(i + 1) == best_b
-          matched = 1;
-        end
-      end
-    end
-    if matched == 1
+    if i < L && seq(i) == best_a && seq(i + 1) == best_b
       new_seq(k) = new_id;
       k = k + 1;
       i = i + 2;

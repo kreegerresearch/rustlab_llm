@@ -70,7 +70,7 @@ function A = causal_attention_weights(Q, K, scale, M, T)
   S_masked = S + M;
   A = zeros(T, T);
   for t = 1:T
-    row = softmax(S_masked(t));
+    row = softmax(S_masked(t, :));
     for j = 1:T
       A(t, j) = row(j);
     end
@@ -106,7 +106,7 @@ for h = 1:H
   end
   row_sums = zeros(T);
   for t = 1:T
-    row_sums(t) = sum(A(t));
+    row_sums(t) = sum(A(t, :));
   end
   print("  Row sums (each should be 1):", row_sums);
 end
@@ -115,7 +115,7 @@ end
 # For rows 2..T, A1(t, 1) should be the largest entry in row t.
 max_col_matches = 0;
 for t = 2:T
-  row = A1(t);
+  row = A1(t, :);
   if argmax(row) == 1
     max_col_matches = max_col_matches + 1;
   end
@@ -126,7 +126,7 @@ print("Head 1: rows whose max is at column 1 (should be", T - 1, "):", max_col_m
 # For row t the strongest causal attendee should be t itself.
 self_matches = 0;
 for t = 2:T
-  if argmax(A3(t)) == t
+  if argmax(A3(t, :)) == t
     self_matches = self_matches + 1;
   end
 end
@@ -134,7 +134,7 @@ print("Head 3: rows whose max is at column t (self) (should be", T - 1, "):", se
 
 # === Verify pattern: Head 4 — rows are uniform over their causal support ===
 # Row t has t equal entries of 1/t.  Check row 4: should be [0.25, 0.25, 0.25, 0.25, 0, 0].
-print("Head 4: row 4 (expect [0.25, 0.25, 0.25, 0.25, 0, 0]):", A4(4));
+print("Head 4: row 4 (expect [0.25, 0.25, 0.25, 0.25, 0, 0]):", A4(4, :));
 
 # === Plot 4 heads side-by-side ===
 # Both axes are token positions t1..tT.  Categorical labels via heatmap()

@@ -92,7 +92,7 @@ The corpus could be anything; what matters is that `ids(t)` is an integer index 
 ```rustlab
 H = zeros(T, d_model);
 for t = 1:T
-  H(t) = E_tok(ids(t)) + PE(t);    % token embedding lookup + PE for position t
+  H(t) = E_tok(ids(t), :) + PE(t, :);    % token embedding lookup + PE for position t
 end
 
 print("H^{(0)} shape:", size(H));
@@ -118,7 +118,7 @@ end
 function H_out = block_fwd(H_in, W_Q, W_K, W_V, W_O, W_ff1, W_ff2, T, d_model, H_heads, d_k, d_ff, scale, M_mask)
   H_norm1 = zeros(T, d_model);
   for t = 1:T
-    H_norm1(t) = layernorm(H_in(t));
+    H_norm1(t) = layernorm(H_in(t, :));
   end
   Q = H_norm1 * W_Q;
   K = H_norm1 * W_K;
@@ -140,7 +140,7 @@ function H_out = block_fwd(H_in, W_Q, W_K, W_V, W_O, W_ff1, W_ff2, T, d_model, H
     S = Q_h * K_h' * scale + M_mask;
     A_h = zeros(T, T);
     for t = 1:T
-      A_h(t) = softmax(S(t));
+      A_h(t) = softmax(S(t, :));
     end
     O_h = A_h * V_h;
     for t = 1:T
@@ -153,7 +153,7 @@ function H_out = block_fwd(H_in, W_Q, W_K, W_V, W_O, W_ff1, W_ff2, T, d_model, H
 
   H_norm2 = zeros(T, d_model);
   for t = 1:T
-    H_norm2(t) = layernorm(H_mid(t));
+    H_norm2(t) = layernorm(H_mid(t, :));
   end
   H_out = H_mid + gelu(H_norm2 * W_ff1) * W_ff2;
 end
@@ -184,7 +184,7 @@ The shape stays $(T, d_{\text{model}}) = (8, 64)$ across all $N$ blocks — that
 % Final LN (γ = 1, β = 0 here; real models learn them)
 H_f = zeros(T, d_model);
 for t = 1:T
-  H_f(t) = layernorm(H(t));
+  H_f(t) = layernorm(H(t, :));
 end
 
 % LM head: project (T, d_model) → (T, |V|) logits
@@ -194,7 +194,7 @@ logits = H_f * W_U;
 print("logits shape:", size(logits));
 
 % Convert the last position's logits to a probability distribution over the vocab
-probs_last = softmax(logits(T));
+probs_last = softmax(logits(T, :));
 print("sum(probs_last):", sum(probs_last));
 print("argmax next token:", argmax(probs_last));
 ```

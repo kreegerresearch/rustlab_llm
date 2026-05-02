@@ -168,7 +168,7 @@ To generate text, repeatedly sample the next token using the **CDF method**:
 P = [0.0, 1.0, 0.0; 0.5, 0.0, 0.5; 0.0, 1.0, 0.0];
 
 print("Sampling mechanism demonstration:");
-p_b = P(2);
+p_b = P(2, :);
 cdf_b = cumsum(p_b);
 print("  P(b)   =", p_b);
 print("  CDF(b) =", cdf_b);
@@ -188,7 +188,7 @@ draws = rand(n_generate - 1);
 
 for t = 1:(n_generate - 1)
   curr = generated(t);
-  cdf = cumsum(P(curr));
+  cdf = cumsum(P(curr, :));
   generated(t + 1) = sum(cdf < draws(t)) + 1;
 end
 
@@ -223,17 +223,17 @@ Mean cross-entropy on the training corpus: ${mean_ce:%.4f}$ nats, corresponding 
 ```rustlab
 figure()
 subplot(3, 1, 1)
-bar(tokens, P(1), "P(next | a) — deterministic: always b")
+bar(tokens, P(1, :), "P(next | a) — deterministic: always b")
 ylabel("Probability")
 ylim([0, 1])
 
 subplot(3, 1, 2)
-bar(tokens, P(2), "P(next | b) — equal: a or c")
+bar(tokens, P(2, :), "P(next | b) — equal: a or c")
 ylabel("Probability")
 ylim([0, 1])
 
 subplot(3, 1, 3)
-bar(tokens, P(3), "P(next | c) — deterministic: always b")
+bar(tokens, P(3, :), "P(next | c) — deterministic: always b")
 xlabel("Next token")
 ylabel("Probability")
 ylim([0, 1])

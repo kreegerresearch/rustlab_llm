@@ -56,7 +56,7 @@ print(S_masked);
 # === Row-wise softmax ===
 A = zeros(T, T);
 for t = 1:T
-  row = softmax(S_masked(t));
+  row = softmax(S_masked(t, :));
   for j = 1:T
     A(t, j) = row(j);
   end
@@ -68,7 +68,7 @@ print(A);
 # === Verify row sums ===
 row_sums = zeros(T);
 for t = 1:T
-  row_sums(t) = sum(A(t));
+  row_sums(t) = sum(A(t, :));
 end
 print("Row sums of A (each should be 1):", row_sums);
 

@@ -105,7 +105,7 @@ $$A_{t, i} = \frac{\exp(\tilde S_{t, i})}{\sum_{j=1}^{T} \exp(\tilde S_{t, j})}.
 ```rustlab
 A = zeros(T, T);
 for t = 1:T
-  row = softmax(S_masked(t));
+  row = softmax(S_masked(t, :));
   for j = 1:T
     A(t, j) = row(j);
   end
@@ -195,7 +195,7 @@ S2_masked = S2 + M2;
 
 A2 = zeros(T, T);
 for t = 1:T
-  row = softmax(S2_masked(t));
+  row = softmax(S2_masked(t, :));
   for j = 1:T
     A2(t, j) = row(j);
   end

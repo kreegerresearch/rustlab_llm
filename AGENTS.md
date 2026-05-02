@@ -272,58 +272,38 @@ E = randn(8, 6) * 0.1;   % bit-identical across runs
 **Now works:** `vec + 1×N_matrix`, `vec .* 1×N_matrix`, etc. — implicit broadcasting promotes both sides. The `(W * x')'` returns-a-matrix path no longer breaks per-step updates like `x = x + alpha * f(x)`.
 **Status of existing workarounds:** the lessons still use the explicit `M(1)` row-extract (`dL_da1_m(1)`) and `x * W'` patterns. They remain correct under 0.2.0; not rewritten because the workarounds make the type story explicit, which is pedagogically useful.
 
-### `M(idx)` row gather — partially fixed in 0.2.0
-**Needed for:** Lesson 11 (FFN per-position independence check) and any later lesson that wants to permute, gather, or sample a subset of rows of a matrix.
-**Current behaviour:** `M([3, 1, 2], :)` (with explicit `:` second index) **now works** in 0.2.0. The single-index form `M([3, 1, 2])` still raises `matrix single-index with vector not supported; use M(i,j) for element access`.
-**Workaround in use:** Either upgrade to the `M(rows, :)` form, or keep the existing permutation-matrix pattern (`P * M`). See `lessons/11-feed-forward-block/ffn_forward.rlab` for the perm-matrix pattern; the explicit `:` form is the cleaner replacement going forward.
-**Still wanted:** the bare `M([3, 1, 2])` shorthand to gather rows without the redundant `:`.
-**Example (target):**
+### ✅ `M([3, 1, 2], :)` row gather — **landed in rustlab 0.2.0 and 0.3.0**
+**Was needed for:** Lesson 11 (FFN per-position independence check) and any later lesson that wants to permute, gather, or sample a subset of rows.
+**Now works:** `M([3, 1, 2], :)` returns a matrix of those rows (0.2.0), and `M([3, 1, 2])` returns a *column-major linear gather* (0.3.0; new column-major linear-index semantics — see breaking change below). For ordered row gathers, prefer `M(rows, :)` for clarity.
+**Example:**
 ```
-H_perm = H([3, 1, 2, 5, 4]);          % wanted: bare row gather
-H_perm = H([3, 1, 2, 5, 4], :);        % works in 0.2.0
+H_perm = H([3, 1, 2, 5, 4], :);   % gather those rows in any order
 ```
 
-### Multi-output function definitions  `function [a, b] = name(...)`
-**Hit while writing:** Lesson 18 (training loop).
-**Symptom:** Defining a function with multiple outputs — `function [dE, dW, L] = step_grad(...)` — fails with `parse error: expected function name, got LBracket`. Documented signature is `function [out] = name(args)` (single output in brackets); multi-output isn't implemented.
-**Workaround in use:** Pack outputs into a struct and return a single value: `r = struct("dE", ..., "dW", ..., "L", ...);` then unpack with `dE = r.dE; dW = r.dW;` at the call site.
-**Caveat:** Indexing a struct field directly (`r.dW(i, j)`) raises "undefined function 'dW'" — extract `dW = r.dW` to a variable first.
-**Wanted:** Native multi-output return so multi-grad / multi-stat helpers don't need a struct wrapper.
-**Example (target):**
+### ✅ Multi-output function definitions — **landed in rustlab 0.3.0** (commit `18523a3`)
+**Was hit while writing:** Lesson 18 (training loop) and Lesson 20 (perplexity curve).
+**Now works:** `function [dE, dW, L] = step_grad(...)` with `[dE, dW, L] = step_grad(curr, nxt, E, W)` at the call site. The struct-return workaround is no longer needed; lessons 18 and 20 have been migrated to the native multi-output form.
+
+### ✅ Logical `&&` and `||` short-circuit — **landed in rustlab 0.3.0** (commit `18523a3`)
+**Was hit while writing:** Lesson 19 (BPE merge step).
+**Now works:** `if i < L && seq(i + 1) == val` evaluates LHS first and skips RHS when LHS is false, so the last-position OOB read no longer happens. Lesson 19 has been migrated back to the canonical idiom; the nested-`if` workaround is gone.
+
+### ✅ `layernorm(M)` row-wise matrix overload — **landed in rustlab 0.3.0** (commit `18523a3`)
+**Was needed for:** Lesson 12 (LayerNorm sublayer) and every later transformer lesson.
+**Now works:** `layernorm(M)` returns a matrix of the same shape with each row normalised to mean 0, std 1. Lessons 12, 13, 14 have been migrated from the per-row loop to the matrix overload.
+**Example:**
 ```
-function [dE, dW] = step_grad(curr, nxt, E, W)
-  ...
-end
-[dE, dW] = step_grad(1, 2, E, W);   % currently parse error
+H_normed = layernorm(H);                    % shape (T, d_model), per-row mean=0 std=1
 ```
 
-### Logical `&&` and `||` are eager (no short-circuit)
-**Hit while writing:** Lesson 19 (BPE merge step).
-**Symptom:** A typical bound-then-deref guard like `if i < L && seq(i + 1) == best_b` evaluates `seq(i + 1)` *before* checking `i < L`, so on the last position (`i == L`) it reads `seq(L + 1)` and raises `index out of bounds`.
-**Workaround in use:** Nest the bound check, with the second condition strictly inside the first's `if` body. For multi-condition logic, use a flag: `matched = 0; if i < L; if seq(i) == a; if seq(i+1) == b; matched = 1; end; end; end;`
-**Wanted:** Standard left-to-right short-circuit semantics for `&&` / `||`, the way most C-family languages and MATLAB itself handle them.
-**Example (target):**
-```
-% Currently raises index OOB on the last position:
-while i <= L
-  if i < L && seq(i + 1) == val
-    ...
-  end
-end
-```
+### ⚠️ BREAKING (rustlab 0.3.0): `M(scalar)` is now a linear-index element, not a row
+**Hit during the 0.3.0 audit.** Previously `M(2)` returned the second *row* of a matrix; in 0.3.0 it returns the second column-major *linear element* (matches `find(M)`'s 1-based linear indices and is consistent with vector indexing).
+**Migration recipe:** anywhere a script meant "row `t` of M", rewrite as `M(t, :)`. The notebooks and scripts in this repo were swept after the 0.3.0 release; the canonical idioms are:
+- Row read: `S(t, :)`, `E(curr, :)`, `H(t, :)`, etc.
+- Element read: `M(t)` returns a scalar.
+- Row write: `M(t) = vec` still assigns row `t` (legacy compat — `M(scalar) = vec` reads as "assign the vector starting at linear index `t * nrows`", which lines up with the row when `t` is a row index and the RHS is a row vector). For clarity, lessons keep `M(t, j) = scalar` for element writes and `M(t) = vec` for row writes.
 
 ### `softmax(logits(1))` after a vector × matrix
 **Hit while writing:** Lessons 18 and (preventatively) 16, 17.
-**Symptom:** A common idiom `logits = h * W; p = softmax(logits(1))` mis-fires when `h` is a vector — `h * W` returns a *vector* (not a 1×N matrix), so `logits(1)` extracts the first scalar element instead of the first row, and softmax of a scalar yields a 1×1 matrix that breaks downstream `p(j)` indexing.
+**Symptom:** The idiom `logits = h * W; p = softmax(logits(1))` mis-fires when `h` is a vector — `h * W` returns a *vector*, so `logits(1)` extracts the first scalar element. Softmax of a scalar yields a 1×1 matrix that breaks downstream `p(j)` indexing.
 **Workaround in use:** Call `softmax(h * W)` directly. The vector-valued result indexes correctly with `p(j)`. If a 1×N matrix really is needed, write `reshape(h * W, 1, vocab)`.
-
-### `layernorm(M)` row-wise on a matrix → matrix
-**Needed for:** Lesson 12 (LayerNorm sublayer) and every later transformer lesson — every transformer block applies LN per token vector to the full $T \times d_{\text{model}}$ residual stream.
-**Current behaviour:** `layernorm(v)` works on a vector or scalar; `layernorm(M)` raises `type error: layernorm: argument must be a non-empty vector or scalar`.
-**Workaround in use:** Loop per row — `for t = 1:T; LN(t) = layernorm(X(t)); end` — leveraging that `M(t) = vec` assigns a row. Correct and readable, but $O(T)$ scalar dispatches instead of one vectorised call. See `lessons/12-layer-norm-and-residuals/layernorm_distribution.rlab`.
-**Wanted:** Matrix overload that normalises each row independently, matching the convention every transformer uses.
-**Example (target):**
-```
-H_normed = layernorm(H);                    % shape (T, d_model), per-row mean=0 std=1
-H_affine = layernorm(H, eps, gamma, beta);  % optional learned scale + bias
-```

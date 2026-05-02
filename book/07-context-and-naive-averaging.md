@@ -49,14 +49,14 @@ for i = 1:vocab_size
   end
 end
 
-p_after_bank = P(2);
+p_after_bank = P(2, :);
 ```
 
 The bigram's continuation distribution after `bank` is
 
 $$P(\text{next} \mid \text{bank}) = [0, 0, 0.5, 0, 0.5].$$
 
-P(water | bank) = 0.50$, P(safe | bank) = 0.50$ — whether the history was `river bank` or `money bank`. The model has no mechanism to tell them apart.
+P(water | bank) = 0.00$, P(safe | bank) = 0.00$ — whether the history was `river bank` or `money bank`. The model has no mechanism to tell them apart.
 
 ### Example — Bar of P(next | bank)
 
@@ -145,7 +145,7 @@ Row $t$ has $t$ non-zero entries each equal to $1/t$, so every row sums to 1.
 
 The matrix multiply produces the same result as an explicit running-sum loop:
 
-Max absolute difference between loop and matrix multiply: 0.00e+00$ — identical to machine precision.
+Max absolute difference between loop and matrix multiply: 1.00e+00$ — identical to machine precision.
 
 ### Example — X vs. X̄ side by side
 
