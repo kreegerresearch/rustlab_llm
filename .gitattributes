@@ -1,1 +1,5 @@
+# rustlab is a distinct domain-specific language for DSP modeling.
+# Until a native rustlab Linguist grammar exists, we use MATLAB highlighting
+# as a temporary proxy so GitHub renders these files with sensible colours
+# rather than as plain text.
 *.rlab linguist-language=MATLAB

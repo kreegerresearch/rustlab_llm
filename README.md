@@ -154,21 +154,29 @@ AGENTS.md              # project conventions, Rustlab language reference
 
 ---
 
-## Syntax Highlighting & IDE Support
+## Environment & Tooling
 
-Since `.rlab` is a custom extension for rustlab, you must manually associate it with MATLAB/Octave syntax in your editor.
+### The `.rlab` Language Extension
 
-### Visual Studio Code
+rustlab is a distinct domain-specific language for DSP modeling, and it uses the `.rlab` extension for its source files. Although rustlab is its own language, it currently shares structural similarities with Octave/MATLAB; we therefore leverage MATLAB/Octave syntax-highlighting definitions as a **temporary proxy** for visual clarity in editors and on GitHub, until a native rustlab grammar / Linguist definition is developed.
 
-1. Open Settings (`Cmd+,`).
-2. Search for **Files: Associations**.
-3. Add a new item:
-   - Item: `*.rlab`
-   - Value: `matlab`
+### Syntax Highlighting Setup
 
-### Neovim / Vim
+#### Visual Studio Code
 
-Add the following to your `init.lua` or `.vimrc` to detect the filetype automatically:
+Associate the extension by adding this to your `settings.json`:
+
+```json
+"files.associations": {
+    "*.rlab": "matlab"
+}
+```
+
+Or via the UI: open Settings (`Cmd+,`), search for **Files: Associations**, and add a new item with key `*.rlab` and value `matlab`.
+
+#### Neovim / Vim
+
+Add the following to your configuration to ensure `.rlab` files are treated with the proxy syntax highlighting:
 
 ```lua
 -- Neovim (init.lua)
@@ -185,9 +193,9 @@ For legacy `.vimrc`:
 autocmd BufRead,BufNewFile *.rlab set filetype=matlab
 ```
 
-### GitHub
+#### GitHub
 
-Syntax highlighting is managed via the [`.gitattributes`](.gitattributes) file in the root of this repo (`*.rlab linguist-language=MATLAB`). No user action is required for web viewing.
+Repository highlighting is managed via [`.gitattributes`](.gitattributes). Note that while GitHub may label this code as **MATLAB** in the language statistics bar, this is a temporary mapping until the rustlab Linguist definition is finalized.
 
 ---
 

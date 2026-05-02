@@ -245,6 +245,18 @@ When a needed function is missing from rustlab, record it here with the format:
 **Example:** result = function_name(arg1, arg2)
 ```
 
+### CLI should announce itself as the `.rlab` handler
+**Needed for:** language identity. Lessons in this repo use the `.rlab` extension, but `rustlab run foo.rlab` produces output indistinguishable from running a `.r` or unsuffixed file — there is no banner or log line that identifies rustlab as the handler.
+**Why it matters:** rustlab is a distinct DSP-modelling language; while we currently borrow MATLAB syntax highlighting as a temporary proxy (see `.gitattributes` and the README "Environment & Tooling" section), the CLI is the most authoritative place to reinforce that `.rlab` is *rustlab*, not MATLAB. A one-line banner at startup ("rustlab 0.1.x — running foo.rlab") gives every shell-pasteable command a clear provenance.
+**Wanted:** an opt-in `--banner` flag, or an unconditional one-line stderr log on `rustlab run`, identifying the version + the file being executed. Optionally a stricter mode that warns when the input doesn't carry the `.rlab` extension.
+**Example (target):**
+```
+$ rustlab run lessons/01-tokens-and-encoding/char_frequencies.rlab
+rustlab 0.1.12 — running char_frequencies.rlab
+Corpus: to be or not to be
+...
+```
+
 ### ✅ `seed(n)` — **landed in rustlab** (commit `2bf8156`)
 **Was needed for:** Lessons 04 (embeddings) and 05 (bigram sampling), and any later lesson that uses `rand()` / `randn()`.
 **Use:** `seed(N)` sets the global RNG to a deterministic state; subsequent `rand` / `randn` / `randi` / `sprand` calls are bit-stable. `seed()` (no argument) re-randomizes from system entropy.
