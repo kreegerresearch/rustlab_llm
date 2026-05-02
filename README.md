@@ -158,7 +158,32 @@ AGENTS.md              # project conventions, Rustlab language reference
 
 ### The `.rlab` Language Extension
 
-rustlab is a distinct domain-specific language for DSP modeling, and it uses the `.rlab` extension for its source files. Although rustlab is its own language, it currently shares structural similarities with Octave/MATLAB; we therefore leverage MATLAB/Octave syntax-highlighting definitions as a **temporary proxy** for visual clarity in editors and on GitHub, until a native rustlab grammar / Linguist definition is developed.
+rustlab is a **distinct domain-specific language** for DSP modeling and scientific scripting in a Rust-native environment. Source files use the `.rlab` extension; the runtime is the `rustlab` CLI from [`../rustlab`](../rustlab), implemented in Rust on top of `ndarray` / `nalgebra`. Although the surface syntax is influenced by Octave / MATLAB, rustlab is **not** a MATLAB or Octave dialect — it has its own parser, its own builtins, its own type system, and its own non-trivial semantic differences (see below).
+
+We currently leverage MATLAB syntax-highlighting definitions as a **temporary proxy** for visual clarity in editors and on GitHub, until a native rustlab grammar / Linguist definition is developed. The label is a shortcut for tooling, not a claim of language compatibility.
+
+### How rustlab differs from MATLAB / Octave
+
+These are the surface-level differences a MATLAB or Octave user will trip over when writing rustlab. None of them are accidental — they are all intentional consequences of the rustlab runtime — but they explain why the MATLAB Linguist mapping is a proxy, not a fit.
+
+| Concern | MATLAB / Octave | rustlab |
+|---|---|---|
+| Comments | `%` (and `#` in Octave) | `%` or `#` (both work; lessons use `%` in notebook blocks, `#` in `.rlab` scripts) |
+| File extension | `.m` | `.rlab` |
+| Multi-output `function` | `function [a, b] = f(...)` | single output only — `function r = f(...)` returning a struct |
+| Logical `&&` / `\|\|` | short-circuit | **eager** (both operands always evaluated) |
+| Vector vs `1×N` matrix | implicit promotion in arithmetic | distinct types; `vec + 1×N matrix` errors |
+| Row gather `M([3, 1, 2])` | returns a sub-matrix of those rows | not supported (use a permutation matrix; see [`AGENTS.md`](AGENTS.md) Rustlab Recommendations) |
+| `M(i, j)` on a `1×1` matrix | returns the scalar | "undefined function 'M'" — coerce with `sum(M)` first |
+| `softmax(x)` / `gelu(x)` / `layernorm(x)` | toolbox functions | rustlab builtins, no toolbox required |
+| `imagesc` / `heatmap` / `surf` / `quiver` / `streamplot` | MATLAB plotting toolkit (figure windows) | rustlab plotting (Plotly / SVG / HTML output) |
+| `seed(N)` for deterministic RNG | `rng(N)` | `seed(N)` — distinct name, same role |
+| Module system | toolboxes / packages | Rust crate / builtin only — no add-on packages |
+| Runtime | MATLAB Runtime / Octave interpreter | the `rustlab` CLI (single static Rust binary) |
+
+The cumulative effect: a script that *looks* like MATLAB will often parse but mis-execute under rustlab, and a script written for rustlab will often fail to parse under MATLAB or Octave. The languages overlap on syntax; they diverge on semantics, types, and runtime. **Treat them as cousins, not synonyms.**
+
+Lessons in this repo use rustlab features that have no MATLAB or Octave counterpart (`heatmap(xlabels, ylabels, M, …)`, the `seed(...)` deterministic RNG seeded across `rand` / `randn`, builtin `softmax` / `gelu` / `layernorm`). The notebooks list every gap they hit in [`AGENTS.md`](AGENTS.md) "Rustlab Recommendations" so the rustlab project can close them upstream over time.
 
 ### Syntax Highlighting Setup
 
