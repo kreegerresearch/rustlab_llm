@@ -156,13 +156,7 @@ AGENTS.md              # project conventions, Rustlab language reference
 
 ## License
 
-Licensed under either of
+This repository uses a split licence:
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
-- MIT License ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
-
-at your option.
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this work by you, as defined in the Apache-2.0 license, shall be dual-licensed as above, without any additional terms or conditions.
+- **Code** (`.r` scripts, `Makefile`) is licensed under the [MIT License](LICENSE-MIT).
+- **Documentation** (notebook sources and other prose) is licensed under [CC BY 4.0](LICENSE-CC-BY-4.0).
