@@ -1,0 +1,134 @@
+# Script:  bpe_apply.r
+# System:  Apply a fixed BPE merge list to encode test inputs.
+# Concept: Given a learned merge_list (ordered list of (a, b) -> id pairs),
+#          encoding any character sequence is deterministic: apply each
+#          merge greedily in learned order, stopping when no more pairs
+#          can be merged.
+# Equations:
+#   For each merge (a*, b*) -> new_id in order, scan the sequence left
+#   to right and replace every adjacent (a*, b*) with new_id.
+# Units:   integer token ids; counts dimensionless.
+
+# === Hardcoded merge list ===
+# These are the merges from bpe_train.r (in order):
+#   1: (2, 5) -> 7   meaning ('b', 'r') -> 'br'
+#   2: (1, 7) -> 8   meaning ('a', 'br') -> 'abr'
+#   3: (8, 1) -> 9   meaning ('abr', 'a') -> 'abra'
+#   4: (4, 9) -> 10  meaning ('d', 'abra') -> 'dabra'
+#   5: (1, 10) -> 11 meaning ('a', 'dabra') -> 'adabra'
+merge_a   = [2, 1, 8, 4, 1];
+merge_b   = [5, 7, 1, 9, 10];
+merge_id  = [7, 8, 9, 10, 11];
+n_merges = length(merge_a);
+
+# === Apply one merge to a sequence ===
+function new_seq = apply_merge(seq, ma, mb, new_id)
+  L = length(seq);
+  buf = zeros(L);
+  k = 1;
+  i = 1;
+  while i <= L
+    matched = 0;
+    if i < L
+      if seq(i) == ma
+        if seq(i + 1) == mb
+          matched = 1;
+        end
+      end
+    end
+    if matched == 1
+      buf(k) = new_id;
+      k = k + 1;
+      i = i + 2;
+    else
+      buf(k) = seq(i);
+      k = k + 1;
+      i = i + 1;
+    end
+  end
+  new_seq = buf(1:(k - 1));
+end
+
+# === Apply the full merge list in order ===
+function out = encode(seq, merge_a, merge_b, merge_id)
+  out = seq;
+  for m = 1:length(merge_a)
+    out = apply_merge(out, merge_a(m), merge_b(m), merge_id(m));
+  end
+end
+
+# === Three test inputs of increasing variety ===
+# Input A: "abracadabra" — fully covered by training merges
+input_A = [1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1];
+# Input B: "abracadabra abracadabra" — two reps of A, separated by space (id 6)
+input_B = [1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1, 6, 1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1];
+# Input C: "abc cad bra" — partial coverage (br merges to 7, no longer pieces match)
+input_C = [1, 2, 3, 6, 3, 1, 4, 6, 2, 5, 1];
+
+enc_A = encode(input_A, merge_a, merge_b, merge_id);
+enc_B = encode(input_B, merge_a, merge_b, merge_id);
+enc_C = encode(input_C, merge_a, merge_b, merge_id);
+
+print("Input A 'abracadabra'      :", input_A);
+print("Encoded A (length", length(enc_A), "):", enc_A);
+print("");
+print("Input B (2x reps + space)  : length", length(input_B));
+print("Encoded B (length", length(enc_B), "):", enc_B);
+print("");
+print("Input C 'abc cad bra'      :", input_C);
+print("Encoded C (length", length(enc_C), "):", enc_C);
+print("");
+
+# === Compression metrics ===
+print("Compression ratios:");
+print("  A: ", length(input_A) / length(enc_A));
+print("  B: ", length(input_B) / length(enc_B));
+print("  C: ", length(input_C) / length(enc_C));
+
+# === Tokens-per-input bar chart (using lengths as a stand-in for distribution) ===
+labels = {"A: 'abracadabra'", "B: 2x reps", "C: partial coverage"};
+encoded_lens = [length(enc_A), length(enc_B), length(enc_C)];
+input_lens   = [length(input_A), length(input_B), length(input_C)];
+
+figure()
+bar(labels, encoded_lens)
+title("Encoded token count per input under the trained BPE")
+xlabel("input")
+ylabel("# encoded tokens")
+savefig("bpe_encoded_lens.svg")
+print("Saved bpe_encoded_lens.svg");
+
+# === Token-length histogram across inputs ===
+% Bin per-input encoded lengths (1, 2, 3, 4, 5+) for the 3 inputs we have.
+% In a real BPE deployment this would be 10000s of words; here we collapse
+% to a small representative distribution.
+buckets = {"1", "2", "3", "4-5", "6+"};
+hist_counts = zeros(5);
+for v = [length(enc_A), length(enc_B), length(enc_C)]
+  if v == 1
+    hist_counts(1) = hist_counts(1) + 1;
+  end
+  if v == 2
+    hist_counts(2) = hist_counts(2) + 1;
+  end
+  if v == 3
+    hist_counts(3) = hist_counts(3) + 1;
+  end
+  if v == 4
+    hist_counts(4) = hist_counts(4) + 1;
+  end
+  if v == 5
+    hist_counts(4) = hist_counts(4) + 1;
+  end
+  if v >= 6
+    hist_counts(5) = hist_counts(5) + 1;
+  end
+end
+
+figure()
+bar(buckets, hist_counts)
+title("Distribution of encoded lengths (3 test inputs)")
+xlabel("encoded tokens")
+ylabel("count of inputs")
+savefig("bpe_length_distribution.svg")
+print("Saved bpe_length_distribution.svg");
