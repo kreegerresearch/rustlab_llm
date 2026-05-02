@@ -27,7 +27,7 @@ This repo is **independent from rustlab** — never modify `../rustlab` from her
 
 ## Repository Layout
 
-This repo follows the [Rustlab lesson-site pattern](../rustlab/docs/lesson-site-pattern.md) — sources flat in `notebooks/`, rendered output committed to a top-level `site/`, optional `.r` scripts in `lessons/<slug>/`.
+This repo follows the [Rustlab lesson-site pattern](../rustlab/docs/lesson-site-pattern.md) — sources flat in `notebooks/`, rendered output committed to a top-level `book/`, optional `.r` scripts in `lessons/<slug>/`.
 
 ```
 notebooks/
@@ -40,7 +40,7 @@ lessons/
     *.r                  # standalone shell-runnable rustlab scripts
     *.svg|*.png|*.html   # script artefacts (gitignored)
 
-site/                    # rendered output for GitHub display
+book/                    # rendered output for GitHub display
   README.md              # hand-written GitHub landing page
   NN-topic-slug.md       # rendered notebook with inline ![](plots/...) SVGs (committed)
   plots/NN-topic-slug/   # captured figures (committed)
@@ -62,15 +62,15 @@ All commands run from the project root:
 
 ```bash
 make                    # show help
-make all                # render committed site/<slug>.md + interactive site/*.html
-make notebooks          # render site/<slug>.md from notebooks/<slug>.md (markdown)
-make html               # render site/index.html + per-notebook html (gitignored)
-make notebooks-check    # CI drift guard: fails if site/ is out of sync with sources
+make all                # render committed book/<slug>.md + interactive book/*.html
+make notebooks          # render book/<slug>.md from notebooks/<slug>.md (markdown)
+make html               # render book/index.html + per-notebook html (gitignored)
+make notebooks-check    # CI drift guard: fails if book/ is out of sync with sources
 make lesson-01          # run only lesson 01's .r scripts (works for 01–09)
 make clean              # delete the interactive HTML build and .r artefacts
 ```
 
-The notebook render is directory-mode: `rustlab notebook render notebooks --format markdown --output site` produces `site/<slug>.md` plus `site/plots/<slug>/plot-N.svg` for each lesson. The hand-written `site/README.md` is preserved (the renderer skips files named `README.md` on input).
+The notebook render is directory-mode: `rustlab notebook render notebooks --format markdown --output book` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The hand-written `book/README.md` is preserved (the renderer skips files named `README.md` on input).
 
 Single script:
 ```bash

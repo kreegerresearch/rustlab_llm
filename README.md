@@ -4,7 +4,7 @@ A self-contained tutorial series for building large language models from first p
 
 Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts that produce visualisations. The series builds from raw probability and linear algebra all the way to a complete GPT-style decoder — nothing is a black box.
 
-> **📖 Read the rendered lessons:** [**`site/`**](site/README.md) — executed code, printed output, and inline plots, viewable directly on GitHub. No clone or build required.
+> **📖 Read the rendered lessons:** [**`book/`**](book/) — executed code, printed output, and inline plots, viewable directly on GitHub. No clone or build required.
 
 ---
 
@@ -97,13 +97,13 @@ No prior deep learning experience is assumed.
 
 The lessons are integrated **notebooks** under `notebooks/<slug>.md` — prose, math, and code interleaved in a linear narrative. Optional standalone **`.r` scripts** under `lessons/<slug>/` mirror the notebook code blocks for shell-based experimentation.
 
-GitHub renders the executed lessons directly at [`site/`](site/) — that's the landing page. The source notebooks at [`notebooks/`](notebooks/) are what humans edit.
+GitHub renders the executed lessons directly at [`book/`](book/) — that's the landing page. The source notebooks at [`notebooks/`](notebooks/) are what humans edit.
 
 ```bash
 make                    # show help
-make all                # render committed site/<slug>.md + local site/*.html
-make notebooks          # regenerate site/<slug>.md from notebooks/<slug>.md
-make html               # build site/index.html for local Plotly view (gitignored)
+make all                # render committed book/<slug>.md + local book/*.html
+make notebooks          # regenerate book/<slug>.md from notebooks/<slug>.md
+make html               # build book/index.html for local Plotly view (gitignored)
 make notebooks-check    # CI drift guard
 make lesson-06          # run lesson 06's .r scripts (works for 01–09)
 make clean              # delete the interactive HTML build and .r artefacts
@@ -122,7 +122,7 @@ Standalone scripts call `savefig("foo.svg")` next to themselves (gitignored). Ea
 
 ## Repository Layout
 
-This repo follows the [Rustlab lesson-site pattern](../rustlab/docs/lesson-site-pattern.md) shared with [rustlab_em](../rustlab_em/) — sources flat in `notebooks/`, rendered output committed to a top-level `site/`.
+This repo follows the [Rustlab lesson-site pattern](../rustlab/docs/lesson-site-pattern.md) shared with [rustlab_em](../rustlab_em/) — sources flat in `notebooks/`, rendered output committed to a top-level `book/`.
 
 ```
 notebooks/
@@ -132,7 +132,7 @@ lessons/
   README.md            # explains the .r-script convention
   NN-topic-slug/
     *.r                # standalone rustlab scripts paralleling the notebook code blocks
-site/
+book/
   README.md            # hand-written GitHub landing page
   NN-topic-slug.md     # rendered notebook with inline SVG plots (committed)
   plots/NN-topic-slug/ # captured figures (committed)

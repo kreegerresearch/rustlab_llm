@@ -1,5 +1,5 @@
 # Per-lesson .r script artefacts. Scripts write plots alongside
-# themselves; the canonical rendered output lives under site/, so
+# themselves; the canonical rendered output lives under book/, so
 # nothing under lessons/ besides the source files needs to be tracked.
 lessons/*/*.svg
 lessons/*/*.html
@@ -10,7 +10,7 @@ lessons/*/outputs/
 
 # Interactive HTML notebook build — auto-generated `make html` output
 # living alongside the committed *.md (large Plotly bundles, regenerable).
-site/*.html
+book/*.html
 
 # macOS
 .DS_Store

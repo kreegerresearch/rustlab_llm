@@ -1,5 +1,8 @@
 # The Rustlab Lesson + Site Pattern
 
+> Looking for the actual lessons? They live in [`../book/`](../book/).
+> This file documents the layout pattern and is meta-doc only.
+
 A drop-in layout for course-style projects built around
 [rustlab](https://github.com/kreegerresearch/rustlab) notebooks. This is
 the pattern `rustlab_em` uses; copy it into any sibling course project
@@ -42,7 +45,7 @@ your-course/
 │   │   └── *.svg|html|png       # script artefacts (gitignored)
 │   └── README.md                # explains the .r-script convention
 │
-├── site/                        # rendered output for GitHub display (committed)
+├── book/                        # rendered output for GitHub display (committed)
 │   ├── README.md                # hand-written index — GitHub landing
 │   ├── 01-topic-slug.md         # rendered notebook with inline ![](...) SVGs
 │   ├── 02-topic-slug.md
@@ -65,21 +68,21 @@ your-course/
 - **`lessons/`** — where standalone `.r` scripts live, organized by
   slug. Optional; skip the dir entirely if a lesson has no side
   scripts. Created on demand as scripts are authored.
-- **`site/`** — what GitHub displays and what `make notebooks`
+- **`book/`** — what GitHub displays and what `make notebooks`
   rebuilds. Two landing pages coexist here, one per context: the
   hand-written `README.md` is what GitHub shows when someone clicks the
   dir; the auto-generated `index.html` (from `make html`, gitignored)
   is what a local browser opens. They don't conflict — GitHub doesn't
   render `.html`, and you point your browser at `index.html` directly.
-  Everything else under `site/` is generated.
+  Everything else under `book/` is generated.
 
 ### Naming rules
 
 - Slug: `NN-topic-slug` with two-digit zero-padded numbering. Sorts
   correctly in directory listings and `wildcard` globs.
 - Source notebook: `notebooks/<slug>.md`. The filename stem becomes the
-  slug at every later stage (`site/<slug>.md`, `site/plots/<slug>/`,
-  `site/<slug>.html`).
+  slug at every later stage (`book/<slug>.md`, `book/plots/<slug>/`,
+  `book/<slug>.html`).
 - Standalone scripts: `lessons/<slug>/<descriptive-name>.r`. Comments
   inside `.r` files use `#`.
 
@@ -89,24 +92,24 @@ your-course/
 # 1. Edit the source notebook.
 $EDITOR notebooks/01-topic-slug.md
 
-# 2. Regenerate the site.
+# 2. Regenerate the book.
 make notebooks
 
 # 3. Review the diff. Commit source + regenerated files together.
-git add notebooks/01-topic-slug.md site/01-topic-slug.md site/plots/01-topic-slug/
+git add notebooks/01-topic-slug.md book/01-topic-slug.md book/plots/01-topic-slug/
 git commit
 ```
 
-The "commit source + site together" rule keeps the tree internally
+The "commit source + book together" rule keeps the tree internally
 consistent. The CI drift check (below) enforces it.
 
 ## Makefile
 
 Drop this into the project root. It works unchanged for any number of
-notebooks; rename `SITE` if your output dir is named differently.
+notebooks; rename `BOOK` if your output dir is named differently.
 
 ```make
-SITE := site
+BOOK := book
 
 .DEFAULT_GOAL := help
 .PHONY: help all notebooks notebooks-check html clean
@@ -116,20 +119,20 @@ help: ## Show this help
 		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo "  lesson-NN          Run .r scripts for one lesson (e.g. make lesson-01)"
 
-all: notebooks html ## Regenerate the rendered site/ and the interactive HTML build
+all: notebooks html ## Regenerate the rendered book/ and the interactive HTML build
 
-notebooks: ## Render site/<slug>.md from notebooks/<slug>.md
-	rustlab notebook render notebooks --format markdown --output $(abspath $(SITE))
+notebooks: ## Render book/<slug>.md from notebooks/<slug>.md
+	rustlab notebook render notebooks --format markdown --output $(abspath $(BOOK))
 
-html: ## Build interactive HTML at site/index.html (auto-generated entry + per-notebook html)
-	rustlab notebook render notebooks --format html --output $(abspath $(SITE)) --title "your-course"
+html: ## Build interactive HTML at book/index.html (auto-generated entry + per-notebook html)
+	rustlab notebook render notebooks --format html --output $(abspath $(BOOK)) --title "your-course"
 
-# Drift guard: re-render, then fail if site/ has uncommitted changes.
-# Wire this into CI to enforce the source-and-site-together rule.
+# Drift guard: re-render, then fail if book/ has uncommitted changes.
+# Wire this into CI to enforce the source-and-book-together rule.
 notebooks-check: notebooks
-	@if [ -n "$$(git status --porcelain -- $(SITE)/)" ]; then \
-		echo "site/ drifted from sources. Run 'make notebooks' and commit." >&2; \
-		git status --short -- $(SITE)/ >&2; exit 1; \
+	@if [ -n "$$(git status --porcelain -- $(BOOK)/)" ]; then \
+		echo "book/ drifted from sources. Run 'make notebooks' and commit." >&2; \
+		git status --short -- $(BOOK)/ >&2; exit 1; \
 	fi
 
 # Per-lesson script runner: `make lesson-01` runs lessons/01-*/*.r.
@@ -137,7 +140,7 @@ lesson-%:
 	@for f in lessons/$*-*/*.r; do echo "=== $$f ==="; rustlab run "$$f" || true; done
 
 clean: ## Delete the interactive HTML build and .r script artefacts
-	rm -f $(SITE)/*.html
+	rm -f $(BOOK)/*.html
 	rm -f lessons/*/*.svg lessons/*/*.html lessons/*/*.png
 ```
 
@@ -147,7 +150,7 @@ clean: ## Delete the interactive HTML build and .r script artefacts
 renders the whole batch in one call, with two niceties that fall out of
 directory mode and let us avoid per-file pattern rules:
 
-1. **The hand-written `site/README.md` is preserved.** The renderer
+1. **The hand-written `book/README.md` is preserved.** The renderer
    skips files named `README.md` on input and never writes one on
    output, so the markdown landing page survives every rebuild.
 2. **HTML output gets a free `index.html`** with prev/next navigation
@@ -173,29 +176,29 @@ lose the hand-written-README behaviour and the auto-generated
 ```
 # Standalone .r script artefacts. Scripts call savefig("foo.svg")
 # relative to their own dir (no subdirectory), and the canonical
-# rendered plots live under site/, so we ignore the artefacts in
+# rendered plots live under book/, so we ignore the artefacts in
 # place rather than committing them.
 lessons/*/*.svg
 lessons/*/*.html
 lessons/*/*.png
 
 # Interactive HTML notebook build — `make html` writes index.html and
-# one *.html per notebook into site/, alongside the committed *.md.
-site/*.html
+# one *.html per notebook into book/, alongside the committed *.md.
+book/*.html
 ```
 
 There is deliberately no `outputs/` subdirectory per lesson. Scripts
 call `savefig("foo.svg")` (no path prefix); the file lands next to the
-`.r` and is gitignored. The committed site is the single canonical
+`.r` and is gitignored. The committed `book/` is the single canonical
 location for rendered plots — `.r` artefacts are throwaway tinkering
 output.
 
 ## CI drift guard
 
 Wire `make notebooks-check` into your CI pipeline. It re-renders the
-site, then asks `git status` whether anything under `site/` changed.
+book, then asks `git status` whether anything under `book/` changed.
 
-A failure means the committed site is out of sync with its sources —
+A failure means the committed book is out of sync with its sources —
 the contributor forgot to run `make notebooks` and stage the result.
 Failure mode is loud and the fix is mechanical: run the command
 locally, commit, push.
@@ -233,7 +236,7 @@ Notebook authoring constraints (renderer-specific):
 From an empty repo:
 
 ```sh
-mkdir -p notebooks lessons site docs
+mkdir -p notebooks lessons book docs
 
 # Stub a first lesson source so make doesn't render an empty dir.
 cat > notebooks/01-getting-started.md <<'EOF'
@@ -251,11 +254,11 @@ cat > notebooks/README.md <<'EOF'
 # Source notebooks
 
 Edit `<slug>.md` files here. Run `make notebooks` from the repo root
-to regenerate the rendered site/ tree.
+to regenerate the rendered book/ tree.
 EOF
 
-# Hand-written landing page that GitHub displays at site/.
-cat > site/README.md <<'EOF'
+# Hand-written landing page that GitHub displays at book/.
+cat > book/README.md <<'EOF'
 # your-course
 
 Rendered lessons. Sources at `../notebooks/`.
@@ -270,7 +273,7 @@ cat > .gitignore <<'EOF'
 lessons/*/*.svg
 lessons/*/*.html
 lessons/*/*.png
-site/*.html
+book/*.html
 EOF
 
 # Drop in the Makefile from the section above (replace "your-course"
@@ -278,12 +281,12 @@ EOF
 
 # Sanity check.
 make notebooks
-ls site/
+ls book/
 ```
 
 That's the whole bootstrap. Add lessons by dropping more `<slug>.md`
 files into `notebooks/`, optionally creating `lessons/<slug>/` for side
-scripts, and updating the table in `site/README.md`.
+scripts, and updating the table in `book/README.md`.
 
 ## Migrating from older layouts
 
@@ -327,7 +330,7 @@ done
 ```
 
 In both cases, after the file moves: `make notebooks` to populate
-`site/`, then commit source moves + new site files in one changeset.
+`book/`, then commit source moves + new book files in one changeset.
 
 ## Why this layout works on GitHub
 
@@ -337,15 +340,15 @@ run code blocks. The pattern leans into that:
 
 - **Sources stay diffable.** No SVG bytes or executed-output churn in
   `notebooks/`. Reviewers see exactly what changed in prose or code.
-- **`site/` is committed and self-rendering.** A reader visiting the
+- **`book/` is committed and self-rendering.** A reader visiting the
   repo sees executed notebooks with text output and inline plots, with
   no infrastructure to set up.
 - **Interactive HTML build is gitignored.** `make html` writes
-  `site/index.html` and one `<slug>.html` per notebook *alongside* the
+  `book/index.html` and one `<slug>.html` per notebook *alongside* the
   committed `<slug>.md` files. Self-contained Plotly bundles are large
   and contain `<script>` GitHub won't run anyway, so they're locked
-  behind `site/*.html` in the gitignore. Local readers who want
-  interactive plots run `make html` and open `site/index.html`.
+  behind `book/*.html` in the gitignore. Local readers who want
+  interactive plots run `make html` and open `book/index.html`.
 
 ## Best practices
 
@@ -353,14 +356,14 @@ run code blocks. The pattern leans into that:
 
 Visitors landing on your repo's GitHub page should learn within a few
 lines that they can read the course without cloning. Put a prominent
-link to `site/` near the top of the project root's `README.md`:
+link to `book/` near the top of the project root's `README.md`:
 
 ````markdown
-**[Browse the rendered lessons →](site/)** — N worked notebooks with
+**[Browse the rendered lessons →](book/)** — N worked notebooks with
 plots inline. GitHub displays them directly, no install needed.
 ````
 
-GitHub auto-renders `site/README.md` when the link resolves to the
+GitHub auto-renders `book/README.md` when the link resolves to the
 directory, so readers land on your hand-written index without any
 extra wiring. Skip this lead-in and the rendered output — one of the
 best things about the layout — is easy to miss; visitors assume they
@@ -390,8 +393,10 @@ lesson, leave it visible.
 
 - Upstream rustlab uses the same pattern at a larger scale (sources
   flat in `examples/notebooks/`, rendered output committed to a
-  top-level dir they call `gallery/` rather than `site/`, no
-  `lessons/` layer for side scripts):
-  <https://github.com/kreegerresearch/rustlab/tree/main/gallery>.
+  top-level dir they call `gallery/`, no `lessons/` layer for side
+  scripts): <https://github.com/kreegerresearch/rustlab/tree/main/gallery>.
+  Downstream course projects (this one, `rustlab_em`) call the rendered
+  output dir `book/` instead, since the lessons read as a linear
+  curriculum and `book/` matches the mdBook / Jupyter Book convention.
 - `rustlab/docs/notebooks.md` — full notebook format reference,
   including directives, frontmatter, and output format details.

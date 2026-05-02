@@ -25,7 +25,7 @@ make lesson-01     # run every .r in lesson 01
 ```
 
 Scripts call `savefig("foo.svg")` next to themselves; the canonical
-rendered plots live in [`../site/`](../site/), so `.r` artefacts
+rendered plots live in [`../book/`](../book/), so `.r` artefacts
 (`*.svg`, `*.html`, `*.png` under each lesson dir) are gitignored.
 
 ## Why have both notebooks and scripts?
