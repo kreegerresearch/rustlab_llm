@@ -1,0 +1,128 @@
+# Script:  attention_backward.r
+# System:  One causal attention head — full forward + analytical backward
+# Concept: Decompose the head's backward pass into four steps.
+#          1. O = A V         => dL/dV, dL/dA
+#          2. A = softmax(S)  => dL/dS  (using the row-wise simplification)
+#          3. S = QK'/sqrt(dk) + M  => dL/dQ, dL/dK
+#          4. Q,K,V = X W_*   => dL/dW_* and accumulate dL/dX
+#          Verify dL/dW_Q at one entry against a centred finite-difference.
+# Units:   All values dimensionless reals.
+
+# === Setup ===
+seed(17);
+T = 4;
+d_model = 4;
+d_k = 3;
+d_v = 3;
+scale = 1.0 / sqrt(d_k);
+
+X = randn(T, d_model) * 0.5;
+W_Q = randn(d_model, d_k) * 0.5;
+W_K = randn(d_model, d_k) * 0.5;
+W_V = randn(d_model, d_v) * 0.5;
+
+# Causal mask
+NEG_INF = -1.0e9;
+Mmat = zeros(T, T);
+for i = 1:T
+  for j = (i + 1):T
+    Mmat(i, j) = NEG_INF;
+  end
+end
+
+# === Forward pass (factored as a function of W_Q for the FD check) ===
+function L = head_loss(X, W_Q, W_K, W_V, Mmat, scale, dL_dO, T)
+  Q = X * W_Q;
+  K = X * W_K;
+  V = X * W_V;
+  S = Q * K' * scale + Mmat;
+  A = zeros(T, T);
+  for t = 1:T
+    row = softmax(S(t));
+    for j = 1:size(row, 2)
+      A(t, j) = row(j);
+    end
+  end
+  O = A * V;
+  # Treat L = sum(dL_dO .* O) so its gradient w.r.t. O is exactly dL_dO.
+  L = sum(reshape(dL_dO .* O, 1, size(O, 1) * size(O, 2)));
+end
+
+# === Forward (capture intermediates for backward) ===
+Q = X * W_Q;
+K = X * W_K;
+V = X * W_V;
+S = Q * K' * scale + Mmat;
+
+A = zeros(T, T);
+for t = 1:T
+  row = softmax(S(t));
+  for j = 1:T
+    A(t, j) = row(j);
+  end
+end
+O = A * V;
+
+# Synthetic upstream gradient (deterministic for reproducibility)
+seed(42);
+dL_dO = randn(T, d_v) * 0.1;
+
+print("O shape:", size(O));
+print("dL/dO shape:", size(dL_dO));
+
+# === Backward ===
+# Step 1: O = A V
+dL_dV = A' * dL_dO;
+dL_dA = dL_dO * V';
+
+# Step 2: A = softmax(S) row-wise
+# For each row a = softmax(s), J = diag(a) - a' a, so
+#   dL/ds = a .* (dL/da - sum(dL/da .* a))
+dL_dS = zeros(T, T);
+for t = 1:T
+  a   = A(t);
+  da  = dL_dA(t);
+  m   = sum(a .* da);
+  for j = 1:T
+    dL_dS(t, j) = a(j) * (da(j) - m);
+  end
+end
+
+# Step 3: S = Q K' / sqrt(d_k)
+dL_dQ = dL_dS * K * scale;
+dL_dK = dL_dS' * Q * scale;
+
+# Step 4: Q, K, V = X W_*
+dL_dWQ = X' * dL_dQ;
+dL_dWK = X' * dL_dK;
+dL_dWV = X' * dL_dV;
+
+# All three branches feed the same X — gradients accumulate
+dL_dX = dL_dQ * W_Q' + dL_dK * W_K' + dL_dV * W_V';
+
+print("dL/dW_Q shape (should be d_model x d_k):", size(dL_dWQ));
+print("dL/dW_K shape (should be d_model x d_k):", size(dL_dWK));
+print("dL/dW_V shape (should be d_model x d_v):", size(dL_dWV));
+print("dL/dX  shape (should be T x d_model)  :", size(dL_dX));
+
+# === Finite-difference check at W_Q(2, 1) ===
+eps = 1.0e-5;
+WQp = W_Q; WQp(2, 1) = W_Q(2, 1) + eps;
+WQm = W_Q; WQm(2, 1) = W_Q(2, 1) - eps;
+Lp = head_loss(X, WQp, W_K, W_V, Mmat, scale, dL_dO, T);
+Lm = head_loss(X, WQm, W_K, W_V, Mmat, scale, dL_dO, T);
+fd = (Lp - Lm) / (2.0 * eps);
+err = abs(fd - dL_dWQ(2, 1));
+print("FD dL/dW_Q(2,1):", fd, "  analytic:", dL_dWQ(2, 1), "  err:", err);
+
+# === Mask gradient is zero on the upper triangle ===
+# A is exactly zero on i<j (softmax of -1e9), so dL_dS inherits the same zeros.
+max_upper = 0.0;
+for i = 1:T
+  for j = (i + 1):T
+    if abs(dL_dS(i, j)) > max_upper
+      max_upper = abs(dL_dS(i, j));
+    end
+  end
+end
+print("Max |dL/dS| on upper triangle (should be ~0):", max_upper);
