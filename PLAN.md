@@ -19,7 +19,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 | 4 | Transformer Components | Complete |
 | 5 | Full GPT Architecture | Complete |
 | 6 | Training | Complete |
-| 7 | Tokenization & Evaluation | In progress |
+| 7 | Tokenization & Evaluation | Complete |
 | 8 | Generation & Capstone | Not started |
 
 ---
@@ -214,20 +214,22 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - `20-perplexity-and-evaluation`
 
 **Deliverables:**
-- [ ] Lesson 19 visualises the BPE merge frequency as a bar chart and token length distribution as a line plot
-- [ ] Lesson 20 plots perplexity vs. training steps and a train/val loss comparison showing overfitting
+- [x] Lesson 19 visualises the BPE merge frequency as a bar chart and token length distribution as a line plot
+- [x] Lesson 20 plots perplexity vs. training steps and a train/val loss comparison showing overfitting
 
 **Acceptance criteria:**
 - Lesson 19 walks through 3–5 BPE merge steps manually with printed examples.
 - Lesson 20 derives perplexity from cross-entropy loss algebraically (references Lesson 03).
 - Both lessons are self-contained — they do not require running any previous script to produce outputs.
 
-**Status:** Not started
+**Status:** Complete
 
 **Handoff notes:**
-- Last completed lesson: —
-- Next action: Start with `lessons/19-byte-pair-encoding/lesson.md`.
-- Known blockers: None — `sort(v)` now confirmed available.
+- Last completed lesson: 20-perplexity-and-evaluation
+- Next action: Start Phase 8 with `notebooks/21-sampling-strategies.md`.
+- Known blockers: None.
+- New rustlab gap recorded in AGENTS.md during Phase 7:
+  3. **`&&` and `||` do NOT short-circuit.** Both operands are eagerly evaluated, which breaks the common idiom `if i < L && seq(i+1) == val ...` (the second operand reads out-of-bounds when `i == L`). Workaround: nest the bound check explicitly, with the second condition inside the first's `if` block. Use a `matched = 0/1` flag if you need to combine many conditions cleanly.
 
 ---
 

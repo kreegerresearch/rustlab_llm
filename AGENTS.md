@@ -291,6 +291,21 @@ end
 [dE, dW] = step_grad(1, 2, E, W);   % currently parse error
 ```
 
+### Logical `&&` and `||` are eager (no short-circuit)
+**Hit while writing:** Lesson 19 (BPE merge step).
+**Symptom:** A typical bound-then-deref guard like `if i < L && seq(i + 1) == best_b` evaluates `seq(i + 1)` *before* checking `i < L`, so on the last position (`i == L`) it reads `seq(L + 1)` and raises `index out of bounds`.
+**Workaround in use:** Nest the bound check, with the second condition strictly inside the first's `if` body. For multi-condition logic, use a flag: `matched = 0; if i < L; if seq(i) == a; if seq(i+1) == b; matched = 1; end; end; end;`
+**Wanted:** Standard left-to-right short-circuit semantics for `&&` / `||`, the way most C-family languages and MATLAB itself handle them.
+**Example (target):**
+```
+% Currently raises index OOB on the last position:
+while i <= L
+  if i < L && seq(i + 1) == val
+    ...
+  end
+end
+```
+
 ### `softmax(logits(1))` after a vector × matrix
 **Hit while writing:** Lessons 18 and (preventatively) 16, 17.
 **Symptom:** A common idiom `logits = h * W; p = softmax(logits(1))` mis-fires when `h` is a vector — `h * W` returns a *vector* (not a 1×N matrix), so `logits(1)` extracts the first scalar element instead of the first row, and softmax of a scalar yields a 1×1 matrix that breaks downstream `p(j)` indexing.

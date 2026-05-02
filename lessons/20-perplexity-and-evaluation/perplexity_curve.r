@@ -1,0 +1,151 @@
+# Script:  perplexity_curve.r
+# System:  Track perplexity through training of the same 24-parameter LM
+#          from Lesson 18.  PPL = exp(L) plotted alongside the loss curve.
+# Concept: PPL is just exp(L) and inherits L's training-curve shape; it
+#          adds the unit "effective branching factor" so endpoints (3 at
+#          init, 1.4 at the bigram floor) read directly off the y-axis.
+# Equations:
+#   forward / backward identical to lesson 18 train_loop.r
+#   L(t) = mean cross-entropy at step t
+#   PPL(t) = exp(L(t))
+# Units:   PPL dimensionless; loss in nats.
+
+seed(20);
+vocab = 3;
+d_emb = 4;
+
+E = randn(vocab, d_emb) * 0.3;
+W = randn(d_emb, vocab) * 0.3;
+
+# === Period-4 corpus (same as lesson 18) ===
+function tokens = build_seq(n)
+  tokens = zeros(n);
+  pat = [1, 2, 3, 2];
+  for i = 1:n
+    tokens(i) = pat(mod(i - 1, 4) + 1);
+  end
+end
+
+corpus = build_seq(60);
+n_train_pairs = 49;
+n_val_pairs = 9;
+
+# === Forward + backward (struct return) ===
+function r = step_grad(curr, nxt, E, W, vocab, d_emb)
+  h_m = E(curr);
+  p = softmax(h_m * W);
+  L_step = -log(p(nxt));
+  e_y = zeros(vocab); e_y(nxt) = 1.0;
+  dlogits = p - e_y;
+  dW_acc = h_m' * dlogits;
+  dh = dlogits * W';
+  dE_acc = zeros(vocab, d_emb);
+  for k = 1:d_emb
+    dE_acc(curr, k) = dh(k);
+  end
+  r = struct("dE", dE_acc, "dW", dW_acc, "L", L_step);
+end
+
+function L = mean_loss(start_idx, n_pairs, corpus, E, W)
+  L = 0.0;
+  for k = 0:(n_pairs - 1)
+    curr = corpus(start_idx + k);
+    nxt  = corpus(start_idx + k + 1);
+    h_m = E(curr);
+    p = softmax(h_m * W);
+    L = L + (-log(p(nxt)));
+  end
+  L = L / n_pairs;
+end
+
+# === AdamW + warmup-cosine schedule ===
+n_train = 600;
+beta1 = 0.9;
+beta2 = 0.999;
+adam_eps = 1.0e-8;
+eta_max = 0.15;
+eta_min = 0.015;
+T_w = 60;
+
+m_E = zeros(vocab, d_emb);
+v_E = zeros(vocab, d_emb);
+m_W = zeros(d_emb, vocab);
+v_W = zeros(d_emb, vocab);
+
+L_train = zeros(n_train + 1);
+L_val   = zeros(n_train + 1);
+L_train(1) = mean_loss(1,  n_train_pairs, corpus, E, W);
+L_val(1)   = mean_loss(50, n_val_pairs,   corpus, E, W);
+
+print("Initial train PPL:", exp(L_train(1)), "  (uniform baseline = 3.0)");
+print("Initial val   PPL:", exp(L_val(1)));
+
+for t = 1:n_train
+  if t <= T_w
+    eta_t = eta_max * (t / T_w);
+  else
+    progress = (t - T_w) / (n_train - T_w);
+    eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * progress));
+  end
+
+  dE_sum = zeros(vocab, d_emb);
+  dW_sum = zeros(d_emb, vocab);
+  for k = 0:(n_train_pairs - 1)
+    r = step_grad(corpus(1 + k), corpus(2 + k), E, W, vocab, d_emb);
+    dE_sum = dE_sum + r.dE;
+    dW_sum = dW_sum + r.dW;
+  end
+  dE_avg = dE_sum / n_train_pairs;
+  dW_avg = dW_sum / n_train_pairs;
+
+  m_E = beta1 * m_E + (1 - beta1) * dE_avg;
+  v_E = beta2 * v_E + (1 - beta2) * (dE_avg .^ 2);
+  E = E - eta_t * (m_E / (1 - beta1 ^ t)) ./ (sqrt(v_E / (1 - beta2 ^ t)) + adam_eps);
+
+  m_W = beta1 * m_W + (1 - beta1) * dW_avg;
+  v_W = beta2 * v_W + (1 - beta2) * (dW_avg .^ 2);
+  W = W - eta_t * (m_W / (1 - beta1 ^ t)) ./ (sqrt(v_W / (1 - beta2 ^ t)) + adam_eps);
+
+  L_train(t + 1) = mean_loss(1,  n_train_pairs, corpus, E, W);
+  L_val(t + 1)   = mean_loss(50, n_val_pairs,   corpus, E, W);
+end
+
+# Convert to PPL
+PPL_train = exp(L_train);
+PPL_val   = exp(L_val);
+
+print("Final train PPL:", PPL_train(n_train + 1));
+print("Final val   PPL:", PPL_val(n_train + 1));
+print("Bigram floor (Lesson 05): exp(0.347) =", exp(0.347));
+
+# === Plot 1: PPL curves ===
+figure()
+steps = 0:n_train;
+plot(steps, PPL_train, "color", "red",  "label", "train PPL")
+hold("on")
+plot(steps, PPL_val,   "color", "blue", "label", "val PPL")
+hline(3.0,            "dashed", "uniform PPL = 3")
+hline(exp(0.347),     "dashed", "bigram PPL ≈ 1.41")
+hold("off")
+title("Train / val perplexity over training")
+xlabel("step")
+ylabel("PPL")
+legend("train", "val")
+savefig("perplexity_curve.svg")
+print("Saved perplexity_curve.svg");
+
+# === Plot 2: side-by-side L and PPL ===
+figure()
+subplot(2, 1, 1)
+plot(steps, L_train, "color", "red", "label", "train L")
+title("Cross-entropy loss (nats)")
+xlabel("step")
+ylabel("L")
+
+subplot(2, 1, 2)
+plot(steps, PPL_train, "color", "red", "label", "train PPL")
+title("Perplexity = exp(L)")
+xlabel("step")
+ylabel("PPL")
+savefig("loss_vs_ppl.svg")
+print("Saved loss_vs_ppl.svg");
