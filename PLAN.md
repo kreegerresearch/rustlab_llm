@@ -18,8 +18,8 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 | 3 | Attention Mechanism | Complete |
 | 4 | Transformer Components | Complete |
 | 5 | Full GPT Architecture | Complete |
-| 6 | Training | Not started |
-| 7 | Tokenization & Evaluation | Not started |
+| 6 | Training | Complete |
+| 7 | Tokenization & Evaluation | In progress |
 | 8 | Generation & Capstone | Not started |
 
 ---
@@ -182,10 +182,10 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - `18-training-loop`
 
 **Deliverables:**
-- [ ] Lesson 15 visualises gradient magnitude per layer (heatmap) to illustrate vanishing/exploding gradients
-- [ ] Lesson 16 plots optimiser trajectories (SGD vs. Adam vs. AdamW) on a 2D loss surface
-- [ ] Lesson 17 plots a warmup + cosine decay LR schedule and overlays it on a simulated loss curve
-- [ ] Lesson 18 plots training and validation loss curves and gradient norm over steps
+- [x] Lesson 15 visualises gradient magnitude per layer (heatmap) to illustrate vanishing/exploding gradients
+- [x] Lesson 16 plots optimiser trajectories (SGD vs. Adam vs. AdamW) on a 2D loss surface
+- [x] Lesson 17 plots a warmup + cosine decay LR schedule and overlays it on a simulated loss curve
+- [x] Lesson 18 plots training and validation loss curves and gradient norm over steps (and a sister `overfit_demo.r` showing the train↘ / val↗ signature)
 
 **Acceptance criteria:**
 - Lesson 15 derives the chain rule through at least one attention head explicitly.
@@ -193,12 +193,15 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - Lesson 17 explains *why* warmup prevents early instability.
 - Lesson 18 identifies the signs of overfitting (val loss rises while train loss falls) and underfitting.
 
-**Status:** Not started
+**Status:** Complete
 
 **Handoff notes:**
-- Last completed lesson: —
-- Next action: Start with `lessons/15-backpropagation/lesson.md`.
-- Known blockers: None.
+- Last completed lesson: 18-training-loop
+- Next action: Start Phase 7 with `notebooks/19-byte-pair-encoding.md`.
+- Known blockers for Phase 7: None.
+- New rustlab gaps recorded in AGENTS.md Rustlab Recommendations during Phase 6:
+  1. **Multi-output function definitions.** `function [a, b, c] = name(...)` is documented as `function [out] = name(...)` only. Workaround: pack outputs into a struct `r = struct("a", ..., "b", ..., "c", ...)` and unpack with `a = r.a` (note: `r.a(i, j)` indexing fails — extract to a variable first).
+  2. **Vector vs 1×N matrix arithmetic.** Already logged in Phase 4. Recipe consolidated across Phase 6 lessons: scalarise scalar-valued matrices with `sum(...)`, use `M(1)` to extract row 1 of a 1×N matrix as a vector when chaining elementwise ops, and call `softmax(h * W)` directly rather than via `softmax(logits(1))` (the latter mistakenly indexes a vector as a scalar).
 
 ---
 

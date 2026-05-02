@@ -277,6 +277,25 @@ y = (W * x')';             % current: returns matrix
 z = x + 0.1 * gelu(y);     % current: errors; want: just works
 ```
 
+### Multi-output function definitions  `function [a, b] = name(...)`
+**Hit while writing:** Lesson 18 (training loop).
+**Symptom:** Defining a function with multiple outputs — `function [dE, dW, L] = step_grad(...)` — fails with `parse error: expected function name, got LBracket`. Documented signature is `function [out] = name(args)` (single output in brackets); multi-output isn't implemented.
+**Workaround in use:** Pack outputs into a struct and return a single value: `r = struct("dE", ..., "dW", ..., "L", ...);` then unpack with `dE = r.dE; dW = r.dW;` at the call site.
+**Caveat:** Indexing a struct field directly (`r.dW(i, j)`) raises "undefined function 'dW'" — extract `dW = r.dW` to a variable first.
+**Wanted:** Native multi-output return so multi-grad / multi-stat helpers don't need a struct wrapper.
+**Example (target):**
+```
+function [dE, dW] = step_grad(curr, nxt, E, W)
+  ...
+end
+[dE, dW] = step_grad(1, 2, E, W);   % currently parse error
+```
+
+### `softmax(logits(1))` after a vector × matrix
+**Hit while writing:** Lessons 18 and (preventatively) 16, 17.
+**Symptom:** A common idiom `logits = h * W; p = softmax(logits(1))` mis-fires when `h` is a vector — `h * W` returns a *vector* (not a 1×N matrix), so `logits(1)` extracts the first scalar element instead of the first row, and softmax of a scalar yields a 1×1 matrix that breaks downstream `p(j)` indexing.
+**Workaround in use:** Call `softmax(h * W)` directly. The vector-valued result indexes correctly with `p(j)`. If a 1×N matrix really is needed, write `reshape(h * W, 1, vocab)`.
+
 ### `layernorm(M)` row-wise on a matrix → matrix
 **Needed for:** Lesson 12 (LayerNorm sublayer) and every later transformer lesson — every transformer block applies LN per token vector to the full $T \times d_{\text{model}}$ residual stream.
 **Current behaviour:** `layernorm(v)` works on a vector or scalar; `layernorm(M)` raises `type error: layernorm: argument must be a non-empty vector or scalar`.

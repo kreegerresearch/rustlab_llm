@@ -1,0 +1,188 @@
+# Script:  train_loop.r
+# System:  Tiny embedding-then-linear language model on a periodic 60-char
+#          corpus over { a, b, c }.  Trains with AdamW + warmup+cosine LR
+#          schedule.  Saves three diagnostic plots.
+# Concept: Wire forward + backward + optimiser + schedule.  Track train
+#          loss, validation loss, and gradient norm per logged step.
+# Equations:
+#   h        = E(x_curr)            (lookup row x_curr of E)
+#   logits   = h * W                  (1 × vocab)
+#   p        = softmax(logits)
+#   L        = -log p(x_next)
+#   dlogits  = p - 1_{x_next}
+#   dW       = h' * dlogits
+#   dh       = dlogits * W'
+#   dE[x_curr] += dh
+#   AdamW step on (E, W) with eta_t from the schedule.
+# Units:   parameters dimensionless; loss in nats.
+
+# === Setup ===
+seed(18);
+vocab = 3;
+d_emb = 4;
+
+E = randn(vocab, d_emb) * 0.3;
+W = randn(d_emb, vocab) * 0.3;
+
+# === Corpus ===
+# Periodic "abcbabc..." sequence, 60 chars.  Train on first 50 pairs;
+# validate on the last 9.  (Periodic sequences mean train/val are i.i.d.
+# under the bigram model, so a healthy run sees val ~ train.)
+function tokens = build_seq(n)
+  tokens = zeros(n);
+  pat = [1, 2, 3, 2];     % a, b, c, b — period 4
+  for i = 1:n
+    tokens(i) = pat(mod(i - 1, 4) + 1);
+  end
+end
+
+corpus = build_seq(60);
+train_seq = corpus(1);    % 60 elements as vector
+# Use first 50 for train, remaining for val.  Index by hand below.
+n_train_pairs = 49;        # pairs (1..49) -> (2..50)
+n_val_pairs = 9;           # pairs (50..58) -> (51..59)
+
+# === Forward + backward for one (curr, next) pair ===
+# Returns a struct {dE, dW, L} since rustlab functions take a single output.
+function r = step_grad(curr, nxt, E, W, vocab, d_emb)
+  h_m = E(curr);                    % row gather -> vector of length d_emb
+  p = softmax(h_m * W);              % vector of length vocab
+  L_step = -log(p(nxt));
+
+  e_y = zeros(vocab); e_y(nxt) = 1.0;
+  dlogits = p - e_y;                  % vector
+  dW_acc = h_m' * dlogits;            % d_emb × vocab
+  dh = dlogits * W';                  % vector of length d_emb
+
+  dE_acc = zeros(vocab, d_emb);
+  for k = 1:d_emb
+    dE_acc(curr, k) = dh(k);
+  end
+  r = struct("dE", dE_acc, "dW", dW_acc, "L", L_step);
+end
+
+# === Mean loss over a list of pairs ===
+function L = mean_loss(start_idx, n_pairs, corpus, E, W)
+  L = 0.0;
+  for k = 0:(n_pairs - 1)
+    curr = corpus(start_idx + k);
+    nxt  = corpus(start_idx + k + 1);
+    h_m = E(curr);
+    pvec = softmax(h_m * W);
+    L = L + (-log(pvec(nxt)));
+  end
+  L = L / n_pairs;
+end
+
+# === Hyperparameters ===
+n_train = 600;
+beta1 = 0.9;
+beta2 = 0.999;
+adam_eps = 1.0e-8;
+eta_max = 0.15;
+eta_min = 0.015;
+T_w = 60;
+lambda_wd = 0.0;            % small model — leave decoupled decay off
+
+# AdamW state
+m_E = zeros(vocab, d_emb);
+v_E = zeros(vocab, d_emb);
+m_W = zeros(d_emb, vocab);
+v_W = zeros(d_emb, vocab);
+
+# Diagnostic buffers
+loss_train_curve = zeros(n_train + 1);
+loss_val_curve   = zeros(n_train + 1);
+grad_norm_curve  = zeros(n_train + 1);
+lr_curve         = zeros(n_train + 1);
+
+loss_train_curve(1) = mean_loss(1,  n_train_pairs, corpus, E, W);
+loss_val_curve(1)   = mean_loss(50, n_val_pairs,   corpus, E, W);
+grad_norm_curve(1)  = 0.0;
+lr_curve(1)         = 0.0;
+
+print("Initial train loss (should be ~log(3) = 1.0986):", loss_train_curve(1));
+print("Initial val   loss (should be ~log(3) = 1.0986):", loss_val_curve(1));
+
+# === Training loop ===
+for t = 1:n_train
+  # LR schedule
+  if t <= T_w
+    eta_t = eta_max * (t / T_w);
+  else
+    progress = (t - T_w) / (n_train - T_w);
+    eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * progress));
+  end
+  lr_curve(t + 1) = eta_t;
+
+  # Full-batch gradient over training pairs
+  dE_sum = zeros(vocab, d_emb);
+  dW_sum = zeros(d_emb, vocab);
+  for k = 0:(n_train_pairs - 1)
+    curr = corpus(1 + k);
+    nxt  = corpus(2 + k);
+    r = step_grad(curr, nxt, E, W, vocab, d_emb);
+    dE_sum = dE_sum + r.dE;
+    dW_sum = dW_sum + r.dW;
+  end
+  dE_avg = dE_sum / n_train_pairs;
+  dW_avg = dW_sum / n_train_pairs;
+
+  # Gradient norm = sqrt(sum of squares across all parameter grads)
+  gn_sq = sum(reshape(dE_avg .^ 2, 1, vocab * d_emb)) + sum(reshape(dW_avg .^ 2, 1, d_emb * vocab));
+  grad_norm_curve(t + 1) = sqrt(gn_sq);
+
+  # AdamW update on E
+  m_E = beta1 * m_E + (1 - beta1) * dE_avg;
+  v_E = beta2 * v_E + (1 - beta2) * (dE_avg .^ 2);
+  m_E_hat = m_E / (1 - beta1 ^ t);
+  v_E_hat = v_E / (1 - beta2 ^ t);
+  E = E - eta_t * (m_E_hat ./ (sqrt(v_E_hat) + adam_eps) + lambda_wd * E);
+
+  # AdamW update on W
+  m_W = beta1 * m_W + (1 - beta1) * dW_avg;
+  v_W = beta2 * v_W + (1 - beta2) * (dW_avg .^ 2);
+  m_W_hat = m_W / (1 - beta1 ^ t);
+  v_W_hat = v_W / (1 - beta2 ^ t);
+  W = W - eta_t * (m_W_hat ./ (sqrt(v_W_hat) + adam_eps) + lambda_wd * W);
+
+  # Log losses
+  loss_train_curve(t + 1) = mean_loss(1,  n_train_pairs, corpus, E, W);
+  loss_val_curve(t + 1)   = mean_loss(50, n_val_pairs,   corpus, E, W);
+end
+
+print("Final train loss:", loss_train_curve(n_train + 1));
+print("Final val   loss:", loss_val_curve(n_train + 1));
+print("Final grad norm :", grad_norm_curve(n_train + 1));
+print("Bigram entropy reference (Lesson 05): ~0.347 nats / ~1.414 perplexity");
+print("(For 'abcbabcb...': P(a|b)=P(c|b)=0.5, P(b|a)=P(b|c)=1.  H = 0.347 nats.)");
+
+# === Diagnostic plots ===
+figure()
+steps = 0:n_train;
+plot(steps, loss_train_curve, "color", "red",  "label", "train")
+hold("on")
+plot(steps, loss_val_curve,   "color", "blue", "label", "val")
+hold("off")
+title("Train vs Val loss (period-4 corpus, 24-param model)")
+xlabel("step")
+ylabel("L (nats)")
+legend("train", "val")
+savefig("train_val_loss.svg")
+print("Saved train_val_loss.svg");
+
+figure()
+plot(steps, log10(grad_norm_curve + 1e-12), "color", "green", "label", "log10 ||grad||")
+title("Gradient norm vs step (log10)")
+xlabel("step")
+ylabel("log10 ||grad||")
+savefig("grad_norm.svg")
+print("Saved grad_norm.svg");
+
+figure()
+plot(steps, lr_curve, "color", "purple", "label", "eta")
+title("Learning-rate schedule (warmup + cosine)")
+xlabel("step")
+ylabel("eta")
+savefig("lr_curve.svg")
+print("Saved lr_curve.svg");
