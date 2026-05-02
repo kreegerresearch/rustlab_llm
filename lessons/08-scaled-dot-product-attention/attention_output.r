@@ -104,28 +104,28 @@ print("Formula: 3 * d_model * d_k  =  3 *", d_model, "*", d_k, "=", n_params_qkv
 print("Note: parameter count is independent of sequence length T.");
 
 # === Plots ===
+# Rows are token positions; columns are projected feature dimensions for
+# Q/K/V/O and key positions for A.  Categorical labels make this explicit.
+positions = {"t1", "t2", "t3", "t4", "t5"};
+qk_dims  = {"d1", "d2", "d3", "d4"};
+
 figure()
 subplot(3, 1, 1)
-imagesc(Q, "viridis")
-title("Q = X W_Q (queries)")
+heatmap(qk_dims, positions, Q, "Q = X W_Q (queries)", "viridis")
 
 subplot(3, 1, 2)
-imagesc(K, "viridis")
-title("K = X W_K (keys)")
+heatmap(qk_dims, positions, K, "K = X W_K (keys)", "viridis")
 
 subplot(3, 1, 3)
-imagesc(V, "viridis")
-title("V = X W_V (values)")
+heatmap(qk_dims, positions, V, "V = X W_V (values)", "viridis")
 savefig("qkv_projections.svg")
 print("Saved qkv_projections.svg");
 
 figure()
 subplot(2, 1, 1)
-imagesc(A, "viridis")
-title("Attention weights A")
+heatmap(positions, positions, A, "Attention weights A", "viridis")
 
 subplot(2, 1, 2)
-imagesc(O, "viridis")
-title("Output O = A V")
+heatmap(qk_dims, positions, O, "Output O = A V  (rows: positions, cols: value dims)", "viridis")
 savefig("attention_output.svg")
 print("Saved attention_output.svg");

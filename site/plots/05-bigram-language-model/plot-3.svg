@@ -84,12 +84,12 @@ c
 <rect x="90" y="429" width="157" height="0" opacity="1" fill="none" stroke="#000000"/>
 <rect x="326" y="47" width="316" height="382" opacity="1" fill="none" stroke="#000000"/>
 <rect x="721" y="429" width="159" height="0" opacity="1" fill="none" stroke="#000000"/>
-<rect x="806" y="52" width="69" height="31" opacity="0.85" fill="#1E1E2E" stroke="none"/>
-<rect x="806" y="52" width="69" height="31" opacity="0.3" fill="none" stroke="#CDD6F4"/>
-<text x="846" y="62" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+<rect x="809" y="52" width="66" height="31" opacity="0.85" fill="#1E1E2E" stroke="none"/>
+<rect x="809" y="52" width="66" height="31" opacity="0.3" fill="none" stroke="#CDD6F4"/>
+<text x="849" y="62" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
 bar
 </text>
-<rect x="816" y="62" width="20" height="10" opacity="1" fill="#17BECF" stroke="none"/>
+<rect x="819" y="62" width="20" height="10" opacity="1" fill="#17BECF" stroke="none"/>
 <text x="450" y="525" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="17.741935483870968" opacity="1" fill="#CDD6F4">
 P(next | b) — equal: a or c
 </text>
@@ -174,12 +174,12 @@ c
 <rect x="90" y="738" width="157" height="191" opacity="1" fill="none" stroke="#000000"/>
 <rect x="326" y="929" width="316" height="0" opacity="1" fill="none" stroke="#000000"/>
 <rect x="721" y="738" width="159" height="191" opacity="1" fill="none" stroke="#000000"/>
-<rect x="806" y="552" width="69" height="31" opacity="0.85" fill="#1E1E2E" stroke="none"/>
-<rect x="806" y="552" width="69" height="31" opacity="0.3" fill="none" stroke="#CDD6F4"/>
-<text x="846" y="562" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+<rect x="809" y="552" width="66" height="31" opacity="0.85" fill="#1E1E2E" stroke="none"/>
+<rect x="809" y="552" width="66" height="31" opacity="0.3" fill="none" stroke="#CDD6F4"/>
+<text x="849" y="562" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
 bar
 </text>
-<rect x="816" y="562" width="20" height="10" opacity="1" fill="#17BECF" stroke="none"/>
+<rect x="819" y="562" width="20" height="10" opacity="1" fill="#17BECF" stroke="none"/>
 <text x="450" y="1025" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="17.741935483870968" opacity="1" fill="#CDD6F4">
 P(next | c) — deterministic: always b
 </text>
@@ -264,10 +264,10 @@ c
 <rect x="90" y="1429" width="157" height="0" opacity="1" fill="none" stroke="#000000"/>
 <rect x="326" y="1047" width="316" height="382" opacity="1" fill="none" stroke="#000000"/>
 <rect x="721" y="1429" width="159" height="0" opacity="1" fill="none" stroke="#000000"/>
-<rect x="806" y="1052" width="69" height="31" opacity="0.85" fill="#1E1E2E" stroke="none"/>
-<rect x="806" y="1052" width="69" height="31" opacity="0.3" fill="none" stroke="#CDD6F4"/>
-<text x="846" y="1062" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+<rect x="809" y="1052" width="66" height="31" opacity="0.85" fill="#1E1E2E" stroke="none"/>
+<rect x="809" y="1052" width="66" height="31" opacity="0.3" fill="none" stroke="#CDD6F4"/>
+<text x="849" y="1062" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
 bar
 </text>
-<rect x="816" y="1062" width="20" height="10" opacity="1" fill="#17BECF" stroke="none"/>
+<rect x="819" y="1062" width="20" height="10" opacity="1" fill="#17BECF" stroke="none"/>
 </svg>

@@ -75,14 +75,14 @@ T=5.0
 <rect x="506" y="116" width="175" height="314" opacity="1" fill="none" stroke="#000000"/>
 <rect x="725" y="86" width="155" height="344" opacity="1" fill="none" stroke="#000000"/>
 <polyline fill="none" opacity="1" stroke="#D62728" stroke-width="1" points="90,79 879,79 "/>
-<rect x="742" y="52" width="133" height="49" opacity="0.85" fill="#1E1E2E" stroke="none"/>
-<rect x="742" y="52" width="133" height="49" opacity="0.3" fill="none" stroke="#CDD6F4"/>
-<text x="782" y="62" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+<rect x="756" y="52" width="119" height="49" opacity="0.85" fill="#1E1E2E" stroke="none"/>
+<rect x="756" y="52" width="119" height="49" opacity="0.3" fill="none" stroke="#CDD6F4"/>
+<text x="796" y="62" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
 bar
 </text>
-<text x="782" y="80" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+<text x="796" y="80" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
 max = log2(4)
 </text>
-<rect x="752" y="62" width="20" height="10" opacity="1" fill="#17BECF" stroke="none"/>
-<polyline fill="none" opacity="1" stroke="#D62728" stroke-width="1" points="752,85 772,85 "/>
+<rect x="766" y="62" width="20" height="10" opacity="1" fill="#17BECF" stroke="none"/>
+<polyline fill="none" opacity="1" stroke="#D62728" stroke-width="1" points="766,85 786,85 "/>
 </svg>

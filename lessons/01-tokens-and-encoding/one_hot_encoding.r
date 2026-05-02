@@ -43,10 +43,13 @@ print("Dot product l · l (should be 1):", dot_l_l);
 
 # === Heatmap ===
 # Bright = 1 (active character), dark = 0 (inactive)
-# Rows: tokens in sequence order (h, e, l, l, o)
-# Cols: vocabulary slots (e=1, h=2, l=3, o=4)
+# Labelled axes turn the picture into the encoding itself: each row is the
+# token at that sequence position, and the bright cell sits in the column
+# for that character.
+vocab    = {"e", "h", "l", "o"};
+sequence = {"h", "e", "l", "l", "o"};
+
 figure()
-imagesc(X, "viridis")
-title("One-Hot Matrix: 'hello' (5 tokens x 4 vocab)")
+heatmap(vocab, sequence, X, "One-Hot Matrix: 'hello' (5 tokens x 4 vocab)", "viridis")
 savefig("one_hot_matrix.svg")
 print("Saved one_hot_matrix.svg")

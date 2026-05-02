@@ -158,10 +158,13 @@ Key pairs: king/queen = ${s_kq:%.3f}$ (both royal), king/man = ${s_km:%.3f}$ (sa
 
 ### Example — Similarity heatmap
 
+Both axes index the same four vocabulary items, so labelling the rows and columns by token name turns the heatmap into a direct lookup table — every cell reads as $\cos(\text{row token}, \text{col token})$ without referring back to a numbered legend.
+
 ```rustlab
+vocab = {"king", "queen", "man", "woman"};
+
 figure()
-imagesc(S, "viridis")
-title("Cosine Similarity: king, queen, man, woman")
+heatmap(vocab, vocab, S, "Cosine Similarity: king, queen, man, woman", "viridis")
 ```
 
 ## Analogy Arithmetic

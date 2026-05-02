@@ -131,13 +131,18 @@ print("The count is independent of H when d_k = d_model / H.  Heads get narrower
 print("as H grows, but the total width (H * d_k) and parameter count are unchanged.");
 
 # === Plots ===
+# Rows are token positions; columns are feature dimensions.  Naming the
+# concat columns by which head they come from (h1.* vs h2.*) makes the
+# block-stacked structure of multi-head attention visible at a glance.
+positions   = {"t1", "t2", "t3", "t4"};
+concat_cols = {"h1.1", "h1.2", "h2.1", "h2.2"};
+out_cols    = {"d1", "d2", "d3", "d4"};
+
 figure()
 subplot(1, 2, 1)
-imagesc(O_concat, "viridis")
-title("Concatenated head outputs (T × H*d_v)")
+heatmap(concat_cols, positions, O_concat, "Concatenated head outputs (T × H*d_v)", "viridis")
 
 subplot(1, 2, 2)
-imagesc(O, "viridis")
-title("Final output O = Concat * W_O")
+heatmap(out_cols, positions, O, "Final output O = Concat * W_O", "viridis")
 savefig("head_concatenation.svg")
 print("Saved head_concatenation.svg");

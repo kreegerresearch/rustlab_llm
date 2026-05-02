@@ -87,25 +87,26 @@ print("Max attention weight in upper triangle (should be ~0):", max_upper);
 print("A(1, 1) (token 1 can only attend to itself — should be 1):", A(1, 1));
 
 # === Plots ===
-# Three-stage pipeline: raw scores → masked scores → attention weights
+# Three-stage pipeline: raw scores → masked scores → attention weights.
+# Both axes of every matrix here are token positions, so use the labelled
+# heatmap form to make the "row t attends to columns 1..t" structure read
+# without translating cell indices.
+positions = {"t1", "t2", "t3", "t4", "t5"};
+
 figure()
 subplot(3, 1, 1)
-imagesc(S, "viridis")
-title("Scaled scores S = Q K^T / sqrt(d_k)")
+heatmap(positions, positions, S, "Scaled scores S = Q K^T / sqrt(d_k)", "viridis")
 
 subplot(3, 1, 2)
-imagesc(S_masked, "viridis")
-title("After causal mask (upper triangle → -∞)")
+heatmap(positions, positions, S_masked, "After causal mask (upper triangle → -∞)", "viridis")
 
 subplot(3, 1, 3)
-imagesc(A, "viridis")
-title("Attention weights A = softmax_row(S_masked)")
+heatmap(positions, positions, A, "Attention weights A = softmax_row(S_masked)", "viridis")
 savefig("attention_pipeline.svg")
 print("Saved attention_pipeline.svg");
 
 # Standalone heatmap of the final weights
 figure()
-imagesc(A, "viridis")
-title("Causal Attention Weights — lower triangular, rows sum to 1")
+heatmap(positions, positions, A, "Causal Attention Weights — lower triangular, rows sum to 1", "viridis")
 savefig("attention_weights.svg")
 print("Saved attention_weights.svg");

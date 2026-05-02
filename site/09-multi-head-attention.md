@@ -125,23 +125,23 @@ Head 4 row 4 should equal $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case 
 
 ### Example — 2×2 grid of head heatmaps
 
+Both axes are token positions $t_1..t_T$ — labelled axes make the per-head pattern read at a glance: head 1 lights up column $t_1$, head 2 the sub-diagonal, head 3 the diagonal, head 4 every available position equally.
+
 ```rustlab
+positions = {"t1", "t2", "t3", "t4", "t5", "t6"};
+
 figure()
 subplot(2, 2, 1)
-imagesc(A1, "viridis")
-title("Head 1 — first token")
+heatmap(positions, positions, A1, "Head 1 — first token", "viridis")
 
 subplot(2, 2, 2)
-imagesc(A2, "viridis")
-title("Head 2 — previous token")
+heatmap(positions, positions, A2, "Head 2 — previous token", "viridis")
 
 subplot(2, 2, 3)
-imagesc(A3, "viridis")
-title("Head 3 — self")
+heatmap(positions, positions, A3, "Head 3 — self", "viridis")
 
 subplot(2, 2, 4)
-imagesc(A4, "viridis")
-title("Head 4 — uniform")
+heatmap(positions, positions, A4, "Head 4 — uniform", "viridis")
 ```
 
 ```text
@@ -228,15 +228,19 @@ Shapes: $\mathrm{Concat} \in \mathbb{R}^{4 \times 4}$, $\mathbf{O} \in \mathbb{R
 
 ### Example — Concat and final output heatmaps
 
+Rows are still token positions; columns are now feature dimensions. The first $d_v = 2$ columns of `Concat` come from head 1, the next two from head 2.
+
 ```rustlab
+positions2 = {"t1", "t2", "t3", "t4"};
+concat_cols = {"h1.1", "h1.2", "h2.1", "h2.2"};
+out_cols    = {"d1", "d2", "d3", "d4"};
+
 figure()
 subplot(1, 2, 1)
-imagesc(O_concat, "viridis")
-title("Concat = [O_1, O_2]  (T × H*d_v)")
+heatmap(concat_cols, positions2, O_concat, "Concat = [O_1, O_2]  (T × H*d_v)", "viridis")
 
 subplot(1, 2, 2)
-imagesc(O, "viridis")
-title("Final MHA output O = Concat * W_O")
+heatmap(out_cols, positions2, O, "Final MHA output O = Concat * W_O", "viridis")
 ```
 
 ```text

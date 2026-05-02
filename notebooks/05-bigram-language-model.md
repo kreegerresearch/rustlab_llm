@@ -138,16 +138,16 @@ Row entropies: $H(a) = ${H(1):%.3f}$ bits (deterministic → `b`), $H(b) = ${H(2
 
 ### Example — Count and probability heatmaps
 
+Both axes of the bigram matrix are vocabulary tokens — current token on the rows, next token on the columns. `heatmap(xlabels, ylabels, M, ...)` puts those labels directly on the axes so the cells can be read as $C_{ij}$ or $P_{ij}$ without translating indices back to characters.
+
 ```rustlab
 figure()
-imagesc(C, "viridis")
-title("Bigram Count Matrix C (a,b,c)")
+heatmap(tokens, tokens, C, "Bigram Count Matrix C (rows=current, cols=next)", "viridis")
 ```
 
 ```rustlab
 figure()
-imagesc(P, "viridis")
-title("Bigram Probability Matrix P (row-normalised)")
+heatmap(tokens, tokens, P, "Bigram Probability Matrix P (row-normalised)", "viridis")
 ```
 
 ## Sampling from the Model

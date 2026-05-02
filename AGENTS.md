@@ -196,11 +196,15 @@ plot(v)  /  plot(x, y, "color", "blue", "label", "name", "style", "dashed")
 bar(y)  /  bar(labels, y)  /  bar(M)        — bar / categorical / grouped
 scatter(x, y)
 imagesc(M, "viridis")                        — heatmap (colormaps: viridis, jet, hot, gray)
+heatmap(M)  /  heatmap(M, "title")           — heatmap with numeric axes
+heatmap(xlabels, ylabels, M [, "title" [, "viridis"]])  — heatmap with categorical axis labels (row 0 at top)
 [X, Y] = meshgrid(x, y)                      — coordinate matrices (size length(y) × length(x))
 surf(Z)  /  surf(X, Y, Z)  /  surf(X, Y, Z, "viridis")  — 3D surface (rotatable HTML, static SVG/PNG)
 histogram(v)
 savefig("file.svg")                          — save current figure to SVG, PNG, or HTML
 ```
+
+Use `heatmap(xlabels, ylabels, M, ...)` instead of `imagesc(M, ...)` whenever the matrix has categorical row/column meanings (vocabulary tokens, token positions, head/dim names) — the labels turn the heatmap into a direct lookup. Reach for `imagesc` for purely numeric matrices (loss landscapes, positional-encoding `pos × dim`, hidden activations).
 
 **Figure controls:**
 ```

@@ -78,9 +78,12 @@ print("  woman:", sim_to_woman);
 print("Closest token should be 'queen'.");
 
 # === Heatmap of Similarity Matrix ===
-# Bright = similar (cos ~1), dark = dissimilar (cos ~0 or negative)
+# Bright = similar (cos ~1), dark = dissimilar (cos ~0 or negative).
+# Both axes index the same vocabulary, so labelled heatmap turns each cell
+# into a direct lookup of cos(row token, col token).
+vocab = {"king", "queen", "man", "woman"};
+
 figure()
-imagesc(S, "viridis")
-title("Cosine Similarity: king, queen, man, woman")
+heatmap(vocab, vocab, S, "Cosine Similarity: king, queen, man, woman", "viridis")
 savefig("cosine_similarity.svg")
 print("Saved cosine_similarity.svg")

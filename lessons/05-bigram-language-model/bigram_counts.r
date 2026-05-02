@@ -11,6 +11,7 @@
 
 vocab_size = 3;
 seq = [1, 2, 3, 2, 1, 2, 3, 2, 1];
+tokens = {"a", "b", "c"};
 n_tokens = len(seq);
 n_bigrams = n_tokens - 1;
 
@@ -83,14 +84,14 @@ print("Row entropy H(b) bits:", H(2), "  (1 = maximum for 2 options)");
 print("Row entropy H(c) bits:", H(3), "  (0 = deterministic)");
 
 # === Heatmaps ===
+# heatmap(xlabels, ylabels, M, title, cmap) puts the vocabulary characters
+# directly on the axes — rows are the "current" token, cols are "next".
 figure()
-imagesc(C, "viridis")
-title("Bigram Count Matrix C (a,b,c)")
+heatmap(tokens, tokens, C, "Bigram Count Matrix C (rows=current, cols=next)", "viridis")
 savefig("bigram_counts.svg")
 print("Saved bigram_counts.svg");
 
 figure()
-imagesc(P, "viridis")
-title("Bigram Probability Matrix P (row-normalised)")
+heatmap(tokens, tokens, P, "Bigram Probability Matrix P (row-normalised)", "viridis")
 savefig("bigram_probabilities.svg")
 print("Saved bigram_probabilities.svg");

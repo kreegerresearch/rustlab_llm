@@ -137,21 +137,21 @@ print("Head 3: rows whose max is at column t (self) (should be", T - 1, "):", se
 print("Head 4: row 4 (expect [0.25, 0.25, 0.25, 0.25, 0, 0]):", A4(4));
 
 # === Plot 4 heads side-by-side ===
+# Both axes are token positions t1..tT.  Categorical labels via heatmap()
+# make the causal "row t lights up only columns 1..t" structure self-evident.
+positions = {"t1", "t2", "t3", "t4", "t5", "t6"};
+
 figure()
 subplot(2, 2, 1)
-imagesc(A1, "viridis")
-title("Head 1 — first token")
+heatmap(positions, positions, A1, "Head 1 — first token", "viridis")
 
 subplot(2, 2, 2)
-imagesc(A2, "viridis")
-title("Head 2 — previous token")
+heatmap(positions, positions, A2, "Head 2 — previous token", "viridis")
 
 subplot(2, 2, 3)
-imagesc(A3, "viridis")
-title("Head 3 — self")
+heatmap(positions, positions, A3, "Head 3 — self", "viridis")
 
 subplot(2, 2, 4)
-imagesc(A4, "viridis")
-title("Head 4 — uniform")
+heatmap(positions, positions, A4, "Head 4 — uniform", "viridis")
 savefig("multi_head_attention.svg")
 print("Saved multi_head_attention.svg");

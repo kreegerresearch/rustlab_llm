@@ -116,19 +116,20 @@ Token 1 can only attend to itself, so $A_{1,1} = 1.0000$. Every row sums to 1. T
 
 ### Example — Three-stage pipeline heatmap
 
+Both axes are **token positions**: rows are the query positions $t$ (which token is asking) and columns are the key positions $i$ (which token is being read). With position labels on the axes, the causal structure becomes literally readable — "row $t_3$ only has weight on columns $t_1, t_2, t_3$".
+
 ```rustlab
+positions = {"t1", "t2", "t3", "t4", "t5"};
+
 figure()
 subplot(3, 1, 1)
-imagesc(S, "viridis")
-title("Scaled scores S = Q K^T / sqrt(d_k)")
+heatmap(positions, positions, S, "Scaled scores S = Q K^T / sqrt(d_k)", "viridis")
 
 subplot(3, 1, 2)
-imagesc(S_masked, "viridis")
-title("After causal mask (upper triangle → -∞)")
+heatmap(positions, positions, S_masked, "After causal mask (upper triangle → -∞)", "viridis")
 
 subplot(3, 1, 3)
-imagesc(A, "viridis")
-title("Attention weights A = softmax_row(S_masked)")
+heatmap(positions, positions, A, "Attention weights A = softmax_row(S_masked)", "viridis")
 ```
 
 ```text
@@ -208,13 +209,13 @@ Row 1 of $\mathbf{O}$ equals row 1 of $\mathbf{V}$ (token 1 only attends to itse
 ### Example — Attention weights and output heatmaps
 
 ```rustlab
+out_dims = {"d1", "d2", "d3", "d4"};
+
 figure()
 subplot(2, 1, 1)
-imagesc(A2, "viridis")
-title("Attention weights A")
+heatmap(positions, positions, A2, "Attention weights A", "viridis")
 subplot(2, 1, 2)
-imagesc(O, "viridis")
-title("Output O = A V")
+heatmap(out_dims, positions, O, "Output O = A V  (rows: positions, cols: value dims)", "viridis")
 ```
 
 ```text

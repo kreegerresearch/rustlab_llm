@@ -141,12 +141,14 @@ Orthogonality confirmed: $\mathbf{e}_h \cdot \mathbf{e}_e = ${dot_h_e}$ and $\ma
 ### Example — One-hot matrix heatmap
 
 ```rustlab
+vocab    = {"e", "h", "l", "o"};                  % columns: vocabulary slots
+sequence = {"h", "e", "l", "l", "o"};             % rows: tokens in order
+
 figure()
-imagesc(X, "viridis")
-title("One-Hot Matrix: 'hello' (5 tokens x 4 vocab)")
+heatmap(vocab, sequence, X, "One-Hot Matrix: 'hello' (5 tokens x 4 vocab)", "viridis")
 ```
 
-In the heatmap, each row has one bright cell (value = 1) and three dark cells (value = 0). The column positions identify the character.
+With the rows labelled by the actual character at each position and the columns labelled by vocabulary slot, the bright cell on each row sits exactly under the column for that character — the picture *is* the encoding.
 
 ## Connection to Information Theory
 
