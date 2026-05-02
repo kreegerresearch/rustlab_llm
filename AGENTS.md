@@ -267,26 +267,20 @@ seed(42);
 E = randn(8, 6) * 0.1;   % bit-identical across runs
 ```
 
-### `M(idx)` row gather with an integer-vector index → matrix
-**Needed for:** Lesson 11 (FFN per-position independence check) and any later lesson that wants to permute, gather, or sample a subset of rows of a matrix.
-**Current behaviour:** `M(2)` returns row 2, `M(2, 3)` returns the scalar at (2, 3), but `M([3, 1, 2])` raises `runtime error: matrix single-index with vector not supported; use M(i,j) for element access`.
-**Workaround in use:** Build a permutation/selection matrix `P` and compute `P * M`. Works correctly but is allocation-heavy ($N^2$ memory for an $N$-row gather) and requires the user to construct the permutation matrix by hand. See `lessons/11-feed-forward-block/ffn_forward.rlab` for the worked pattern.
-**Wanted:** Standard MATLAB/Octave-style row gather, accepting an integer vector or range and returning the gathered rows.
-**Example (target):**
-```
-H_perm = H([3, 1, 2, 5, 4]);          % gather rows in any order
-batch  = X(rand_indices);             % minibatch sampling for SGD lessons (Phase 6)
-```
+### ✅ Vector + 1×N matrix arithmetic — **landed in rustlab 0.2.0** (commit `31ff3e3`)
+**Was hit while writing:** Lesson 12 (residual signal) and every subsequent lesson that mixes a `vector` and a `1×N matrix` in arithmetic.
+**Now works:** `vec + 1×N_matrix`, `vec .* 1×N_matrix`, etc. — implicit broadcasting promotes both sides. The `(W * x')'` returns-a-matrix path no longer breaks per-step updates like `x = x + alpha * f(x)`.
+**Status of existing workarounds:** the lessons still use the explicit `M(1)` row-extract (`dL_da1_m(1)`) and `x * W'` patterns. They remain correct under 0.2.0; not rewritten because the workarounds make the type story explicit, which is pedagogically useful.
 
-### Vector vs. 1×N matrix type distinction in arithmetic
-**Hit while writing:** Lesson 12 (residual signal demo).
-**Symptom:** `(W * x')'` and `x * W'` are mathematically identical (both produce a row of length $d$), but the first returns a `matrix` of shape $1 \times d$ while the second returns a `vector`. Adding a `vector` to a `matrix` raises `type error: operator Add not defined for vector and matrix`. Surfaces whenever you mix the two patterns in a per-step update like `x = x + alpha * f(x)`.
-**Workaround in use:** Always project via `x * W'` (or use `reshape(M, 1, d)` to coerce a 1×$d$ matrix back to a vector) so types stay aligned. See `lessons/12-layer-norm-and-residuals/residual_signal.rlab`.
-**Wanted:** Either treat `1 × N` matrices as auto-promotable to vectors for `+`/`-`, or — more conservatively — accept vector + 1×N-matrix and broadcast. Without one of these, intermediate transposes silently change a value's type and the error appears far from the root cause.
+### `M(idx)` row gather — partially fixed in 0.2.0
+**Needed for:** Lesson 11 (FFN per-position independence check) and any later lesson that wants to permute, gather, or sample a subset of rows of a matrix.
+**Current behaviour:** `M([3, 1, 2], :)` (with explicit `:` second index) **now works** in 0.2.0. The single-index form `M([3, 1, 2])` still raises `matrix single-index with vector not supported; use M(i,j) for element access`.
+**Workaround in use:** Either upgrade to the `M(rows, :)` form, or keep the existing permutation-matrix pattern (`P * M`). See `lessons/11-feed-forward-block/ffn_forward.rlab` for the perm-matrix pattern; the explicit `:` form is the cleaner replacement going forward.
+**Still wanted:** the bare `M([3, 1, 2])` shorthand to gather rows without the redundant `:`.
 **Example (target):**
 ```
-y = (W * x')';             % current: returns matrix
-z = x + 0.1 * gelu(y);     % current: errors; want: just works
+H_perm = H([3, 1, 2, 5, 4]);          % wanted: bare row gather
+H_perm = H([3, 1, 2, 5, 4], :);        % works in 0.2.0
 ```
 
 ### Multi-output function definitions  `function [a, b] = name(...)`
