@@ -192,10 +192,10 @@ A practical consequence: **larger vocabularies waste no information**. Doubling 
 
 | Script | What it computes |
 |---|---|
-| `bpe_train.r` | trains 5 BPE merges on `"abracadabra…"` and prints the merge list, sequence length, and vocab size at each step |
-| `bpe_apply.r` | applies a fixed merge list to encode three different inputs and plots the tokens-per-input bar chart |
+| `bpe_train.rlab` | trains 5 BPE merges on `"abracadabra…"` and prints the merge list, sequence length, and vocab size at each step |
+| `bpe_apply.rlab` | applies a fixed merge list to encode three different inputs and plots the tokens-per-input bar chart |
 
-Run all with `make lesson-19` (or `rustlab run lessons/19-byte-pair-encoding/<name>.r`).
+Run all with `make lesson-19` (or `rustlab run lessons/19-byte-pair-encoding/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -213,7 +213,7 @@ Run all with `make lesson-19` (or `rustlab run lessons/19-byte-pair-encoding/<na
 1. **Compute by hand.** Take the first occurrence of `"abracadabra"` and count every adjacent pair. Which pair appears most often? Apply that merge and recount — what is the new most-frequent pair?
 2. **Why greedy is fine.** What goes wrong if you choose the *least* frequent pair to merge first? What if you pick a random pair?
 3. **OOV handling.** Encode the word `"xyzzy"` against a BPE merge list trained on `"abracadabra…"`. What is the resulting token sequence? How many tokens long?
-4. **Vocab size vs sequence length.** For the corpus in `bpe_train.r`, plot total sequence length as a function of `n_merges` from 0 to 8. Where is the elbow? What does that tell you about an optimal vocab size for this corpus?
+4. **Vocab size vs sequence length.** For the corpus in `bpe_train.rlab`, plot total sequence length as a function of `n_merges` from 0 to 8. Where is the elbow? What does that tell you about an optimal vocab size for this corpus?
 5. **Information-theoretic bound.** Compute the bigram mutual information $I(a; b)$ for the first chosen merge. Multiply by the pair count — does it match the savings (in bits) of replacing those character pairs with one token?
 
 ## What's next

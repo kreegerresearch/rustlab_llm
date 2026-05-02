@@ -178,9 +178,9 @@ Modern language modelling reports **bits per byte** (BPB) or **bits per characte
 
 | Script | What it computes |
 |---|---|
-| `cross_entropy_surface.r` | $\mathcal{L}(\hat{p}_c) = -\log\hat{p}_c$ as a 1-D curve, plus the 2-D loss surface over logits $(z_1, z_2)$ |
+| `cross_entropy_surface.rlab` | $\mathcal{L}(\hat{p}_c) = -\log\hat{p}_c$ as a 1-D curve, plus the 2-D loss surface over logits $(z_1, z_2)$ |
 
-Run with `make lesson-03` (or `rustlab run lessons/03-cross-entropy-loss/cross_entropy_surface.r`).
+Run with `make lesson-03` (or `rustlab run lessons/03-cross-entropy-loss/cross_entropy_surface.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -202,7 +202,7 @@ Run with `make lesson-03` (or `rustlab run lessons/03-cross-entropy-loss/cross_e
 2. **Loss ceiling.** If a model assigns probability $10^{-6}$ to the correct token, what is the cross-entropy loss? Is this worse or better than a uniform prediction over a 50-token vocabulary?
 3. **Sequence loss.** A model processes a 3-token sequence and assigns probabilities $[0.8, 0.3, 0.6]$ to the correct tokens. Compute the mean cross-entropy loss $\mathcal{L}_{\text{avg}}$.
 4. **KL divergence.** Show that for a one-hot true distribution $\mathbf{y}$, the KL divergence $D_{\text{KL}}(\mathbf{y} \| \hat{\mathbf{p}})$ simplifies to the cross-entropy formula. (Hint: $H(\mathbf{y}) = 0$ for a one-hot vector.)
-5. **Loss curve units.** Modify `cross_entropy_surface.r` to plot $-\log_2(\hat{p}_c)$ instead of natural log. How does the shape change? What is the unit of the resulting loss? At what probability does the loss equal 1 bit?
+5. **Loss curve units.** Modify `cross_entropy_surface.rlab` to plot $-\log_2(\hat{p}_c)$ instead of natural log. How does the shape change? What is the unit of the resulting loss? At what probability does the loss equal 1 bit?
 
 ## What's next
 

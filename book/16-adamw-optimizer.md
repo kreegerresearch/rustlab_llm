@@ -284,11 +284,11 @@ The optimiser is the credit-assignment loop: backprop measures how each paramete
 
 | Script | What it computes |
 |---|---|
-| `sgd_vs_momentum.r` | SGD vs SGD-with-momentum on the elongated bowl; loss curves and trajectories |
-| `adam_step.r` | one Adam step in detail with bias correction; verifies that $\hat{\mathbf{m}} \to \mathbf{m}$ as $t$ grows |
-| `optimizer_comparison.r` | full SGD vs Adam vs AdamW trajectory overlay on the anisotropic loss surface |
+| `sgd_vs_momentum.rlab` | SGD vs SGD-with-momentum on the elongated bowl; loss curves and trajectories |
+| `adam_step.rlab` | one Adam step in detail with bias correction; verifies that $\hat{\mathbf{m}} \to \mathbf{m}$ as $t$ grows |
+| `optimizer_comparison.rlab` | full SGD vs Adam vs AdamW trajectory overlay on the anisotropic loss surface |
 
-Run all with `make lesson-16` (or `rustlab run lessons/16-adamw-optimizer/<name>.r`).
+Run all with `make lesson-16` (or `rustlab run lessons/16-adamw-optimizer/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -303,10 +303,10 @@ Run all with `make lesson-16` (or `rustlab run lessons/16-adamw-optimizer/<name>
 ## Exercises
 
 1. **Why bias correction matters.** At $t = 1$, what does $\mathbf{m}_1$ equal in terms of $\mathbf{g}_1$? What does $\hat{\mathbf{m}}_1$ equal? Why would Adam underestimate the first step's update without the correction?
-2. **Tuning $\beta_2$.** Re-run `adam_step.r` with $\beta_2 = 0.9$. Does the optimiser still converge as quickly? Why is a long second-moment horizon important for stable training?
+2. **Tuning $\beta_2$.** Re-run `adam_step.rlab` with $\beta_2 = 0.9$. Does the optimiser still converge as quickly? Why is a long second-moment horizon important for stable training?
 3. **Why $\varepsilon$ inside the square root vs outside.** The original Adam paper uses $\hat{\mathbf{m}} / (\sqrt{\hat{\mathbf{v}}} + \varepsilon)$. What changes if you write $\hat{\mathbf{m}} / \sqrt{\hat{\mathbf{v}} + \varepsilon}$? On parameters with $\hat{v} \to 0$, which version gives a saner step size?
 4. **Coupled vs decoupled, by hand.** Write out one AdamW step and one Adam-with-L2 step for a single parameter $\theta = 2.0$ with gradient $g = 1.0$ and $\lambda = 0.1$. Where exactly do the two formulas diverge?
-5. **Loss surface intuition.** On `optimizer_comparison.r`, change the bowl to $L = 0.5 (200\theta_1^2 + \theta_2^2)$ (condition number 200). What learning rate keeps SGD stable now? What does Adam need?
+5. **Loss surface intuition.** On `optimizer_comparison.rlab`, change the bowl to $L = 0.5 (200\theta_1^2 + \theta_2^2)$ (condition number 200). What learning rate keeps SGD stable now? What does Adam need?
 
 ## What's next
 

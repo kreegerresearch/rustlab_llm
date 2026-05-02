@@ -190,10 +190,10 @@ These two facts return in [Lesson 03](03-cross-entropy-loss.md) (cross-entropy a
 
 | Script | What it computes |
 |---|---|
-| `softmax_temperature.r` | softmax of `[2.0, 1.0, 0.5, -0.5]` at $T = 0.5, 1.0, 2.0$; overlaid bar plot |
-| `entropy.r` | entropy at $T = 0.5, 1.0, 2.0, 5.0$ plus uniform and near-deterministic baselines |
+| `softmax_temperature.rlab` | softmax of `[2.0, 1.0, 0.5, -0.5]` at $T = 0.5, 1.0, 2.0$; overlaid bar plot |
+| `entropy.rlab` | entropy at $T = 0.5, 1.0, 2.0, 5.0$ plus uniform and near-deterministic baselines |
 
-Run all with `make lesson-02` (or `rustlab run lessons/02-probability-and-softmax/<name>.r`).
+Run all with `make lesson-02` (or `rustlab run lessons/02-probability-and-softmax/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -215,7 +215,7 @@ Run all with `make lesson-02` (or `rustlab run lessons/02-probability-and-softma
 1. **Softmax invariance to shift.** Show algebraically that adding a constant $c$ to all logits does not change the softmax output. Then verify numerically: apply softmax to `[2, 1, 0]` and `[5, 4, 3]` and compare.
 2. **Temperature limits.** What happens to $\text{softmax}(\mathbf{z} / T)$ as $T \to 0$? Write out the limit mathematically. What is this operation called in the context of optimisation?
 3. **Entropy calculation.** For the logits `[3.0, 3.0, 3.0, 3.0]` (all equal), compute the softmax probabilities by hand. Then compute the entropy. Does the result match $\log_2(4)$?
-4. **Modifying temperature.** Edit `softmax_temperature.r` to add a fourth curve at $T = 0.1$. Describe what you observe. Is this practically useful for a language model?
+4. **Modifying temperature.** Edit `softmax_temperature.rlab` to add a fourth curve at $T = 0.1$. Describe what you observe. Is this practically useful for a language model?
 5. **Entropy and vocabulary size.** If a model over a vocabulary of size $|\mathcal{V}|$ outputs a perfectly uniform distribution, what is the entropy in bits? Plot this as a function of $|\mathcal{V}|$ for sizes 10, 100, 1000, 10000.
 
 ## What's next

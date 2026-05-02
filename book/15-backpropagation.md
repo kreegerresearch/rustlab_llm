@@ -369,12 +369,12 @@ Three threads from earlier in the series come together here.
 
 | Script | What it computes |
 |---|---|
-| `chain_rule.r` | two-layer MLP forward + analytical backward + finite-difference check on every parameter gradient |
-| `softmax_ce_grad.r` | numerical confirmation of $\bar{\mathbf{z}} = \mathbf{p} - \mathbf{1}_y$ across all logit positions |
-| `attention_backward.r` | full forward + backward through one causal attention head, finite-difference check at $\mathbf{W}_Q$ |
-| `gradient_flow.r` | per-layer gradient-norm heatmap for vanishing/stable/exploding spectral radii |
+| `chain_rule.rlab` | two-layer MLP forward + analytical backward + finite-difference check on every parameter gradient |
+| `softmax_ce_grad.rlab` | numerical confirmation of $\bar{\mathbf{z}} = \mathbf{p} - \mathbf{1}_y$ across all logit positions |
+| `attention_backward.rlab` | full forward + backward through one causal attention head, finite-difference check at $\mathbf{W}_Q$ |
+| `gradient_flow.rlab` | per-layer gradient-norm heatmap for vanishing/stable/exploding spectral radii |
 
-Run all with `make lesson-15` (or `rustlab run lessons/15-backpropagation/<name>.r`).
+Run all with `make lesson-15` (or `rustlab run lessons/15-backpropagation/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -392,8 +392,8 @@ Run all with `make lesson-15` (or `rustlab run lessons/15-backpropagation/<name>
 
 1. **Bias-only model.** Set $\mathbf{W} = \mathbf{0}$ in the linear-layer example. What is $\bar{\mathbf{x}}$? What does this tell you about why bias terms alone cannot route information backward through a network?
 2. **Why softmax+CE fuse.** Differentiate $L = -\log(\mathrm{softmax}(\mathbf{z})_y)$ symbolically yourself, separately for $j = y$ and $j \ne y$, and confirm both cases collapse to $p_j - \mathbf{1}_y(j)$. At which step does the $1 / p_y$ from $\log$ cancel?
-3. **Mask gradient is zero.** In `attention_backward.r`, compute $\bar{M}_{ij}$ for an upper-triangle entry $(i, j)$ with $i < j$. Why is it exactly zero, regardless of $\bar{\mathbf{O}}$?
-4. **Residual rescue.** Modify `gradient_flow.r` to add an identity term: at each layer, set $\mathbf{g} \leftarrow \mathbf{g} + \mathbf{g} \mathbf{J}^\top$. Replot the heatmap and confirm the vanishing-gradient row no longer shrinks.
+3. **Mask gradient is zero.** In `attention_backward.rlab`, compute $\bar{M}_{ij}$ for an upper-triangle entry $(i, j)$ with $i < j$. Why is it exactly zero, regardless of $\bar{\mathbf{O}}$?
+4. **Residual rescue.** Modify `gradient_flow.rlab` to add an identity term: at each layer, set $\mathbf{g} \leftarrow \mathbf{g} + \mathbf{g} \mathbf{J}^\top$. Replot the heatmap and confirm the vanishing-gradient row no longer shrinks.
 5. **Minibatch generalisation.** Re-derive $\bar{\mathbf{W}}$ for a batch input $\mathbf{X} \in \mathbb{R}^{B \times d_{\text{in}}}$ and upstream $\bar{\mathbf{Y}} \in \mathbb{R}^{B \times d_{\text{out}}}$. Why is $\bar{\mathbf{W}} = \mathbf{X}^\top \bar{\mathbf{Y}}$ (no $1/B$) and not the per-example mean?
 
 ## What's next

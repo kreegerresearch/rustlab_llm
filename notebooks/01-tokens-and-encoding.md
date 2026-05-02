@@ -178,10 +178,10 @@ For shell-based experimentation, two rustlab scripts in this lesson's directory 
 
 | Script | What it computes |
 |---|---|
-| `char_frequencies.r` | character counts and relative frequencies for `"to be or not to be"`; bar chart |
-| `one_hot_encoding.r` | the 5×4 one-hot matrix for `"hello"`; heatmap |
+| `char_frequencies.rlab` | character counts and relative frequencies for `"to be or not to be"`; bar chart |
+| `one_hot_encoding.rlab` | the 5×4 one-hot matrix for `"hello"`; heatmap |
 
-Run both with `make lesson-01` from the repo root (or `rustlab run lessons/01-tokens-and-encoding/<name>.r` for one). Each writes SVGs next to the script (gitignored).
+Run both with `make lesson-01` from the repo root (or `rustlab run lessons/01-tokens-and-encoding/<name>.rlab` for one). Each writes SVGs next to the script (gitignored).
 
 ## Expected Numerical Outputs Summary
 
@@ -198,7 +198,7 @@ Run both with `make lesson-01` from the repo root (or `rustlab run lessons/01-to
 
 ## Exercises
 
-1. **Vocabulary extension.** Modify `char_frequencies.r` to use the corpus `"the cat sat on the mat"`. What is the new vocabulary size? Which character has the highest frequency?
+1. **Vocabulary extension.** Modify `char_frequencies.rlab` to use the corpus `"the cat sat on the mat"`. What is the new vocabulary size? Which character has the highest frequency?
 2. **Decode a sequence.** Given the vocabulary `{e:1, h:2, l:3, o:4}` and the integer sequence `[4, 3, 3, 1]`, what word does this decode to?
 3. **One-hot orthogonality.** Using the `"hello"` one-hot matrix, compute the dot product between the `h` row and the `l` row by hand. Confirm the result matches the orthogonality property.
 4. **Vocabulary size trade-off.** If a text contains $N$ unique characters, the one-hot matrix for a sequence of $T$ tokens has $T \times N$ entries, but only $T$ are non-zero. Express the fraction of non-zero entries as a formula. What happens to this fraction as $N$ grows?

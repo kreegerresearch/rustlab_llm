@@ -353,10 +353,10 @@ A useful framing: a transformer is a **conditional entropy refinement pipeline**
 
 | Script | What it computes |
 |---|---|
-| `block_forward.r` | one Pre-LN transformer block end-to-end with $T = 4, d_{\text{model}} = 8, H = 2$; prints shape at every step |
-| `two_block_stack.r` | runs the same block twice with different weights; prints residual-stream magnitude after each block |
+| `block_forward.rlab` | one Pre-LN transformer block end-to-end with $T = 4, d_{\text{model}} = 8, H = 2$; prints shape at every step |
+| `two_block_stack.rlab` | runs the same block twice with different weights; prints residual-stream magnitude after each block |
 
-Run all with `make lesson-13` (or `rustlab run lessons/13-transformer-block/<name>.r`).
+Run all with `make lesson-13` (or `rustlab run lessons/13-transformer-block/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 

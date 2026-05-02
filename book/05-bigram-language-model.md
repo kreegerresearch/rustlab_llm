@@ -321,10 +321,10 @@ A bigram approximates each conditional with $H(X_t \mid X_{t-1})$, dropping all 
 
 | Script | What it computes |
 |---|---|
-| `bigram_counts.r` | the 3×3 bigram count + normalised + smoothed probability matrices for `"abcbabcba"`; heatmaps |
-| `bigram_sampling.r` | CDF-based sampling trace plus a 12-token generated sequence |
+| `bigram_counts.rlab` | the 3×3 bigram count + normalised + smoothed probability matrices for `"abcbabcba"`; heatmaps |
+| `bigram_sampling.rlab` | CDF-based sampling trace plus a 12-token generated sequence |
 
-Run all with `make lesson-05` (or `rustlab run lessons/05-bigram-language-model/<name>.r`).
+Run all with `make lesson-05` (or `rustlab run lessons/05-bigram-language-model/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 

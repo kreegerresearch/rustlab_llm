@@ -86,7 +86,7 @@ Take any training run and plot $\mathrm{PPL}$ instead of $\mathcal{L}$ on the y-
 - The curve **starts at $|\mathcal{V}|$** and **must end at 1 or higher**. The y-axis has natural endpoints, so a glance tells you how close you are to perfect.
 - The curve is **multiplicative-rate-friendly**. If $\mathrm{PPL}_t / \mathrm{PPL}_{t+1} = 1.05$ for every $t$, the model is improving by a constant factor per step — easy to recognise on a log-scale plot.
 
-The standalone script `perplexity_curve.r` reruns the [Lesson 18](18-training-loop.md) training loop with PPL computed on both train and val sets and plots the result.
+The standalone script `perplexity_curve.rlab` reruns the [Lesson 18](18-training-loop.md) training loop with PPL computed on both train and val sets and plots the result.
 
 ### Example — PPL endpoint sanity for the bigram corpus
 
@@ -173,10 +173,10 @@ A useful evaluation isn't just "what is the average PPL?" but "what is the distr
 
 | Script | What it computes |
 |---|---|
-| `perplexity_basics.r` | PPL of three reference distributions (uniform, peaked, sharp) and prints their endpoints |
-| `perplexity_curve.r` | re-runs the Lesson 18 24-parameter LM training loop and plots train/val PPL per step (alongside the loss curve) |
+| `perplexity_basics.rlab` | PPL of three reference distributions (uniform, peaked, sharp) and prints their endpoints |
+| `perplexity_curve.rlab` | re-runs the Lesson 18 24-parameter LM training loop and plots train/val PPL per step (alongside the loss curve) |
 
-Run all with `make lesson-20` (or `rustlab run lessons/20-perplexity-and-evaluation/<name>.r`).
+Run all with `make lesson-20` (or `rustlab run lessons/20-perplexity-and-evaluation/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -185,8 +185,8 @@ Run all with `make lesson-20` (or `rustlab run lessons/20-perplexity-and-evaluat
 | `entropy_to_ppl(p_uniform)` over 4 classes | `4.0` |
 | `entropy_to_ppl(p_peaked)` (0.7/0.1/0.1/0.1) | ≈ `2.32` |
 | `entropy_to_ppl(p_sharp)` (0.97/0.01/0.01/0.01) | ≈ `1.21` |
-| Initial train PPL (`perplexity_curve.r`) | ≈ `3.0` (uniform over 3 classes) |
-| Final train PPL (`perplexity_curve.r`) | ≈ `1.4` (the bigram floor) |
+| Initial train PPL (`perplexity_curve.rlab`) | ≈ `3.0` (uniform over 3 classes) |
+| Final train PPL (`perplexity_curve.rlab`) | ≈ `1.4` (the bigram floor) |
 | Final val PPL | similar to train PPL (no overfit on this small model) |
 
 ## Exercises

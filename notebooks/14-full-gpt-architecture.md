@@ -314,10 +314,10 @@ The empirical "neural scaling laws" (Kaplan et al. 2020, Hoffmann et al. 2022) s
 
 | Script | What it computes |
 |---|---|
-| `gpt_forward.r` | end-to-end forward pass on the toy config; prints output shape and a sample next-token distribution |
-| `param_count.r` | parameter breakdown for the toy config and for GPT-2 small / GPT-2 medium; bar chart |
+| `gpt_forward.rlab` | end-to-end forward pass on the toy config; prints output shape and a sample next-token distribution |
+| `param_count.rlab` | parameter breakdown for the toy config and for GPT-2 small / GPT-2 medium; bar chart |
 
-Run all with `make lesson-14` (or `rustlab run lessons/14-full-gpt-architecture/<name>.r`).
+Run all with `make lesson-14` (or `rustlab run lessons/14-full-gpt-architecture/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 

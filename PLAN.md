@@ -36,7 +36,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 
 **Deliverables — each lesson must have:**
 - [x] `notebooks/<slug>.md` with the conventional sections (Learning Objectives, Background, Theory, Standalone Scripts, Expected Numerical Outputs, Exercises, What's next)
-- [x] One or more `.r` scripts under `lessons/<slug>/` with the required header block
+- [x] One or more `.rlab` scripts under `lessons/<slug>/` with the required header block
 - [x] All scripts run without error via `rustlab run <path>`
 - [x] Each script calls `savefig("foo.svg")` next to itself (artefacts gitignored)
 - [x] Key numerical results printed with `print()` so a student can verify by hand
@@ -185,7 +185,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 - [x] Lesson 15 visualises gradient magnitude per layer (heatmap) to illustrate vanishing/exploding gradients
 - [x] Lesson 16 plots optimiser trajectories (SGD vs. Adam vs. AdamW) on a 2D loss surface
 - [x] Lesson 17 plots a warmup + cosine decay LR schedule and overlays it on a simulated loss curve
-- [x] Lesson 18 plots training and validation loss curves and gradient norm over steps (and a sister `overfit_demo.r` showing the train↘ / val↗ signature)
+- [x] Lesson 18 plots training and validation loss curves and gradient norm over steps (and a sister `overfit_demo.rlab` showing the train↘ / val↗ signature)
 
 **Acceptance criteria:**
 - Lesson 15 derives the chain rule through at least one attention head explicitly.

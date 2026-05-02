@@ -65,7 +65,7 @@ any time.
 ## How this is organized
 
 The pattern (sources flat in `notebooks/`, rendered output committed to
-a top-level `book/`, standalone `.r` scripts in `lessons/<slug>/`) is
+a top-level `book/`, standalone `.rlab` scripts in `lessons/<slug>/`) is
 documented at [`../rustlab/docs/lesson-site-pattern.md`](../../rustlab/docs/lesson-site-pattern.md)
 and shared across the rustlab course family
 ([rustlab_em](../../rustlab_em/site/) uses the same layout).

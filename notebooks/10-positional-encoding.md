@@ -241,10 +241,10 @@ This is why removing positional encoding tanks language-modelling perplexity by 
 
 | Script | What it computes |
 |---|---|
-| `pe_matrix.r` | the $64 \times 32$ sinusoidal PE matrix; heatmap |
-| `pe_translation.r` | similarity vs. offset curves at two base positions; verifies translation-only dependence |
+| `pe_matrix.rlab` | the $64 \times 32$ sinusoidal PE matrix; heatmap |
+| `pe_translation.rlab` | similarity vs. offset curves at two base positions; verifies translation-only dependence |
 
-Run all with `make lesson-10` (or `rustlab run lessons/10-positional-encoding/<name>.r`).
+Run all with `make lesson-10` (or `rustlab run lessons/10-positional-encoding/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 

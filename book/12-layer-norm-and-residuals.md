@@ -262,10 +262,10 @@ This complements Lesson 11's observation that the FFN does not change $I(X_{t+1}
 
 | Script | What it computes |
 |---|---|
-| `layernorm_distribution.r` | per-row LN on a 4×6 random batch; pre/post histograms |
-| `residual_signal.r` | magnitude of activation across 24 random GELU sublayers, with vs. without residuals |
+| `layernorm_distribution.rlab` | per-row LN on a 4×6 random batch; pre/post histograms |
+| `residual_signal.rlab` | magnitude of activation across 24 random GELU sublayers, with vs. without residuals |
 
-Run all with `make lesson-12` (or `rustlab run lessons/12-layer-norm-and-residuals/<name>.r`).
+Run all with `make lesson-12` (or `rustlab run lessons/12-layer-norm-and-residuals/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -284,7 +284,7 @@ Run all with `make lesson-12` (or `rustlab run lessons/12-layer-norm-and-residua
 1. **Affine identity.** Show that initialising $\boldsymbol{\gamma} = \mathbf{1}$, $\boldsymbol{\beta} = \mathbf{0}$ makes LN reduce to pure standardisation. What happens at $\boldsymbol{\gamma} = \boldsymbol{0}$?
 2. **BatchNorm wouldn't work.** Argue why batch-axis normalisation is unworkable for an autoregressive language model at *inference* time. (Hint: what is the batch at inference?)
 3. **Residual scale.** Try changing `0.1 * f_resi` to `1.0 * f_resi` in the script. Does the magnitude curve still look stable? What does this say about how a deep transformer initialises its sublayer outputs?
-4. **Pre-LN vs Post-LN.** Modify `residual_signal.r` to apply LN to the *output* of the residual addition (Post-LN), not to the input of $f$. Does the magnitude curve change? Why is the gradient story different even when the forward magnitudes look similar?
+4. **Pre-LN vs Post-LN.** Modify `residual_signal.rlab` to apply LN to the *output* of the residual addition (Post-LN), not to the input of $f$. Does the magnitude curve change? Why is the gradient story different even when the forward magnitudes look similar?
 5. **Final LN.** Why does GPT-style code apply one extra LayerNorm to the residual stream before the LM head, even though every block already uses Pre-LN internally?
 
 ## What's next

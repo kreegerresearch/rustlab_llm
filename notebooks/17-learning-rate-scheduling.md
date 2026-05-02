@@ -207,10 +207,10 @@ Read this way, an LR schedule is not a heuristic — it is a *time-varying step 
 
 | Script | What it computes |
 |---|---|
-| `lr_schedule.r` | the warmup + cosine schedule curve and its three phases (warmup, plateau, decay) |
-| `schedule_vs_constant.r` | three simulated training runs (high-LR, low-LR, scheduled) on a noisy 2D bowl; loss curves overlaid |
+| `lr_schedule.rlab` | the warmup + cosine schedule curve and its three phases (warmup, plateau, decay) |
+| `schedule_vs_constant.rlab` | three simulated training runs (high-LR, low-LR, scheduled) on a noisy 2D bowl; loss curves overlaid |
 
-Run all with `make lesson-17` (or `rustlab run lessons/17-learning-rate-scheduling/<name>.r`).
+Run all with `make lesson-17` (or `rustlab run lessons/17-learning-rate-scheduling/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -228,8 +228,8 @@ Run all with `make lesson-17` (or `rustlab run lessons/17-learning-rate-scheduli
 1. **Why a smooth ramp.** Replace the warmup ramp $\eta_{\text{warmup}}(t) = \eta_{\max} \cdot t / T_w$ with a step jump (LR = 0 for $t < T_w/2$, then $\eta_{\max}$). What goes wrong with Adam's first update after the jump?
 2. **The cosine endpoints.** Verify algebraically that $\eta_{\text{decay}}(T_w) = \eta_{\max}$ and $\eta_{\text{decay}}(T_d) = \eta_{\min}$.
 3. **Warmup length scales with $\beta_2$.** Adam's bias correction $1 - \beta_2^t$ reaches 0.99 at $t \approx \log(0.01) / \log(\beta_2)$. Compute this for $\beta_2 \in \{0.99, 0.999, 0.9999\}$. What does each tell you about the minimum sensible $T_w$?
-4. **Re-run schedule_vs_constant.r** with $\sigma = 1.0$ instead of $0.3$. Which schedule (high-LR vs scheduled) is most robust to higher gradient noise? Why?
-5. **What if you skip cosine.** Modify `lr_schedule.r` to keep $\eta = \eta_{\max}$ flat after warmup (no decay). Run on a real loss surface (e.g. import `optimizer_comparison.r` from Lesson 16). Does it ever converge? Why or why not?
+4. **Re-run schedule_vs_constant.rlab** with $\sigma = 1.0$ instead of $0.3$. Which schedule (high-LR vs scheduled) is most robust to higher gradient noise? Why?
+5. **What if you skip cosine.** Modify `lr_schedule.rlab` to keep $\eta = \eta_{\max}$ flat after warmup (no decay). Run on a real loss surface (e.g. import `optimizer_comparison.rlab` from Lesson 16). Does it ever converge? Why or why not?
 
 ## What's next
 

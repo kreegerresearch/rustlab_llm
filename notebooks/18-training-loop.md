@@ -122,7 +122,7 @@ For this lesson, the corpus is a 60-character periodic sequence over $\{a, b, c\
 
 ### Example — End-to-end training
 
-The full training run (corpus, model, AdamW, schedule, diagnostics) is fairly long; the standalone script `train_loop.r` carries it out. The notebook focuses on the diagnostic plots that come out.
+The full training run (corpus, model, AdamW, schedule, diagnostics) is fairly long; the standalone script `train_loop.rlab` carries it out. The notebook focuses on the diagnostic plots that come out.
 
 The expected diagnostics for a healthy run:
 
@@ -136,7 +136,7 @@ If the model were larger relative to the corpus (e.g. 2400 parameters on a 60-ch
 
 ### Theory
 
-Three plots are produced by `train_loop.r`:
+Three plots are produced by `train_loop.rlab`:
 
 **1. `train_val_loss.svg` — train loss (red) vs validation loss (blue) per logged step.** What to look for:
 
@@ -188,30 +188,30 @@ A real GPT training run replaces the embedding+head with the full architecture f
 
 | Script | What it computes |
 |---|---|
-| `train_loop.r` | end-to-end training of the embedding+head bigram model on `"abcbabcba…"` with AdamW + warmup+cosine schedule; saves `train_val_loss.svg`, `grad_norm.svg`, `lr_curve.svg` |
-| `overfit_demo.r` | same model trained on a 6-character corpus to force overfitting; the train/val gap appears clearly |
+| `train_loop.rlab` | end-to-end training of the embedding+head bigram model on `"abcbabcba…"` with AdamW + warmup+cosine schedule; saves `train_val_loss.svg`, `grad_norm.svg`, `lr_curve.svg` |
+| `overfit_demo.rlab` | same model trained on a 6-character corpus to force overfitting; the train/val gap appears clearly |
 
-Run all with `make lesson-18` (or `rustlab run lessons/18-training-loop/<name>.r`).
+Run all with `make lesson-18` (or `rustlab run lessons/18-training-loop/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
 | Variable | Expected Value |
 |---|---|
 | Initial train loss | ≈ `log(3) = 1.099` nats |
-| Final train loss (`train_loop.r`) | ≈ `0.35–0.45` nats (close to bigram entropy) |
-| Final val loss (`train_loop.r`) | ≈ same as train loss (no overfit, model is too small) |
+| Final train loss (`train_loop.rlab`) | ≈ `0.35–0.45` nats (close to bigram entropy) |
+| Final val loss (`train_loop.rlab`) | ≈ same as train loss (no overfit, model is too small) |
 | Initial gradient norm | $O(1)$ |
 | Final gradient norm | several orders of magnitude smaller |
-| `overfit_demo.r` train loss | falls to near 0 (memorised) |
-| `overfit_demo.r` val loss | rises after a few hundred steps (textbook overfit) |
+| `overfit_demo.rlab` train loss | falls to near 0 (memorised) |
+| `overfit_demo.rlab` val loss | rises after a few hundred steps (textbook overfit) |
 
 ## Exercises
 
 1. **Sanity-check the initial loss.** Re-seed the model with `seed(N)` for several $N$. Does the initial training loss stay near $\log 3 \approx 1.099$? What does it mean if it doesn't?
-2. **Effect of LR.** Modify `train_loop.r` to use a constant LR equal to $\eta_{\max}$ (no warmup, no decay). Does training still converge? Where do the diagnostic curves differ from the scheduled run?
+2. **Effect of LR.** Modify `train_loop.rlab` to use a constant LR equal to $\eta_{\max}$ (no warmup, no decay). Does training still converge? Where do the diagnostic curves differ from the scheduled run?
 3. **Effect of weight decay.** Set $\lambda = 0$ in AdamW. The model is so tiny that overfitting is not the issue — but does removing decay change the final loss? Why or why not?
 4. **Read the grad-norm plot.** At which step does the gradient norm peak? Correlate it with the LR schedule's peak in `lr_curve.svg`. Why is the alignment expected?
-5. **Build the overfit case.** In `overfit_demo.r`, increase the embedding dimension to $d = 32$ and the corpus length to 6 characters. Re-run and inspect `train_val_loss.svg` — at what step does the val loss start rising?
+5. **Build the overfit case.** In `overfit_demo.rlab`, increase the embedding dimension to $d = 32$ and the corpus length to 6 characters. Re-run and inspect `train_val_loss.svg` — at what step does the val loss start rising?
 
 ## What's next
 

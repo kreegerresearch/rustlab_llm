@@ -1,4 +1,4 @@
-# Per-lesson .r script artefacts. Scripts write plots alongside
+# Per-lesson .rlab script artefacts. Scripts write plots alongside
 # themselves; the canonical rendered output lives under book/, so
 # nothing under lessons/ besides the source files needs to be tracked.
 lessons/*/*.svg

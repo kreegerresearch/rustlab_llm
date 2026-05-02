@@ -281,10 +281,10 @@ Each head sees the full input $\mathbf{X}$ but projects it down to a $d_k$-dimen
 
 | Script | What it computes |
 |---|---|
-| `multi_head_weights.r` | four hand-crafted heads (first-token, previous-token, self, uniform); 2×2 attention-matrix grid |
-| `head_concatenation.r` | full $T=4, H=2$ pipeline: per-head $\mathbf{O}_h$, concat, $\mathbf{W}_O$ projection; parameter count |
+| `multi_head_weights.rlab` | four hand-crafted heads (first-token, previous-token, self, uniform); 2×2 attention-matrix grid |
+| `head_concatenation.rlab` | full $T=4, H=2$ pipeline: per-head $\mathbf{O}_h$, concat, $\mathbf{W}_O$ projection; parameter count |
 
-Run all with `make lesson-09` (or `rustlab run lessons/09-multi-head-attention/<name>.r`).
+Run all with `make lesson-09` (or `rustlab run lessons/09-multi-head-attention/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -300,9 +300,9 @@ Run all with `make lesson-09` (or `rustlab run lessons/09-multi-head-attention/<
 
 ## Exercises
 
-1. **Role of $\mathbf{W}_O$.** Modify `head_concatenation.r` to set $\mathbf{W}_O = \mathbf{I}$. How does the output relate to the concatenated head outputs now? Argue why a learned $\mathbf{W}_O$ is important even though the concatenation already has the correct shape.
+1. **Role of $\mathbf{W}_O$.** Modify `head_concatenation.rlab` to set $\mathbf{W}_O = \mathbf{I}$. How does the output relate to the concatenated head outputs now? Argue why a learned $\mathbf{W}_O$ is important even though the concatenation already has the correct shape.
 2. **Varying $H$ at fixed $d_{\text{model}}$.** For $d_{\text{model}} = 384$, compute $d_k$ and the total parameter count for $H \in \{1, 2, 4, 6, 8, 12\}$. Confirm the parameter count is independent of $H$. What trades off as $H$ grows?
-3. **More heads, same roles.** Extend `multi_head_weights.r` to 8 heads, with heads 5–8 replicating heads 1–4. Do the outputs still differ (they see the same $\mathbf{V}$)? What does this suggest about initialisation and training?
+3. **More heads, same roles.** Extend `multi_head_weights.rlab` to 8 heads, with heads 5–8 replicating heads 1–4. Do the outputs still differ (they see the same $\mathbf{V}$)? What does this suggest about initialisation and training?
 4. **Attending to two things at once.** Design a pair of $(\mathbf{Q}_h, \mathbf{K}_h)$ values so that attention row 4 concentrates roughly evenly on positions 1 *and* 3 but not 2 or 4. What property of softmax makes this possible?
 5. **Head count vs. dimension budget.** A model with $d_{\text{model}} = 512$ and $H = 8$ has $d_k = 64$. If you kept $d_k$ fixed at 64 but grew $H$ to 16, how would the parameter count change? Why do practitioners typically fix $d_k$ (not $H$) when scaling model width?
 

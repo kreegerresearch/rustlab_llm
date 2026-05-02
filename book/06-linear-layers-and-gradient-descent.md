@@ -231,10 +231,10 @@ These match the first row of `w_path` / `b_path` from the descent loop above.
 
 | Script | What it computes |
 |---|---|
-| `loss_landscape.r` | the MSE loss as a 40×40 heatmap and rotatable 3-D `surf` over $(w, b)$ |
-| `gradient_descent.r` | 200 steps of gradient descent on the same dataset; loss curve and $(w, b)$ trajectory |
+| `loss_landscape.rlab` | the MSE loss as a 40×40 heatmap and rotatable 3-D `surf` over $(w, b)$ |
+| `gradient_descent.rlab` | 200 steps of gradient descent on the same dataset; loss curve and $(w, b)$ trajectory |
 
-Run all with `make lesson-06` (or `rustlab run lessons/06-linear-layers-and-gradient-descent/<name>.r`).
+Run all with `make lesson-06` (or `rustlab run lessons/06-linear-layers-and-gradient-descent/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -252,9 +252,9 @@ Run all with `make lesson-06` (or `rustlab run lessons/06-linear-layers-and-grad
 
 ## Exercises
 
-1. **Learning rate sensitivity.** Modify `gradient_descent.r` to use $\eta = 0.1$. Does the loss still decrease? What about $\eta = 0.2$? Find the threshold above which the algorithm diverges.
+1. **Learning rate sensitivity.** Modify `gradient_descent.rlab` to use $\eta = 0.1$. Does the loss still decrease? What about $\eta = 0.2$? Find the threshold above which the algorithm diverges.
 2. **Gradient at the minimum.** At $(w^*, b^*) = (2, 0)$, compute $\partial \mathcal{L}/\partial w$ and $\partial \mathcal{L}/\partial b$ by hand. Confirm both are zero.
-3. **Non-zero bias.** Change the dataset to $y = [3, 5, 7, 9]$ (true relationship $y = 2x + 1$). Re-run `gradient_descent.r`. Where does the algorithm converge? What are the new values of $w^*$ and $b^*$?
+3. **Non-zero bias.** Change the dataset to $y = [3, 5, 7, 9]$ (true relationship $y = 2x + 1$). Re-run `gradient_descent.rlab`. Where does the algorithm converge? What are the new values of $w^*$ and $b^*$?
 4. **Counting parameters.** A language model uses a linear layer to project from embedding dimension $d = 512$ to vocabulary size $|\mathcal{V}| = 50{,}000$. How many parameters does this output linear layer have (weights + biases)? What fraction of GPT-2-small's 117M parameters does this represent?
 5. **Convexity.** The MSE loss for a linear model is convex. Give an intuitive argument for why adding a non-linear activation (e.g., ReLU) between two linear layers makes the loss non-convex. Why does non-convexity matter for training?
 

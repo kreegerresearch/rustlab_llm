@@ -266,10 +266,10 @@ The FFN does not change the information $I(X_{t+1}; X_{1..t})$ that attention ex
 
 | Script | What it computes |
 |---|---|
-| `ffn_forward.r` | small $T = 5$, $d_{\text{model}} = 4$, $d_{\text{ff}} = 16$ FFN forward pass; per-position independence check |
-| `gelu_vs_relu.r` | overlay plot of GELU vs ReLU on $[-3, 3]$ and the finite-difference derivative around zero |
+| `ffn_forward.rlab` | small $T = 5$, $d_{\text{model}} = 4$, $d_{\text{ff}} = 16$ FFN forward pass; per-position independence check |
+| `gelu_vs_relu.rlab` | overlay plot of GELU vs ReLU on $[-3, 3]$ and the finite-difference derivative around zero |
 
-Run all with `make lesson-11` (or `rustlab run lessons/11-feed-forward-block/<name>.r`).
+Run all with `make lesson-11` (or `rustlab run lessons/11-feed-forward-block/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -286,7 +286,7 @@ Run all with `make lesson-11` (or `rustlab run lessons/11-feed-forward-block/<na
 
 ## Exercises
 
-1. **Collapse without activation.** Replace `gelu` with the identity in `ffn_forward.r`. Show numerically that the result equals `H * (W1 * W2) + b'` for a single combined bias. Why is this a problem for an N-layer transformer?
+1. **Collapse without activation.** Replace `gelu` with the identity in `ffn_forward.rlab`. Show numerically that the result equals `H * (W1 * W2) + b'` for a single combined bias. Why is this a problem for an N-layer transformer?
 2. **Dead-neuron experiment.** Build a small ReLU-FFN and feed it 1000 random inputs. Count the fraction of hidden neurons that are negative across *all* inputs (effectively dead). Repeat with GELU. Comment on the gap.
 3. **Why 4×?** Try `d_ff = d_model` and `d_ff = 8 * d_model`. For each, count the FFN parameters and qualitatively describe what changes (forward-pass FLOPs, expressiveness).
 4. **Per-position symmetry.** Argue why `FFN(P @ H) = P @ FFN(H)` for any row-permutation matrix `P`. Why is this *not* true for attention?

@@ -190,10 +190,10 @@ That is exactly what **attention** does. It replaces the fixed $1/t$ entries of 
 
 | Script | What it computes |
 |---|---|
-| `context_failure.r` | bigram count + probability matrix on the `bank` corpus; bar of $P(\text{next} \mid \text{bank})$ |
-| `prefix_averaging.r` | prefix averages two ways (loop and matrix multiply); heatmaps of $\mathbf{W}$, $\mathbf{X}$, $\bar{\mathbf{X}}$ |
+| `context_failure.rlab` | bigram count + probability matrix on the `bank` corpus; bar of $P(\text{next} \mid \text{bank})$ |
+| `prefix_averaging.rlab` | prefix averages two ways (loop and matrix multiply); heatmaps of $\mathbf{W}$, $\mathbf{X}$, $\bar{\mathbf{X}}$ |
 
-Run all with `make lesson-07` (or `rustlab run lessons/07-context-and-naive-averaging/<name>.r`).
+Run all with `make lesson-07` (or `rustlab run lessons/07-context-and-naive-averaging/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -210,7 +210,7 @@ Run all with `make lesson-07` (or `rustlab run lessons/07-context-and-naive-aver
 
 ## Exercises
 
-1. **Extending the ambiguity.** Modify `context_failure.r` to add a third sentence `river bank fish`. What does $P(\text{next} \mid \text{bank})$ become? How does adding more data *not* fix the underlying structural problem?
+1. **Extending the ambiguity.** Modify `context_failure.rlab` to add a third sentence `river bank fish`. What does $P(\text{next} \mid \text{bank})$ become? How does adding more data *not* fix the underlying structural problem?
 2. **Exponential moving average.** Replace the uniform $1/t$ weights in $\mathbf{W}$ with exponentially decaying weights $w_{t,i} \propto \gamma^{t-i}$ (with $\gamma = 0.8$), normalised to sum to 1 per row. How does the averaged output differ? What kind of bias does this introduce?
 3. **Non-causal averaging.** What matrix $\mathbf{W}'$ would average *all* tokens (past and future) uniformly at every position? Write it out for $T=4$. Why is this wrong for language modelling but fine for, e.g., sentence classification?
 4. **Counting operations.** For a sequence of length $T$ and embedding dimension $d$, how many scalar multiplies does $\mathbf{W}\mathbf{X}$ take? How does this scale with $T$? (Hint: count the non-zero entries of $\mathbf{W}$.)

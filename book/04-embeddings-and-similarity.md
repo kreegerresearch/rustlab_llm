@@ -253,10 +253,10 @@ Similarity of $\mathbf{E}_{\text{king}} - \mathbf{E}_{\text{man}} + \mathbf{E}_{
 
 | Script | What it computes |
 |---|---|
-| `embedding_matrix.r` | random `8 × 6` embedding matrix; one-hot lookup demo; heatmap |
-| `cosine_similarity.r` | the 4-token king/queen/man/woman cosine-similarity matrix; analogy arithmetic |
+| `embedding_matrix.rlab` | random `8 × 6` embedding matrix; one-hot lookup demo; heatmap |
+| `cosine_similarity.rlab` | the 4-token king/queen/man/woman cosine-similarity matrix; analogy arithmetic |
 
-Run all with `make lesson-04` (or `rustlab run lessons/04-embeddings-and-similarity/<name>.r`).
+Run all with `make lesson-04` (or `rustlab run lessons/04-embeddings-and-similarity/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -277,7 +277,7 @@ Run all with `make lesson-04` (or `rustlab run lessons/04-embeddings-and-similar
 2. **Parameter count.** How many learnable parameters does the embedding matrix have for $|\mathcal{V}| = 50{,}000$ and $d = 512$? Compare this to the parameters in one attention head (Lesson 08).
 3. **Cosine symmetry.** Prove algebraically that $\cos(\mathbf{a}, \mathbf{b}) = \cos(\mathbf{b}, \mathbf{a})$. What does this say about the similarity matrix $\mathbf{S}$?
 4. **Analogy arithmetic.** Recompute `king - man + woman` and find which of the four defined tokens it is closest to (by cosine similarity). Does the result match `queen`?
-5. **Effect of dimension.** Edit `embedding_matrix.r` to use $d = 2$ instead of $d = 6$. Plot the 8 token embeddings as 2D scatter points. After random initialisation, do any tokens cluster together? Why or why not?
+5. **Effect of dimension.** Edit `embedding_matrix.rlab` to use $d = 2$ instead of $d = 6$. Plot the 8 token embeddings as 2D scatter points. After random initialisation, do any tokens cluster together? Why or why not?
 
 ## What's next
 

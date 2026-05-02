@@ -261,10 +261,10 @@ Viewed this way, the $1/\sqrt{d_k}$ scale is also information-theoretic: too-lar
 
 | Script | What it computes |
 |---|---|
-| `attention_weights.r` | scores → masked → softmax pipeline on hand-crafted $\mathbf{Q}, \mathbf{K}$; three-stage heatmap |
-| `attention_output.r` | full $X \to Q, K, V \to O$ pipeline with hand-set projection matrices; output heatmap |
+| `attention_weights.rlab` | scores → masked → softmax pipeline on hand-crafted $\mathbf{Q}, \mathbf{K}$; three-stage heatmap |
+| `attention_output.rlab` | full $X \to Q, K, V \to O$ pipeline with hand-set projection matrices; output heatmap |
 
-Run all with `make lesson-08` (or `rustlab run lessons/08-scaled-dot-product-attention/<name>.r`).
+Run all with `make lesson-08` (or `rustlab run lessons/08-scaled-dot-product-attention/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -279,9 +279,9 @@ Run all with `make lesson-08` (or `rustlab run lessons/08-scaled-dot-product-att
 
 ## Exercises
 
-1. **The scale matters.** Remove the $1/\sqrt{d_k}$ factor in `attention_weights.r`. How does the attention matrix change when $d_k = 4$? Try bumping the diagonal of $\mathbf{Q}$ and $\mathbf{K}$ to make the dot products larger — what does softmax do as the scores grow?
-2. **Drop the mask.** Disable the causal mask in `attention_weights.r`. Confirm that token 1 now attends to future tokens. Why does this break language-model training?
-3. **Uniform weights as a limit.** In `attention_weights.r`, set $\mathbf{Q}$ and $\mathbf{K}$ to all zeros. What are the attention weights? Compare to the averaging matrix $\mathbf{W}$ from Lesson 07.
+1. **The scale matters.** Remove the $1/\sqrt{d_k}$ factor in `attention_weights.rlab`. How does the attention matrix change when $d_k = 4$? Try bumping the diagonal of $\mathbf{Q}$ and $\mathbf{K}$ to make the dot products larger — what does softmax do as the scores grow?
+2. **Drop the mask.** Disable the causal mask in `attention_weights.rlab`. Confirm that token 1 now attends to future tokens. Why does this break language-model training?
+3. **Uniform weights as a limit.** In `attention_weights.rlab`, set $\mathbf{Q}$ and $\mathbf{K}$ to all zeros. What are the attention weights? Compare to the averaging matrix $\mathbf{W}$ from Lesson 07.
 4. **Parameter counting.** For $d_{\text{model}} = 384$, $d_k = d_v = 64$, compute the parameter count of $\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V$ together. Add an output projection $\mathbf{W}_O \in \mathbb{R}^{d_v \times d_{\text{model}}}$ — what's the total now?
 5. **Complexity.** The score matrix $\mathbf{S} = \mathbf{Q}\mathbf{K}^\top$ has $T \times T$ entries. How does the cost of computing $\mathbf{S}$ scale with sequence length $T$? Why is this the bottleneck that motivates efficient attention variants (FlashAttention, sliding window, linear attention)?
 

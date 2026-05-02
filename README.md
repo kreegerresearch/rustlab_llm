@@ -95,7 +95,7 @@ No prior deep learning experience is assumed.
 
 ## Running the Lessons
 
-The lessons are integrated **notebooks** under `notebooks/<slug>.md` — prose, math, and code interleaved in a linear narrative. Optional standalone **`.r` scripts** under `lessons/<slug>/` mirror the notebook code blocks for shell-based experimentation.
+The lessons are integrated **notebooks** under `notebooks/<slug>.md` — prose, math, and code interleaved in a linear narrative. Optional standalone **`.rlab` scripts** under `lessons/<slug>/` mirror the notebook code blocks for shell-based experimentation.
 
 GitHub renders the executed lessons directly at [`book/`](book/) — that's the landing page. The source notebooks at [`notebooks/`](notebooks/) are what humans edit.
 
@@ -105,18 +105,18 @@ make all                # render committed book/<slug>.md + local book/*.html
 make notebooks          # regenerate book/<slug>.md from notebooks/<slug>.md
 make html               # build book/index.html for local Plotly view (gitignored)
 make notebooks-check    # CI drift guard
-make lesson-06          # run lesson 06's .r scripts (works for 01–09)
-make clean              # delete the interactive HTML build and .r artefacts
+make lesson-06          # run lesson 06's .rlab scripts (works for 01–09)
+make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
 Or invoke Rustlab directly:
 
 ```bash
-rustlab run lessons/01-tokens-and-encoding/char_frequencies.r
+rustlab run lessons/01-tokens-and-encoding/char_frequencies.rlab
 rustlab                 # interactive REPL
 ```
 
-Standalone scripts call `savefig("foo.svg")` next to themselves (gitignored). Each `.r` script is self-contained — you can run any single script without running previous ones first.
+Standalone scripts call `savefig("foo.svg")` next to themselves (gitignored). Each `.rlab` script is self-contained — you can run any single script without running previous ones first.
 
 ---
 
@@ -129,9 +129,9 @@ notebooks/
   README.md            # editor-facing notes (skipped by renderer)
   NN-topic-slug.md     # source notebooks (prose + math + ```rustlab``` blocks)
 lessons/
-  README.md            # explains the .r-script convention
+  README.md            # explains the .rlab-script convention
   NN-topic-slug/
-    *.r                # standalone rustlab scripts paralleling the notebook code blocks
+    *.rlab                # standalone rustlab scripts paralleling the notebook code blocks
 book/
   README.md            # hand-written GitHub landing page
   NN-topic-slug.md     # rendered notebook with inline SVG plots (committed)
@@ -154,9 +154,46 @@ AGENTS.md              # project conventions, Rustlab language reference
 
 ---
 
+## Syntax Highlighting & IDE Support
+
+Since `.rlab` is a custom extension for rustlab, you must manually associate it with MATLAB/Octave syntax in your editor.
+
+### Visual Studio Code
+
+1. Open Settings (`Cmd+,`).
+2. Search for **Files: Associations**.
+3. Add a new item:
+   - Item: `*.rlab`
+   - Value: `matlab`
+
+### Neovim / Vim
+
+Add the following to your `init.lua` or `.vimrc` to detect the filetype automatically:
+
+```lua
+-- Neovim (init.lua)
+vim.filetype.add({
+  extension = {
+    rlab = 'matlab',
+  },
+})
+```
+
+For legacy `.vimrc`:
+
+```vim
+autocmd BufRead,BufNewFile *.rlab set filetype=matlab
+```
+
+### GitHub
+
+Syntax highlighting is managed via the [`.gitattributes`](.gitattributes) file in the root of this repo (`*.rlab linguist-language=MATLAB`). No user action is required for web viewing.
+
+---
+
 ## License
 
 This repository uses a split licence:
 
-- **Code** (`.r` scripts, `Makefile`) is licensed under the [MIT License](LICENSE-MIT).
+- **Code** (`.rlab` scripts, `Makefile`) is licensed under the [MIT License](LICENSE-MIT).
 - **Documentation** (notebook sources and other prose) is licensed under [CC BY 4.0](LICENSE-CC-BY-4.0).
