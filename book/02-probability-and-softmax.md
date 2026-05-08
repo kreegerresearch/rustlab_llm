@@ -139,7 +139,7 @@ H20 = -sum(p20 .* log2(p20 + eps));
 H50 = -sum(p50 .* log2(p50 + eps));
 ```
 
-Entropy climbs with temperature: $H(T{=}0.5) = $0.802$ bits, $H(T{=}1.0) = $1.525$ bits, $H(T{=}2.0) = $1.862$ bits, $H(T{=}5.0) = $1.977$ bits.
+Entropy climbs with temperature: $H(T{=}0.5) = 0.802$ bits, $H(T{=}1.0) = 1.525$ bits, $H(T{=}2.0) = 1.862$ bits, $H(T{=}5.0) = 1.977$ bits.
 
 ### Example — Sanity checks: uniform vs. near-deterministic
 
@@ -155,7 +155,7 @@ p_det = [0.999, 0.0003, 0.0003, 0.0004];
 H_det = -sum(p_det .* log2(p_det + eps));
 ```
 
-Uniform over 4 tokens: $H = $2.000$ bits (matches $\log_2 4 = 2$). Near-deterministic: $H = $0.0130$ bits (near zero, as expected).
+Uniform over 4 tokens: $H = 2.000$ bits (matches $\log_2 4 = 2$). Near-deterministic: $H = 0.0130$ bits (near zero, as expected).
 
 ### Example — Entropy bar chart vs. the maximum
 

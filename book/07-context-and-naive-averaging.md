@@ -123,7 +123,7 @@ for t = 1:T
 end
 ```
 
-For $T = $6$, $\mathbf{W}$ is shown below.
+For $T = 6$, $\mathbf{W}$ is shown below.
 
 ### Example — Causal averaging matrix W heatmap
 

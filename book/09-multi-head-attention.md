@@ -121,7 +121,7 @@ K4 = zeros(T, d_k);
 A4 = causal_attention_weights(Q4, K4, scale, M, T);
 ```
 
-Head 4 row 4 should equal $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case is exactly the Lesson 07 averaging matrix. Computed: <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, $<ERROR: line 1: undefined function 'A4_row4'>$.
+Head 4 row 4 should equal $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case is exactly the Lesson 07 averaging matrix. Computed: <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>.
 
 ### Example — 2×2 grid of head heatmaps
 
@@ -257,7 +257,7 @@ Pack the per-head projections into three combined $d_{\text{model}} \times d_{\t
 
 $$\underbrace{3 d_{\text{model}}^2}_{\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V} + \underbrace{d_{\text{model}}^2}_{\mathbf{W}_O} \;=\; 4 d_{\text{model}}^2.$$
 
-For the toy $d_{\text{model}} = 4$ that is $3 \cdot 16 + 16 = $64$ parameters.
+For the toy $d_{\text{model}} = 4$ that is $3 \cdot 16 + 16 = 64$ parameters.
 
 **$H$ does not appear.** More heads at fixed $d_{\text{model}}$ means narrower heads ($d_k = d_{\text{model}}/H$), not more parameters. Head *count* is an architectural choice; head *width* is what determines capacity.
 

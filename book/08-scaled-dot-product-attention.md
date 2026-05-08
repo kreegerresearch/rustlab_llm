@@ -112,7 +112,7 @@ for t = 1:T
 end
 ```
 
-Token 1 can only attend to itself, so $A_{1,1} = $1.0000$. Every row sums to 1. The maximum attention weight in the upper triangle is $0.00e+00$ — effectively zero, as required for causality.
+Token 1 can only attend to itself, so $A_{1,1} = 1.0000$. Every row sums to 1. The maximum attention weight in the upper triangle is $0.00e+00$ — effectively zero, as required for causality.
 
 ### Example — Three-stage pipeline heatmap
 
@@ -204,7 +204,7 @@ end
 O = A2 * V2;
 ```
 
-Row 1 of $\mathbf{O}$ equals row 1 of $\mathbf{V}$ (token 1 only attends to itself): $\max|\mathbf{O}_1 - \mathbf{V}_1| = $0.00e+00$. The block's learnable parameters are $3 \cdot d_{\text{model}} \cdot d_k = 3 \cdot $6$ \cdot $4$ = $72$ — and this count does **not** depend on sequence length $T$.
+Row 1 of $\mathbf{O}$ equals row 1 of $\mathbf{V}$ (token 1 only attends to itself): $\max|\mathbf{O}_1 - \mathbf{V}_1| = 0.00e+00$. The block's learnable parameters are $3 \cdot d_{\text{model}} \cdot d_k = 3 \cdot 6 \cdot 4 = 72$ — and this count does **not** depend on sequence length $T$.
 
 ### Example — Attention weights and output heatmaps
 

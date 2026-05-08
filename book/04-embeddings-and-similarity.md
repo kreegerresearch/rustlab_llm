@@ -89,7 +89,7 @@ Embedded representation h3: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -
 Row 3 of E: -0.04089876598481701
 ```
 
-The lookup matches the direct row access exactly — $\max|h_3 - E_3| = $5.85e-02$ (machine epsilon).
+The lookup matches the direct row access exactly — $\max|h_3 - E_3| = 5.85e-02$ (machine epsilon).
 
 ### Example — Embedding matrix heatmap
 
@@ -197,7 +197,7 @@ Matrix(4x4)
   [0.509099, 0.834240, 0.657018, 1.000000]
 ```
 
-Key pairs: king/queen = $0.873$ (both royal), king/man = $0.824$ (same gender), queen/woman = $0.834$ (same gender). The matrix is symmetric: $\max|S - S^\top| = $0.00e+00$.
+Key pairs: king/queen = $0.873$ (both royal), king/man = $0.824$ (same gender), queen/woman = $0.834$ (same gender). The matrix is symmetric: $\max|S - S^\top| = 0.00e+00$.
 
 ### Example — Similarity heatmap
 

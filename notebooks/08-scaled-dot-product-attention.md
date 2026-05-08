@@ -220,7 +220,7 @@ diff_row1 = max(abs(O(1, :) - V2(1, :)));
 n_params_qkv = 3 * d_model * d_k;
 ```
 
-Row 1 of $\mathbf{O}$ equals row 1 of $\mathbf{V}$ (token 1 only attends to itself): $\max|\mathbf{O}_1 - \mathbf{V}_1| = ${diff_row1:%.2e}$. The block's learnable parameters are $3 \cdot d_{\text{model}} \cdot d_k = 3 \cdot ${d_model}$ \cdot ${d_k}$ = ${n_params_qkv}$ — and this count does **not** depend on sequence length $T$.
+Row 1 of $\mathbf{O}$ equals row 1 of $\mathbf{V}$ (token 1 only attends to itself): $\max|\mathbf{O}_1 - \mathbf{V}_1| = ${diff_row1:%.2e}$. The block's learnable parameters are $3 \cdot d_{\text{model}} \cdot d_k = 3 \cdot ${d_model} \cdot ${d_k} = ${n_params_qkv}$ — and this count does **not** depend on sequence length $T$.
 
 ### Example — Attention weights and output heatmaps
 

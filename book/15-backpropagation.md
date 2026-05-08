@@ -197,7 +197,7 @@ zm = z; zm(3) = z(3) - eps;
 fd = (-log(softmax(zp)(y_true)) + log(softmax(zm)(y_true))) / (2 * eps);
 ```
 
-Cross-entropy loss $L = $0.5147$. Analytical $\bar{z}_3 = $0.1334$, finite-difference $= $0.1334$ — match to $3.60e-11$.
+Cross-entropy loss $L = 0.5147$. Analytical $\bar{z}_3 = 0.1334$, finite-difference $= 0.1334$ — match to $3.60e-11$.
 
 ## Backprop Through One Attention Head
 

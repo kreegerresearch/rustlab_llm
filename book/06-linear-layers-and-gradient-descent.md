@@ -51,7 +51,7 @@ L_true = real(mean((2.0 * x + 0.0 - y) .^ 2));
 L_init = real(mean((0.0 * x + 0.0 - y) .^ 2));
 ```
 
-At the optimum, $\mathcal{L}(2, 0) = $0.000$ — zero loss because $y = 2x$ exactly. Starting from $(w, b) = (0, 0)$ the loss is $30.00$, the distance we need gradient descent to close.
+At the optimum, $\mathcal{L}(2, 0) = 0.000$ — zero loss because $y = 2x$ exactly. Starting from $(w, b) = (0, 0)$ the loss is $30.00$, the distance we need gradient descent to close.
 
 ## The Loss Landscape
 
@@ -81,7 +81,7 @@ L_matrix = term_w2 + term_b2 + term_wb + term_w + term_b + 30.0;
 min_loss_flat = min(reshape(L_matrix, 1, n_grid * n_grid));
 ```
 
-Analytic check: $\mathcal{L}(2, 0) = $0.000$ from the expanded formula. The minimum over the $40 \times 40$ grid is $0.0022$ — a hair above zero because the grid doesn't land exactly on $(2, 0)$.
+Analytic check: $\mathcal{L}(2, 0) = 0.000$ from the expanded formula. The minimum over the $40 \times 40$ grid is $0.0022$ — a hair above zero because the grid doesn't land exactly on $(2, 0)$.
 
 ```rustlab
 figure()
@@ -162,7 +162,7 @@ for step = 1:n_steps
 end
 ```
 
-After 200 steps with $\eta = $0.05$: $w = $1.9898$ (true $w^* = 2$), $b = $0.0299$ (true $b^* = 0$), $\mathcal{L} = $1.49e-04$ — effectively zero.
+After 200 steps with $\eta = 0.05$: $w = 1.9898$ (true $w^* = 2$), $b = 0.0299$ (true $b^* = 0$), $\mathcal{L} = 1.49e-04$ — effectively zero.
 
 ### Example — Loss vs. step
 

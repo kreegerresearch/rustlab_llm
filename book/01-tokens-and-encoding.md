@@ -160,7 +160,7 @@ Row sums (each must equal 1): Matrix(5x1)
 Dot product h . e: 0   l . l: 1
 ```
 
-Orthogonality confirmed: $\mathbf{e}_h \cdot \mathbf{e}_e = $0$ and $\mathbf{e}_l \cdot \mathbf{e}_l = $1$ — exactly $\delta_{ij}$.
+Orthogonality confirmed: $\mathbf{e}_h \cdot \mathbf{e}_e = 0$ and $\mathbf{e}_l \cdot \mathbf{e}_l = 1$ — exactly $\delta_{ij}$.
 
 ### Example — One-hot matrix heatmap
 

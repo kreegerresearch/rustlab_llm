@@ -86,7 +86,7 @@ output      (T, d):    [1×2]  5.000000  4.000000
 max | FFN(P*H) - P*FFN(H) | = 0
 ```
 
-Reshuffling the rows of $\mathbf{H}$ via a permutation matrix and re-applying FFN produces exactly the same rows in the same shuffled order — confirmed numerically with $\max\Delta = $0.00e+00$. FFN is row-independent; only attention mixes across positions.
+Reshuffling the rows of $\mathbf{H}$ via a permutation matrix and re-applying FFN produces exactly the same rows in the same shuffled order — confirmed numerically with $\max\Delta = 0.00e+00$. FFN is row-independent; only attention mixes across positions.
 
 ## ReLU vs GELU
 
