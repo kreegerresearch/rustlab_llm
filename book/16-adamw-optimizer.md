@@ -71,7 +71,7 @@ SGD final loss: 0.00009728759888484672
 SGD final theta: [1×2]  -0.000003  0.013949
 ```
 
-After 60 steps SGD loss is 0.0001$ — we are barely off the start in $\theta_2$ because $\eta = 0.09$ shrinks $\theta_2$ by only 9 % per step.
+After 60 steps SGD loss is $0.0001$ — we are barely off the start in $\theta_2$ because $\eta = 0.09$ shrinks $\theta_2$ by only 9 % per step.
 
 ## Momentum: An EMA of the Gradient
 
@@ -131,7 +131,7 @@ print("Adam final loss:", loss(theta_adam));
 Adam final loss: 0.02318514321637464
 ```
 
-Adam's per-coordinate rescaling makes both directions advance at similar speeds — final loss is now 2.3185e-02$, several orders below SGD.
+Adam's per-coordinate rescaling makes both directions advance at similar speeds — final loss is now $2.3185e-02$, several orders below SGD.
 
 ## Coupled vs Decoupled Weight Decay
 

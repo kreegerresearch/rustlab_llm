@@ -56,7 +56,7 @@ The bigram's continuation distribution after `bank` is
 
 $$P(\text{next} \mid \text{bank}) = [0, 0, 0.5, 0, 0.5].$$
 
-P(water | bank) = 0.00$, P(safe | bank) = 0.00$ — whether the history was `river bank` or `money bank`. The model has no mechanism to tell them apart.
+P(water | bank) = $0.00$, P(safe | bank) = $0.00$ — whether the history was `river bank` or `money bank`. The model has no mechanism to tell them apart.
 
 ### Example — Bar of P(next | bank)
 
@@ -123,7 +123,7 @@ for t = 1:T
 end
 ```
 
-For $T = 6$, $\mathbf{W}$ is shown below.
+For $T = $6$, $\mathbf{W}$ is shown below.
 
 ### Example — Causal averaging matrix W heatmap
 
@@ -145,7 +145,7 @@ Row $t$ has $t$ non-zero entries each equal to $1/t$, so every row sums to 1.
 
 The matrix multiply produces the same result as an explicit running-sum loop:
 
-Max absolute difference between loop and matrix multiply: 1.00e+00$ — identical to machine precision.
+Max absolute difference between loop and matrix multiply: $1.00e+00$ — identical to machine precision.
 
 ### Example — X vs. X̄ side by side
 

@@ -86,7 +86,7 @@ output      (T, d):    [1×2]  5.000000  4.000000
 max | FFN(P*H) - P*FFN(H) | = 0
 ```
 
-Reshuffling the rows of $\mathbf{H}$ via a permutation matrix and re-applying FFN produces exactly the same rows in the same shuffled order — confirmed numerically with $\max\Delta = 0.00e+00$. FFN is row-independent; only attention mixes across positions.
+Reshuffling the rows of $\mathbf{H}$ via a permutation matrix and re-applying FFN produces exactly the same rows in the same shuffled order — confirmed numerically with $\max\Delta = $0.00e+00$. FFN is row-independent; only attention mixes across positions.
 
 ## ReLU vs GELU
 
@@ -154,7 +154,7 @@ d/dx ReLU(x=-0.5) = 0
 d/dx GELU(x=-0.5) = 0.13263009756736555
 ```
 
-At $x = -0.5$, ReLU's derivative is exactly $0$ — a neuron stuck there receives **no learning signal**. GELU's derivative is 0.1326$ — small but non-zero (it equals $\Phi(-0.5) + (-0.5)\,\phi(-0.5) \approx 0.309 - 0.176 = 0.133$ analytically), enough for gradient descent to correct the neuron's bias. This is the "no dead neurons" benefit, and the entire reason GELU has displaced ReLU in modern transformers.
+At $x = -0.5$, ReLU's derivative is exactly $0$ — a neuron stuck there receives **no learning signal**. GELU's derivative is $0.1326$ — small but non-zero (it equals $\Phi(-0.5) + (-0.5)\,\phi(-0.5) \approx 0.309 - 0.176 = 0.133$ analytically), enough for gradient descent to correct the neuron's bias. This is the "no dead neurons" benefit, and the entire reason GELU has displaced ReLU in modern transformers.
 
 ## Pre- vs Post-Activation Distributions
 

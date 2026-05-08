@@ -51,7 +51,7 @@ p_hat = linspace(0.01, 1.0, 200);
 loss  = -log(p_hat);
 ```
 
-Reference points in nats: $p{=}1/50000 \Rightarrow L = 10.820$ (the uniform-over-50k-tokens baseline), $p{=}0.25 \Rightarrow L = 1.386$ ($= \log 4$), $p{=}0.5 \Rightarrow L = 0.693$, $p{=}0.9 \Rightarrow L = 0.105$, $p{=}0.99 \Rightarrow L = 0.0101$.
+Reference points in nats: $p{=}1/50000 \Rightarrow L = $10.820$ (the uniform-over-50k-tokens baseline), $p{=}0.25 \Rightarrow L = $1.386$ ($= \log 4$), $p{=}0.5 \Rightarrow L = $0.693$, $p{=}0.9 \Rightarrow L = $0.105$, $p{=}0.99 \Rightarrow L = $0.0101$.
 
 ```rustlab
 figure()
@@ -97,7 +97,7 @@ grad_at_low  = 1.0 / 0.01;
 grad_at_high = 1.0 / 0.99;
 ```
 
-At $p{=}0.01$, $|dL/dp_c| = 100.00$; at $p{=}0.99$, $|dL/dp_c| = 1.0101$ — roughly a 99$× difference in gradient magnitude between confident-wrong and confident-right predictions. This steep penalty forces the model to avoid confidently wrong predictions.
+At $p{=}0.01$, $|dL/dp_c| = $100.00$; at $p{=}0.99$, $|dL/dp_c| = $1.0101$ — roughly a $99$× difference in gradient magnitude between confident-wrong and confident-right predictions. This steep penalty forces the model to avoid confidently wrong predictions.
 
 ## The Loss Surface in Logit Space
 

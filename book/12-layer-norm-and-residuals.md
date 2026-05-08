@@ -56,7 +56,7 @@ layernorm builtin:  [1×5]  -1.414210  -0.707105  0.000000  0.707105  1.414210
 max diff:           0.000003535519647490659
 ```
 
-Built-in `layernorm` matches the by-hand computation up to the regularisation $\epsilon$ — they agree to 3.54e-06$. Output mean is exactly 0; (population) std is exactly 1.
+Built-in `layernorm` matches the by-hand computation up to the regularisation $\epsilon$ — they agree to $3.54e-06$. Output mean is exactly 0; (population) std is exactly 1.
 
 ### Example — Per-row LN on a token batch
 

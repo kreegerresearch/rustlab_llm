@@ -166,7 +166,7 @@ Three plots are produced by `train_loop.rlab`:
 
 Two reference points to verify the run hit:
 
-- **Initial loss.** A randomly-initialised softmax over $|\mathcal{V}|$ classes has expected cross-entropy $\log |\mathcal{V}|$ nats. For $|\mathcal{V}| = 3$ that is 1.0986$ nats. Any random model should start there ± a small amount of noise from the random init.
+- **Initial loss.** A randomly-initialised softmax over $|\mathcal{V}|$ classes has expected cross-entropy $\log |\mathcal{V}|$ nats. For $|\mathcal{V}| = 3$ that is $1.0986$ nats. Any random model should start there ± a small amount of noise from the random init.
 - **Optimal loss.** A trained bigram model on the corpus `"abcbabcba…"` reaches the *conditional entropy* $H(X_{t+1} \mid X_t)$ derived in [Lesson 05](05-bigram-language-model.md). For the periodic `abc` corpus that is roughly 0.347 nats (perplexity ≈ 1.414). The training run should converge near that floor — and *cannot* go below it, because no Markov-1 model can.
 
 Comparing the run's terminal train loss to the analytical bigram entropy is the cleanest "is my training healthy?" test you can run on a tiny problem.

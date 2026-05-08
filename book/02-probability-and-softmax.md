@@ -80,7 +80,7 @@ T=1.0 (neutral): [1×4]  0.597695  0.219880  0.133364  0.049062
 T=2.0 (warm)   : [1×4]  0.422761  0.256418  0.199698  0.121123
 ```
 
-Each row sums to 1.000 — a valid distribution. At $T = 0.5$ token 1 gets 0.839$ of the mass; at $T = 2.0$ it gets only 0.423$ — the distribution flattens as temperature rises.
+Each row sums to 1.000 — a valid distribution. At $T = 0.5$ token 1 gets $0.839$ of the mass; at $T = 2.0$ it gets only $0.423$ — the distribution flattens as temperature rises.
 
 ### Example — Stacked subplots: cold / neutral / warm
 
@@ -139,7 +139,7 @@ H20 = -sum(p20 .* log2(p20 + eps));
 H50 = -sum(p50 .* log2(p50 + eps));
 ```
 
-Entropy climbs with temperature: $H(T{=}0.5) = 0.802$ bits, $H(T{=}1.0) = 1.525$ bits, $H(T{=}2.0) = 1.862$ bits, $H(T{=}5.0) = 1.977$ bits.
+Entropy climbs with temperature: $H(T{=}0.5) = $0.802$ bits, $H(T{=}1.0) = $1.525$ bits, $H(T{=}2.0) = $1.862$ bits, $H(T{=}5.0) = $1.977$ bits.
 
 ### Example — Sanity checks: uniform vs. near-deterministic
 
@@ -155,7 +155,7 @@ p_det = [0.999, 0.0003, 0.0003, 0.0004];
 H_det = -sum(p_det .* log2(p_det + eps));
 ```
 
-Uniform over 4 tokens: $H = 2.000$ bits (matches $\log_2 4 = 2$). Near-deterministic: $H = 0.0130$ bits (near zero, as expected).
+Uniform over 4 tokens: $H = $2.000$ bits (matches $\log_2 4 = 2$). Near-deterministic: $H = $0.0130$ bits (near zero, as expected).
 
 ### Example — Entropy bar chart vs. the maximum
 
@@ -185,8 +185,8 @@ Both objects in this lesson — softmax and entropy — are direct lifts from st
 
 | Distribution | $H$ (bits) | Optimal avg bits/token |
 |---|---|---|
-| `p_cold`  ($T{=}0.5$) | 0.802$ | 0.802$ |
-| `p_neutral` ($T{=}1.0$) | 1.525$ | 1.525$ |
+| `p_cold`  ($T{=}0.5$) | $0.802$ | $0.802$ |
+| `p_neutral` ($T{=}1.0$) | $1.525$ | $1.525$ |
 | `p_uniform` (4 tokens) | $2.0$ (= $\log_2 4$) | $2.0$ — fixed-width is already optimal |
 
 **Softmax is the Boltzmann distribution.** The form $p_i = e^{z_i/T} / \sum_j e^{z_j/T}$ is identical to the probability of microstate $i$ at temperature $T$ in statistical mechanics, with logits $z_i$ playing the role of negative energies. The "temperature" name is not metaphor: as $T \to 0$ the distribution collapses onto the lowest-energy (highest-logit) state, exactly as a physical system freezes into its ground state. The maximum-entropy principle then recovers softmax as the *unique* distribution that maximises $H(p)$ subject to a constraint on $\mathbb{E}[z]$ — softmax is the "least committed" distribution consistent with the logits.

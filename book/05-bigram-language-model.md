@@ -134,7 +134,7 @@ Matrix(3x3)
   [1.000000, 3.000000, 1.000000]
 ```
 
-Every entry in $P^{\text{smooth}}$ is now $\geq 0.333$ — no more zero-probability bigrams.
+Every entry in $P^{\text{smooth}}$ is now $\geq $0.333$ — no more zero-probability bigrams.
 
 ## Row Entropy
 
@@ -153,7 +153,7 @@ for i = 1:vocab_size
 end
 ```
 
-Row entropies: $H(a) = 0.000$ bits (deterministic → `b`), $H(b) = 0.000$ bits (max for 2 equal options), $H(c) = 0.000$ bits (deterministic → `b`).
+Row entropies: $H(a) = $0.000$ bits (deterministic → `b`), $H(b) = $0.000$ bits (max for 2 equal options), $H(c) = $0.000$ bits (deterministic → `b`).
 
 ### Example — Count and probability heatmaps
 
@@ -260,7 +260,7 @@ mean_ce = -real(mean(log_probs));
 ppl = exp(mean_ce);
 ```
 
-Mean cross-entropy on the training corpus: 0.3466$ nats, corresponding to perplexity 1.414$.
+Mean cross-entropy on the training corpus: $0.3466$ nats, corresponding to perplexity $1.414$.
 
 ### Example — Per-row probability bars
 
@@ -297,9 +297,9 @@ The bigram model is a self-contained information-theoretic object — every quan
 
 $$\mathcal{L} \;=\; -\frac{1}{T-1}\sum_t \log P_{x_t,\, x_{t+1}} \;\approx\; H(X_{t+1} \mid X_t) \quad [\text{nats}],$$
 
-the **conditional entropy** of the next token given the current one. For our `"abcbabcba"` example you measured 0.3466$ nats $\approx 0.5000$ bits per token. Shannon's source coding theorem says no compressor that sees only the current token can do better — this is the **fundamental bit floor for any Markov-1 model** of this corpus.
+the **conditional entropy** of the next token given the current one. For our `"abcbabcba"` example you measured $0.3466$ nats $\approx $0.5000$ bits per token. Shannon's source coding theorem says no compressor that sees only the current token can do better — this is the **fundamental bit floor for any Markov-1 model** of this corpus.
 
-**Perplexity = $2^H$ (or $e^H$).** The perplexity 1.414$ you printed above is the **effective branching factor**: the model is, on average, as uncertain as if it had to choose uniformly among 1.414$ tokens. A perfect bigram on this corpus would reach $2^{H(X_{t+1}\mid X_t)} = 2^{0.5} \approx 1.414$ — and it does. There is no slack left to close at the Markov-1 horizon.
+**Perplexity = $2^H$ (or $e^H$).** The perplexity $1.414$ you printed above is the **effective branching factor**: the model is, on average, as uncertain as if it had to choose uniformly among $1.414$ tokens. A perfect bigram on this corpus would reach $2^{H(X_{t+1}\mid X_t)} = 2^{0.5} \approx 1.414$ — and it does. There is no slack left to close at the Markov-1 horizon.
 
 **The Markov assumption is a structural ceiling.** The chain rule of entropy gives
 

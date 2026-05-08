@@ -89,7 +89,7 @@ Embedded representation h3: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -
 Row 3 of E: -0.04089876598481701
 ```
 
-The lookup matches the direct row access exactly — $\max|h_3 - E_3| = 5.85e-02$ (machine epsilon).
+The lookup matches the direct row access exactly — $\max|h_3 - E_3| = $5.85e-02$ (machine epsilon).
 
 ### Example — Embedding matrix heatmap
 
@@ -197,7 +197,7 @@ Matrix(4x4)
   [0.509099, 0.834240, 0.657018, 1.000000]
 ```
 
-Key pairs: king/queen = 0.873$ (both royal), king/man = 0.824$ (same gender), queen/woman = 0.834$ (same gender). The matrix is symmetric: $\max|S - S^\top| = 0.00e+00$.
+Key pairs: king/queen = $0.873$ (both royal), king/man = $0.824$ (same gender), queen/woman = $0.834$ (same gender). The matrix is symmetric: $\max|S - S^\top| = $0.00e+00$.
 
 ### Example — Similarity heatmap
 
@@ -240,7 +240,7 @@ sim_to_woman = cos_sim(analogy, woman);
 king - man + woman: [1×4]  1.000000  0.900000  0.700000  0.800000
 ```
 
-Similarity of $\mathbf{E}_{\text{king}} - \mathbf{E}_{\text{man}} + \mathbf{E}_{\text{woman}}$ to each vocab item: king = 0.881$, **queen = 0.999**, man = 0.738$, woman = 0.812$. The closest token is **queen**, as predicted. This emergent structure is not programmed — it arises from training the model to predict next tokens accurately. Dense embeddings are a compressed summary of co-occurrence patterns in language.
+Similarity of $\mathbf{E}_{\text{king}} - \mathbf{E}_{\text{man}} + \mathbf{E}_{\text{woman}}$ to each vocab item: king = $0.881$, **queen = 0.999**, man = $0.738$, woman = $0.812$. The closest token is **queen**, as predicted. This emergent structure is not programmed — it arises from training the model to predict next tokens accurately. Dense embeddings are a compressed summary of co-occurrence patterns in language.
 
 ## Key Takeaways
 

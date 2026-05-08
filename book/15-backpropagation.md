@@ -112,7 +112,7 @@ fd  = (Lp - Lm) / (2 * eps);
 err = abs(fd - dL_dW1(2, 1));
 ```
 
-Finite-difference estimate at $W_1(2, 1)$: 0.358389$ vs analytic 0.358389$ — error 1.10e-11$ (well under $\varepsilon^2$).
+Finite-difference estimate at $W_1(2, 1)$: $0.358389$ vs analytic $0.358389$ — error $1.10e-11$ (well under $\varepsilon^2$).
 
 ## Backprop Through a Linear Layer
 
@@ -197,7 +197,7 @@ zm = z; zm(3) = z(3) - eps;
 fd = (-log(softmax(zp)(y_true)) + log(softmax(zm)(y_true))) / (2 * eps);
 ```
 
-Cross-entropy loss $L = 0.5147$. Analytical $\bar{z}_3 = 0.1334$, finite-difference $= 0.1334$ — match to 3.60e-11$.
+Cross-entropy loss $L = $0.5147$. Analytical $\bar{z}_3 = $0.1334$, finite-difference $= $0.1334$ — match to $3.60e-11$.
 
 ## Backprop Through One Attention Head
 
