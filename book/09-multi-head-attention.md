@@ -60,14 +60,9 @@ end
 
 function A = causal_attention_weights(Q, K, scale, M, T)
   S = Q * K' * scale;
-  S_masked = S + M;
-  A = zeros(T, T);
-  for t = 1:T
-    row = softmax(S_masked(t, :));
-    for j = 1:T
-      A(t, j) = row(j);
-    end
-  end
+  % softmax(M) softmaxes each row of M independently (dim=2 default,
+  % ML convention) — replaces the manual per-row loop.
+  A = softmax(S + M);
 end
 ```
 

@@ -138,10 +138,7 @@ function H_out = block_fwd(H_in, W_Q, W_K, W_V, W_O, W_ff1, W_ff2, T, d_model, H
       end
     end
     S = Q_h * K_h' * scale + M_mask;
-    A_h = zeros(T, T);
-    for t = 1:T
-      A_h(t) = softmax(S(t, :));
-    end
+    A_h = softmax(S);            % per-row softmax of the whole T×T block
     O_h = A_h * V_h;
     for t = 1:T
       for k = 1:d_k

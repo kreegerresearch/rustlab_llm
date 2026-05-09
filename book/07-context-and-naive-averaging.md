@@ -125,6 +125,24 @@ end
 
 For $T = 6$, $\mathbf{W}$ is shown below.
 
+### Example — Vectorized W construction
+
+The nested loop reads the definition cell by cell. The same matrix is also a one-liner if we materialise the row- and column-index grids and let the comparison `j \le t` build the lower-triangular mask, divided element-wise by the row index. Both must agree exactly.
+
+```rustlab
+lower_tri = cumsum(eye(T), 1);                   % 1 on / below diagonal, 0 above
+I_col     = repmat((1:T)', 1, T);                % row-index matrix: row t is all t's
+W_vec     = lower_tri ./ I_col;                  % 1/t on / below diagonal, 0 above
+diff_W    = max(reshape(abs(W - W_vec), 1, T * T));
+print("max|W_loop - W_vec| =", diff_W);
+```
+
+```text
+max|W_loop - W_vec| = 0
+```
+
+The vectorized form mirrors the math $W_{t, i} = \frac{1}{t} \cdot [i \le t]$ exactly — a lower-triangular mask divided element-wise by the row index. `cumsum(eye(T), 1)` is a compact way to build the mask: the identity has a 1 on each diagonal cell, and cumulating downward in each column extends each 1 down to the bottom of the matrix. The loop form is easier to single-step; the vectorized form generalises immediately to other masked weighting schemes (swap `lower_tri` for any other mask, or `1 ./ I_col` for any other per-row weighting).
+
 ### Example — Causal averaging matrix W heatmap
 
 ```rustlab

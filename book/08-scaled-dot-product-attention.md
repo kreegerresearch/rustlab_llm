@@ -103,13 +103,11 @@ $$A_{t, i} = \frac{\exp(\tilde S_{t, i})}{\sum_{j=1}^{T} \exp(\tilde S_{t, j})}.
 ### Example — Build A and verify causality + row sums
 
 ```rustlab
-A = zeros(T, T);
-for t = 1:T
-  row = softmax(S_masked(t, :));
-  for j = 1:T
-    A(t, j) = row(j);
-  end
-end
+% softmax(M) softmaxes each row of M independently (dim=2 default,
+% ML convention), so the whole attention matrix is one call — no
+% per-row loop. Numerical stability (per-row max subtraction) is
+% automatic.
+A = softmax(S_masked);
 ```
 
 Token 1 can only attend to itself, so $A_{1,1} = 1.0000$. Every row sums to 1. The maximum attention weight in the upper triangle is $0.00e+00$ — effectively zero, as required for causality.
@@ -193,13 +191,8 @@ for i = 1:T
 end
 S2_masked = S2 + M2;
 
-A2 = zeros(T, T);
-for t = 1:T
-  row = softmax(S2_masked(t, :));
-  for j = 1:T
-    A2(t, j) = row(j);
-  end
-end
+% Row-wise softmax in one call. softmax(M) defaults to per-row.
+A2 = softmax(S2_masked);
 
 O = A2 * V2;
 ```

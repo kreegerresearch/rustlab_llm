@@ -36,13 +36,8 @@ function L = head_loss(X, W_Q, W_K, W_V, Mmat, scale, dL_dO, T)
   K = X * W_K;
   V = X * W_V;
   S = Q * K' * scale + Mmat;
-  A = zeros(T, T);
-  for t = 1:T
-    row = softmax(S(t, :));
-    for j = 1:size(row, 2)
-      A(t, j) = row(j);
-    end
-  end
+  # softmax(M) does per-row softmax (dim=2 default, ML convention).
+  A = softmax(S);
   O = A * V;
   # Treat L = sum(dL_dO .* O) so its gradient w.r.t. O is exactly dL_dO.
   L = sum(reshape(dL_dO .* O, 1, size(O, 1) * size(O, 2)));
@@ -53,14 +48,8 @@ Q = X * W_Q;
 K = X * W_K;
 V = X * W_V;
 S = Q * K' * scale + Mmat;
-
-A = zeros(T, T);
-for t = 1:T
-  row = softmax(S(t, :));
-  for j = 1:T
-    A(t, j) = row(j);
-  end
-end
+# softmax(M) does per-row softmax (dim=2 default, ML convention).
+A = softmax(S);
 O = A * V;
 
 # Synthetic upstream gradient (deterministic for reproducibility)
@@ -80,12 +69,9 @@ dL_dA = dL_dO * V';
 #   dL/ds = a .* (dL/da - sum(dL/da .* a))
 dL_dS = zeros(T, T);
 for t = 1:T
-  a   = A(t, :);
-  da  = dL_dA(t, :);
-  m   = sum(a .* da);
-  for j = 1:T
-    dL_dS(t, j) = a(j) * (da(j) - m);
-  end
+  a  = A(t, :);
+  da = dL_dA(t, :);
+  dL_dS(t) = a .* (da - sum(a .* da));
 end
 
 # Step 3: S = Q K' / sqrt(d_k)

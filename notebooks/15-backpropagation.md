@@ -255,13 +255,7 @@ Q = X * W_Q;
 K = X * W_K;
 V = X * W_V;
 S = Q * K' * scale2 + Mmat;
-A = zeros(T2, T2);
-for t = 1:T2
-  row = softmax(S(t, :));
-  for j = 1:T2
-    A(t, j) = row(j);
-  end
-end
+A = softmax(S);                 % softmax(M) does per-row softmax (dim=2 default)
 O = A * V;
 
 % Synthetic upstream gradient
@@ -273,15 +267,12 @@ dL_dV = A' * dL_dO;
 dL_dA = dL_dO * V';
 
 % Backward — Step 2 (softmax row by row)
+% Per-row softmax Jacobian-vector product:  dL/ds = a .* (dL/da - <a, dL/da>)
 dL_dS = zeros(T2, T2);
 for t = 1:T2
-  a    = A(t, :);
-  da   = dL_dA(t, :);
-  dot  = sum(a .* da);
-  dL_dS(t, 1) = a(1) * (da(1) - dot);
-  dL_dS(t, 2) = a(2) * (da(2) - dot);
-  dL_dS(t, 3) = a(3) * (da(3) - dot);
-  dL_dS(t, 4) = a(4) * (da(4) - dot);
+  a   = A(t, :);
+  da  = dL_dA(t, :);
+  dL_dS(t) = a .* (da - sum(a .* da));
 end
 
 % Backward — Step 3

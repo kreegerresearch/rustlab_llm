@@ -54,13 +54,9 @@ print("Masked scores (upper triangle → -1e9):");
 print(S_masked);
 
 # === Row-wise softmax ===
-A = zeros(T, T);
-for t = 1:T
-  row = softmax(S_masked(t, :));
-  for j = 1:T
-    A(t, j) = row(j);
-  end
-end
+# softmax(M) softmaxes each row of M independently (dim=2 default,
+# ML convention), so the whole T×T attention matrix is one call.
+A = softmax(S_masked);
 
 print("Attention weights A = softmax_row(S_masked):");
 print(A);

@@ -40,12 +40,21 @@ print(X_bar_loop);
 # === Method 2: Lower-Triangular Averaging Matrix ===
 # W[t, i] = 1/t  if i <= t,  else 0.
 # Then X̄ = W * X in a single matrix multiply.
+#
+# Two equivalent constructions:
+#   (a) explicit nested loop — mirrors the per-cell definition.
+#   (b) vectorized via meshgrid — reads "lower triangle, divided by row index".
 W = zeros(T, T);
 for t = 1:T
   for i = 1:t
     W(t, i) = 1.0 / t;
   end
 end
+
+lower_tri = cumsum(eye(T), 1);                   # 1 on / below diagonal, 0 above
+I_col     = repmat((1:T)', 1, T);                # row-index matrix: I_col(t, :) == t
+W_vec     = lower_tri ./ I_col;                  # 1/t on / below diagonal, 0 above
+print("max|W_loop - W_vec| (should be 0):", max(reshape(abs(W - W_vec), 1, T * T)));
 
 print("Averaging matrix W (lower-triangular, rows sum to 1):");
 print(W);

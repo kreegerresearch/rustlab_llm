@@ -47,14 +47,8 @@ function O = attn(X, W_Q, W_K, W_V, scale)
   K = X * W_K;
   V = X * W_V;
   S = Q * K' * scale;
-  T_local = size(S, 1);
-  A = zeros(T_local, T_local);
-  for t = 1:T_local
-    row = softmax(S(t, :));
-    for j = 1:T_local
-      A(t, j) = row(j);
-    end
-  end
+  % softmax(M) does per-row softmax (dim=2 default, ML convention).
+  A = softmax(S);
   O = A * V;
 end
 
@@ -122,6 +116,29 @@ PE(64, 1:6): [1×6]  0.920026  0.391857  -0.990428  -0.138029  0.983524  0.18077
 ```
 
 Position 1 produces $[\sin(1), \cos(1), \sin(0.422), \cos(0.422), \dots]$; position 64 cycles much further around the fastest sinusoids while barely moving on the slowest ones.
+
+### Example — Vectorized PE construction
+
+The nested loop above mirrors the textbook formula one cell at a time, but every entry of `PE` is independent — there is no sequential dependency. We can build the same matrix in five lines using `meshgrid` to materialise the $(t, i)$ index grids, then computing $\sin$/$\cos$ element-wise. The two forms must agree to machine precision.
+
+```rustlab
+% mod(., 2) is 0 on even columns and 1 on odd, so `1 - mod(...)` is the
+% even-column mask — written this way to avoid a matrix-vs-scalar comparison.
+[I_grid, T_grid] = meshgrid(1:d_model_pe, 1:T_seq);    % both T_seq × d_model_pe
+pair_idx = floor((I_grid - 1) / 2);                    % k repeated as 0,0,1,1,...
+angles   = T_grid ./ (10000.0 .^ (2.0 * pair_idx / d_model_pe));
+even_col = 1 - mod(I_grid - 1, 2);                     % 1 on even columns, 0 on odd
+PE_vec   = even_col .* sin(angles) + (1 - even_col) .* cos(angles);
+
+max_diff = max(reshape(abs(PE - PE_vec), 1, T_seq * d_model_pe));
+print("Max |loop - vectorized| =", max_diff);
+```
+
+```text
+Max |loop - vectorized| = 0.000000000000007098488463697095
+```
+
+The vectorized form reads top-to-bottom as the formula does: build the index grids, compute the angles, pick $\sin$ on even dimensions and $\cos$ on odd ones. The loop is easier to step through with a debugger; the vectorized form is easier to recognise as the equation in the paper.
 
 ### Example — Heatmap of the full PE matrix
 

@@ -67,14 +67,8 @@ K4 = zeros(T, d_k);
 
 function A = causal_attention_weights(Q, K, scale, M, T)
   S = Q * K' * scale;
-  S_masked = S + M;
-  A = zeros(T, T);
-  for t = 1:T
-    row = softmax(S_masked(t, :));
-    for j = 1:T
-      A(t, j) = row(j);
-    end
-  end
+  % softmax(M) does per-row softmax of the whole T×T block (dim=2 default).
+  A = softmax(S + M);
 end
 
 A1 = causal_attention_weights(Q1, K1, scale, M, T);

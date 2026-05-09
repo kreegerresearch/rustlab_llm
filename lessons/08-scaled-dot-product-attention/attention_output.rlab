@@ -73,13 +73,8 @@ for i = 1:T
 end
 S_masked = S + M;
 
-A = zeros(T, T);
-for t = 1:T
-  row = softmax(S_masked(t, :));
-  for j = 1:T
-    A(t, j) = row(j);
-  end
-end
+# softmax(M) softmaxes each row of M independently (dim=2 default).
+A = softmax(S_masked);
 
 print("Attention weights A:");
 print(A);

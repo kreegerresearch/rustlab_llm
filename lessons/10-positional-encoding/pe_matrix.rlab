@@ -10,7 +10,7 @@
 T = 64;
 d_model = 32;
 
-# === Build the PE matrix ===
+# === Build the PE matrix (loop form — mirrors the textbook formula cell by cell) ===
 PE = zeros(T, d_model);
 for t = 1:T
   for i = 1:d_model
@@ -24,6 +24,18 @@ for t = 1:T
     end
   end
 end
+
+# === Build the PE matrix (vectorized form — every cell is independent) ===
+# `mod(I_grid - 1, 2)` is 0 on even columns and 1 on odd, so `1 - mod(...)`
+# is the even-column mask without needing matrix-vs-scalar comparison.
+[I_grid, T_grid] = meshgrid(1:d_model, 1:T);
+pair_idx = floor((I_grid - 1) / 2);
+angles   = T_grid ./ (10000.0 .^ (2.0 * pair_idx / d_model));
+even_col = 1 - mod(I_grid - 1, 2);
+PE_vec   = even_col .* sin(angles) + (1 - even_col) .* cos(angles);
+
+max_diff = max(reshape(abs(PE - PE_vec), 1, T * d_model));
+print("Max |loop - vectorized| =", max_diff);
 
 # === Sanity prints ===
 print("PE shape:", size(PE));

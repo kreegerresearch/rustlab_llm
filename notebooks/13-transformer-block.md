@@ -127,10 +127,8 @@ for h = 1:H_heads
   end
 
   S = Q_h * K_h' * scale + M_mask;
-  A_h = zeros(T, T);
-  for t = 1:T
-    A_h(t) = softmax(S(t, :));
-  end
+  % softmax(M) softmaxes each row of M independently (dim=2 default).
+  A_h = softmax(S);
   O_h = A_h * V_h;
 
   % Write head h's output into its slice of the concat
@@ -264,10 +262,7 @@ for h = 1:H_heads
     end
   end
   S = Q_h * K_h' * scale + M_mask;
-  A_h = zeros(T, T);
-  for t = 1:T
-    A_h(t) = softmax(S(t, :));
-  end
+  A_h = softmax(S);             % per-row softmax of the whole T×T block
   O_h = A_h * V_h;
   for t = 1:T
     for k = 1:d_k
