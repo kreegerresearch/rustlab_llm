@@ -110,6 +110,22 @@ Use GitHub-flavored Markdown with LaTeX math: `$inline$` and `$$block$$`. Each n
 - Use template interpolation `${expr}` to embed computed values in prose (e.g. `${mean(v):%.3f}`).
 - Comments in notebook code blocks: `%`. Comments in `.rlab` files: `#`.
 
+**Math escaping for GitHub + Obsidian compatibility** (full reference in `../rustlab/docs/notebooks.md`):
+
+- `${expr}$` in plain text auto-wraps as `$<value>$` (math-wrap shorthand). Inside an open `$...$` span, write `$X = ${expr}$` — the value emits bare and the trailing `$` closes the span.
+- **In tables, use `\lvert ... \rvert`** (not raw `|...|`) for cardinality / absolute value. Raw `|` inside `$...$` splits the table cell on GitHub. Same for `\lVert ... \rVert` for norms.
+- `\$` is the literal-`$` escape (currency). It does not toggle the math tracker, so `\$5 plus ${tax}$` works.
+- `$$display$$` math should sit on its own paragraph line.
+
+**Obsidian-aligned markdown features** (render natively on GitHub *and* Obsidian — full reference in `../rustlab/docs/notebooks.md`):
+
+- **Callouts** — prefer `> [!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]` blockquote syntax. Optional inline title: `> [!TIP] Heads up`. The legacy `<!-- note -->` form still parses; on the next `make notebooks` it auto-migrates to GFM-native syntax in the rendered output.
+- **Footnotes** — `[^id]` inline reference, `[^id]: text` definition.
+- **Task lists** — `- [ ]` and `- [x]` render as checkboxes.
+- **Explicit heading IDs** — `## Section {#stable-anchor}` pins a cross-notebook anchor.
+- **Wikilinks** — `[[02-probability-and-softmax]]`, `[[02-probability-and-softmax|softmax lesson]]`, `[[02-probability-and-softmax#Temperature Scaling]]`. The renderer transforms them to ordinary markdown links (target gets `.md` appended for notebook refs); GitHub and Obsidian both render the result natively.
+- **Embeds** — `![[diagram.svg]]`, `![[chart.png|alt text]]` for inline images. Path passes through as-is.
+
 **Style:**
 
 - Derive equations step-by-step; never skip a step without explanation.
@@ -294,6 +310,15 @@ H_perm = H([3, 1, 2, 5, 4], :);   % gather those rows in any order
 **Example:**
 ```
 H_normed = layernorm(H);                    % shape (T, d_model), per-row mean=0 std=1
+```
+
+### `softmax(M[, dim])` row-wise matrix overload — **requested** (`../rustlab/dev/requests/softmax-matrix-rowwise.md`)
+**Hit while writing:** Lesson 08 (attention weights), Lesson 13 (transformer block), Lesson 14 (full GPT), Lesson 15 (backprop through attention).
+**Workaround in use:** A per-row loop, `for t = 1:T; A(t, :) = softmax(S(t, :)); end`. Correct, but writes the same loop four separate times across the lesson series and slightly misleads about the parallel nature of softmax (every row is independent).
+**Wanted:** `softmax(M)` / `softmax(M, dim)` mirroring `layernorm(M[, dim[, eps]])`, default `dim=2` (per-row, ML convention).
+**Example (target):**
+```
+A = softmax(S_masked, 2);                   % per-row softmax on a T × T scores matrix
 ```
 
 ### ⚠️ BREAKING (rustlab 0.3.0): `M(scalar)` is now a linear-index element, not a row
