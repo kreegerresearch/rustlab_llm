@@ -116,7 +116,7 @@ K4 = zeros(T, d_k);
 A4 = causal_attention_weights(Q4, K4, scale, M, T);
 ```
 
-Head 4 row 4 should equal $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case is exactly the Lesson 07 averaging matrix. Computed: <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>, <ERROR: line 1: undefined function 'A4_row4'>.
+Head 4 row 4 should equal $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case is exactly the Lesson 07 averaging matrix. Computed: 0.250, 0.250, 0.250, 0.250, 0.000, 0.000.
 
 ### Example — 2×2 grid of head heatmaps
 
