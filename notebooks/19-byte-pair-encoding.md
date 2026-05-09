@@ -20,7 +20,7 @@ Tokens, vocabulary, one-hot encoding from [Lesson 01](01-tokens-and-encoding.md)
 
 Two extremes bracket what tokenisation can do:
 
-| Tokenisation | Vocab size $|\mathcal{V}|$ | Sequence length $T$ | OOV problem? |
+| Tokenisation | Vocab size $\lvert\mathcal{V}\rvert$ | Sequence length $T$ | OOV problem? |
 |---|---|---|---|
 | Character | small (~100) | very long | none |
 | Whole word | huge (10⁵–10⁶) | short | yes — every unseen word becomes `<UNK>` |

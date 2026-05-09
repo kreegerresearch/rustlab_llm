@@ -284,7 +284,7 @@ Run all with `make lesson-08` (or `rustlab run lessons/08-scaled-dot-product-att
 | `A_1_1` | `1.0000` (token 1 attends only to itself) |
 | `max_upper` (max of upper-triangle $\mathbf{A}$) | ≈ `0` (machine epsilon × softmax of $-10^9$) |
 | `row_sums` (each row of $\mathbf{A}$) | `1.0` |
-| `diff_row1` ($\max|\mathbf{O}_1 - \mathbf{V}_1|$) | ≈ `0` (machine epsilon) |
+| `diff_row1` ($\max\lvert\mathbf{O}_1 - \mathbf{V}_1\rvert$) | ≈ `0` (machine epsilon) |
 | `n_params_qkv` (= $3 \cdot d_{\text{model}} \cdot d_k$) | `72` |
 
 ## Exercises

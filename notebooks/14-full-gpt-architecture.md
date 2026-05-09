@@ -38,11 +38,11 @@ Five components hold all the parameters:
 
 | Component | Shape | Purpose |
 |---|---|---|
-| **Token embedding** $\mathbf{E}$ | $|\mathcal{V}| \times d_{\text{model}}$ | id → dense vector ([Lesson 04](04-embeddings-and-similarity.md)) |
+| **Token embedding** $\mathbf{E}$ | $\lvert\mathcal{V}\rvert \times d_{\text{model}}$ | id → dense vector ([Lesson 04](04-embeddings-and-similarity.md)) |
 | **Positional encoding** $\mathrm{PE}$ | $T_{\max} \times d_{\text{model}}$ (sinusoidal: 0 params) | inject position ([Lesson 10](10-positional-encoding.md)) |
 | **$N$ transformer blocks** | each $\sim 12 d_{\text{model}}^2$ | the work ([Lesson 13](13-transformer-block.md)) |
 | **Final LayerNorm** $\mathrm{LN}_f$ | $2 d_{\text{model}}$ ($\boldsymbol{\gamma}, \boldsymbol{\beta}$) | bound the residual stream's scale before the LM head ([Lesson 12](12-layer-norm-and-residuals.md)) |
-| **LM head** $\mathbf{W}_U$ ("unembedding") | $d_{\text{model}} \times |\mathcal{V}|$ | residual stream → vocabulary logits |
+| **LM head** $\mathbf{W}_U$ ("unembedding") | $d_{\text{model}} \times \lvert\mathcal{V}\rvert$ | residual stream → vocabulary logits |
 
 The LM head and token embedding are often **weight-tied** ($\mathbf{W}_U = \mathbf{E}^\top$) — common in GPT-2/3. Tying halves the embedding-related parameter count and slightly improves training stability. Whether or not weights are tied is purely a parameter-count and training choice; the architecture is identical otherwise.
 
@@ -223,11 +223,11 @@ Sum each component:
 
 | Component | Params | Notes |
 |---|---|---|
-| Token embedding $\mathbf{E}$ | $\|\mathcal{V}\| \cdot d_{\text{model}}$ | dominant at small $N$, large $\|\mathcal{V}\|$ |
+| Token embedding $\mathbf{E}$ | $\lvert\mathcal{V}\rvert \cdot d_{\text{model}}$ | dominant at small $N$, large $\lvert\mathcal{V}\rvert$ |
 | Sinusoidal PE | $0$ | learned PE would add $T_{\max} \cdot d_{\text{model}}$ |
 | $N$ transformer blocks | $N \cdot (12 d_{\text{model}}^2 + O(d_{\text{model}}))$ | $4 d_{\text{model}}^2$ MHA + $8 d_{\text{model}}^2$ FFN per block ([Lesson 13](13-transformer-block.md)) |
 | Final LN | $2 d_{\text{model}}$ | $\boldsymbol{\gamma}, \boldsymbol{\beta}$ |
-| LM head $\mathbf{W}_U$ | $\|\mathcal{V}\| \cdot d_{\text{model}}$ | zero if weight-tied to $\mathbf{E}^\top$ |
+| LM head $\mathbf{W}_U$ | $\lvert\mathcal{V}\rvert \cdot d_{\text{model}}$ | zero if weight-tied to $\mathbf{E}^\top$ |
 
 Untied total:
 

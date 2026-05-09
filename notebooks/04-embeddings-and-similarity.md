@@ -215,7 +215,7 @@ Run all with `make lesson-04` (or `rustlab run lessons/04-embeddings-and-similar
 | `s_km` (king/man) | ≈ `0.881` |
 | `s_qw` (queen/woman) | ≈ `0.881` |
 | `s_kk` (king/king) | `1.000` |
-| `sym_err` ($\max|S - S^\top|$) | ≈ `0` (machine epsilon) |
+| `sym_err` ($\max\lvert S - S^\top\rvert$) | ≈ `0` (machine epsilon) |
 | `sim_to_queen` (analogy → queen) | ≈ `0.998` (closest match) |
 
 ## Exercises

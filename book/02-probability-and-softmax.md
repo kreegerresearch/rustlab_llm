@@ -54,7 +54,7 @@ $$p_i(T) = \frac{e^{z_i / T}}{\sum_{j} e^{z_j / T}}.$$
 |-------------|--------|
 | $T \to 0$ (cold) | Near-step function — almost all mass on the top token |
 | $T = 1$ (neutral) | Standard softmax |
-| $T \to \infty$ (hot) | Approaches uniform: $p_i \to 1/|\mathcal{V}|$ |
+| $T \to \infty$ (hot) | Approaches uniform: $p_i \to 1/\lvert\mathcal{V}\rvert$ |
 
 Temperature does not change *which* token has the highest probability — it changes *how much* higher it is relative to the others. Temperature is the knob the **generation** stage (Lesson 21) uses to trade off deterministic (focused) vs. random (creative) output.
 

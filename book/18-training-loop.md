@@ -151,7 +151,7 @@ Three plots are produced by `train_loop.rlab`:
 
 | Pattern | Diagnosis |
 |---|---|
-| Both flat near $\log_2 \|\mathcal{V}\|$ | underfitting — increase model size or LR |
+| Both flat near $\log_2 \lvert\mathcal{V}\rvert$ | underfitting — increase model size or LR |
 | Both falling, val tracks train | healthy — keep training |
 | Train falling, val rising | overfitting — add regularisation, more data, or stop earlier |
 | Loss spikes mid-training | LR too high, exploding gradients, or numerical instability |
