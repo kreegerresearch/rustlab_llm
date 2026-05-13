@@ -139,6 +139,113 @@ Mean PPL is a single summary number, but the per-token distribution carries usef
 
 A useful evaluation isn't just "what is the average PPL?" but "what is the distribution of $-\log P_\theta(x_{t+1})$ across the test set?" Plotting that histogram is the cheapest diagnostic that a model is working as intended.
 
+## Sidebar: Parallel Evaluation with `parmap`
+
+### Theory
+
+Computing mean cross-entropy over a held-out set is **embarrassingly parallel**: the per-token loss $\ell_t = -\log P_\theta(x_{t+1} \mid x_{<t})$ at every position depends only on past context, not on other positions' losses. Every $\ell_t$ can be computed independently and the mean assembled at the end.
+
+<!-- hide -->
+```rustlab
+% Minimal Lesson-18-style state for the parmap demo: tiny embedding+head
+% model on the periodic abcb corpus.  Just enough to compute a real
+% per-pair loss so the next blocks have live variables to operate on.
+seed(20);
+vocab = 3;  d_emb = 4;
+E = randn(vocab, d_emb) * 0.3;
+W = randn(d_emb, vocab) * 0.3;
+pat = [1, 2, 3, 2];
+corpus = zeros(20);
+for i = 1:20
+  corpus(i) = pat(mod(i - 1, 4) + 1);
+end
+n_pairs = 19;
+```
+
+The serial form in [Lesson 18](18-training-loop.md)'s `mean_loss` is
+
+```rustlab
+% --- Serial form (see lessons/18-training-loop/train_loop.rlab) ---
+L = 0.0;
+for k = 0:(n_pairs - 1)
+  curr = corpus(1 + k);  nxt = corpus(2 + k);
+  p = softmax(E(curr, :) * W);
+  L = L + (-log(p(nxt)));
+end
+L = L / n_pairs;
+print("serial loop loss:", L);
+```
+
+Rustlab provides `parmap` for exactly this pattern. The map–then–reduce form makes the independence explicit:
+
+```rustlab
+function l = pair_loss(k, corpus, E, W)
+  curr = corpus(k);  nxt = corpus(k + 1);
+  p = softmax(E(curr, :) * W);
+  l = -log(p(nxt));
+end
+
+losses = parmap(@(k) pair_loss(k, corpus, E, W), 1:n_pairs);
+L_parmap = mean(losses);
+
+% Serial reference — bit-identical result.
+L_serial = 0.0;
+for k = 1:n_pairs
+  L_serial = L_serial + pair_loss(k, corpus, E, W);
+end
+L_serial = L_serial / n_pairs;
+
+print("parmap mean loss:", L_parmap);
+print("serial mean loss:", L_serial);
+print("diff:            ", abs(L_parmap - L_serial));
+```
+
+Both forms produce **bit-identical** results — `parmap` is a control-flow rewrite, not a numerical approximation. The advantage is twofold: (a) the parallel-over-positions structure is now expressed in code, and (b) on multi-core runtimes the wall-clock time scales sublinearly with $n_{\text{pairs}}$.
+
+### Where the pattern fits — and where it doesn't
+
+The constraint to keep in mind: rustlab 0.3.1's `parmap` requires the lambda to return a **scalar**. That maps naturally onto reductions:
+
+| Site | parmap-friendly? | Why |
+|---|---|---|
+| Per-token loss / per-token PPL (this lesson) | ✓ | each $\ell_t$ is a scalar |
+| Pairwise embedding similarity ([[04-embeddings-and-similarity]]) | ✓ | each $\cos(\mathbf{e}_i, \mathbf{e}_j)$ is a scalar |
+| Mean validation loss ([[18-training-loop]]) | ✓ | per-pair loss is a scalar; the *gradient* accumulator is not |
+| Per-row attention softmax ([[08-scaled-dot-product-attention]]) | ✗ | each row is a vector |
+| Per-position FFN output ([[11-feed-forward-block]]) | ✗ | each position is a $d_{\text{model}}$-vector |
+| Multi-head attention output ([[09-multi-head-attention]]) | ✗ | each head returns a $T \times d_v$ matrix |
+| Autoregressive token sampling ([[21-sampling-and-generation]]) | ✗ — *and* fundamentally serial | each step depends on the previous emission, not just on the past prefix that already exists |
+
+The first three are eligible today. The next three are eligible *in principle* — every row / position / head is independent — but blocked on parmap accepting vector or matrix returns (recorded as a feature request in [AGENTS.md](../AGENTS.md)).
+
+The last row is different: even with unlimited parmap support, the generation loop in [Lesson 21](21-sampling-and-generation.md) is sequential by definition — token $x_{t+1}$ can only be sampled after $x_t$ has been chosen and appended to the prefix. Evaluation has $T$ independent forward passes; generation has $T$ dependent ones. The KV cache is what makes that serial path fast, not parallelism.
+
+### Example — `parmap` mean perplexity
+
+The same pattern produces per-token perplexity directly:
+
+```rustlab
+% --- Per-token PPL across the validation set ---
+% per_token_ppl(k) = 1 / p(nxt | x_{1..k})
+function ppl = pair_ppl(k, corpus, E, W)
+  curr = corpus(k);  nxt = corpus(k + 1);
+  p = softmax(E(curr, :) * W);
+  ppl = 1.0 / p(nxt);
+end
+
+ppls = parmap(@(k) pair_ppl(k, corpus, E, W), 1:n_pairs);
+print("arithmetic mean PPL :", mean(ppls));
+print("median PPL          :", median(ppls));
+print("geometric mean PPL  :", exp(mean(log(ppls))), " (matches exp(mean cross-entropy))");
+```
+
+Two summary statistics matter:
+
+- **Mean per-token PPL** — sensitive to outliers (rare tokens with very low $\hat p$ inflate it).
+- **Median per-token PPL** — the typical token's PPL. Often much lower than the mean; the gap quantifies how skewed the distribution is.
+
+Plotting both as horizontal lines on the per-token PPL histogram from the previous section is the cheapest "where is my model's effort going?" diagnostic.
+
 ## Connection to Earlier Lessons
 
 ### Theory

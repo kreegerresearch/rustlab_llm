@@ -1,0 +1,121 @@
+# Script:  rmsnorm.rlab
+# System:  RMSNorm (LLaMA, Mistral, T5) compared to LayerNorm (Lesson 12)
+#          on a 5-token, d_model=8 hidden-state matrix.
+# Concept: RMSNorm drops the mean-centering and the bias term from
+#          LayerNorm, leaving only the rescale by the inverse RMS.  The
+#          motivation: empirically, dropping mean-centering loses no
+#          quality and saves one mean reduction plus one bias-add per
+#          forward pass — about 1.4x speedup at the same numerical
+#          stability.  Used in LLaMA, Mistral, T5, Qwen.
+# Equations:
+#   LayerNorm(x) = gamma * (x - mean(x)) / sqrt(var(x) + eps) + beta
+#   RMSNorm(x)   = gamma * x / sqrt(mean(x^2) + eps)
+#                = gamma * x / RMS(x)
+# Units:   activations dimensionless; norms in the same units as inputs.
+
+# === 1. Setup: a small hidden-state matrix ===
+seed(23);
+T = 5;
+d_model = 8;
+H = randn(T, d_model);          % (T, d_model) — each row is one token
+
+# Per-feature scale parameter gamma (initialized to 1 — the identity).
+gamma = ones(d_model);
+
+# === 2. Implementations ===
+function H_out = rmsnorm_naive(H, gamma, eps)
+  T = size(H)(1);
+  d = size(H)(2);
+  H_out = zeros(T, d);
+  for t = 1:T
+    x = H(t, :);
+    rms = sqrt(mean(x .^ 2) + eps);
+    H_out(t) = (x / rms) .* gamma;
+  end
+end
+
+function H_out = layernorm_naive(H, gamma, beta, eps)
+  T = size(H)(1);
+  d = size(H)(2);
+  H_out = zeros(T, d);
+  for t = 1:T
+    x = H(t, :);
+    mu = mean(x);
+    sd = sqrt(mean((x - mu) .^ 2) + eps);
+    H_out(t) = ((x - mu) / sd) .* gamma + beta;
+  end
+end
+
+beta = zeros(d_model);
+eps = 1e-5;
+
+H_rms = rmsnorm_naive(H, gamma, eps);
+H_ln  = layernorm_naive(H, gamma, beta, eps);
+
+# === 3. Verify the row-wise property of each ===
+print("=== RMSNorm row 1: mean(x^2) should be 1 after norm ===");
+print("mean(H_rms(1, :)^2):", mean(H_rms(1, :) .^ 2));
+print("(LayerNorm would also give 1, plus mean=0 — see below.)");
+print("");
+print("=== LayerNorm row 1: mean = 0, variance = 1 ===");
+print("mean(H_ln(1, :)):  ", mean(H_ln(1, :)));
+print("variance:          ", mean((H_ln(1, :) - mean(H_ln(1, :))) .^ 2));
+
+# === 4. Equivalence on zero-mean inputs ===
+# When the input row already has zero mean, RMSNorm and LayerNorm produce
+# identical output.  Demonstrate on a centred copy:
+H_centred = zeros(T, d_model);
+for t = 1:T
+  row = H(t, :);
+  H_centred(t) = row - mean(row);
+end
+H_rms_c = rmsnorm_naive(H_centred, gamma, eps);
+H_ln_c  = layernorm_naive(H_centred, gamma, beta, eps);
+max_diff = max(max(abs(H_rms_c - H_ln_c)));
+print("");
+print("Zero-mean inputs: max | RMSNorm - LayerNorm | =", max_diff);
+print("(Effectively zero — only difference is the eps placement under sqrt.)");
+
+# === 5. Difference on non-zero-mean inputs ===
+# Add a constant DC offset to every row; RMSNorm preserves it (scales by
+# inverse RMS), LayerNorm removes it.
+H_shifted = H + 2.0;
+H_rms_s = rmsnorm_naive(H_shifted, gamma, eps);
+H_ln_s  = layernorm_naive(H_shifted, gamma, beta, eps);
+print("");
+print("DC-shifted inputs: row 1 of RMSNorm output:", H_rms_s(1, :));
+print("                   row 1 of LayerNorm out:", H_ln_s(1, :));
+print("(LayerNorm rows match the unshifted output; RMSNorm rows do not.)");
+
+# === 6. Operation count comparison ===
+# Per row of d_model elements:
+#   LayerNorm  : 1 mean(x) + 1 subtraction + 1 mean(.^2) + 1 sqrt + 1 div + 1 mul (gamma) + 1 add (beta)
+#                ~ 4d + 5 ops, two reductions
+#   RMSNorm    : 1 mean(.^2) + 1 sqrt + 1 div + 1 mul (gamma)
+#                ~ 2d + 3 ops, one reduction
+# Empirical speedup measured in production: ~1.4x at d_model = 4096.
+d_test = 4096;
+ln_ops_per_row = 4 * d_test + 5;
+rms_ops_per_row = 2 * d_test + 3;
+print("");
+print("At d_model =", d_test, ": LayerNorm ~", ln_ops_per_row, "ops/row, RMSNorm ~", rms_ops_per_row, "ops/row.");
+print("RMSNorm is ~", ln_ops_per_row / rms_ops_per_row, "x cheaper on the operation count.");
+
+# === 7. Plot: side-by-side row-1 output for raw, RMSNorm, LayerNorm ===
+figure()
+subplot(1, 3, 1)
+bar(H(1, :))
+title("Original row 1")
+xlabel("dim"); ylabel("value")
+
+subplot(1, 3, 2)
+bar(H_rms(1, :))
+title("RMSNorm row 1 (LLaMA/Mistral)")
+xlabel("dim"); ylabel("value")
+
+subplot(1, 3, 3)
+bar(H_ln(1, :))
+title("LayerNorm row 1 (GPT-2, Vaswani)")
+xlabel("dim"); ylabel("value")
+savefig("rmsnorm.svg")
+print("Saved rmsnorm.svg");

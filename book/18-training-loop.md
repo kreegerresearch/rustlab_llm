@@ -185,6 +185,40 @@ Every component is a closer look at something already in the series:
 
 A real GPT training run replaces the embedding+head with the full architecture from Lesson 14 — but the loop, the gradient flow, and the diagnostic recipes are identical. Scaling up changes which numbers fly past, not how the loop is structured.
 
+## Sidebar: Gradient Clipping
+
+### Theory
+
+The AdamW update from [Lesson 16](16-adamw-optimizer.md) makes the *direction* of the step adaptive but not its *magnitude*. A single outlier batch (e.g. a sequence that hits a numerical edge case) can produce a gradient whose norm is 10–100× the typical step. That one step can move the parameters far enough off the loss basin that the next step diverges, and training collapses.
+
+**Gradient clipping** caps the per-step gradient norm before the optimiser sees it. Let $g$ be the concatenated gradient over all parameters and $c$ the clip threshold (typically $c = 1.0$). The clipped gradient is
+
+$$g \leftarrow g \cdot \min\!\left(1,\; \frac{c}{\lVert g \rVert_2}\right).$$
+
+In words: if $\lVert g \rVert_2 \leq c$, do nothing; otherwise rescale $g$ to have norm exactly $c$. The *direction* of the step is preserved (every parameter's gradient scaled by the same factor), only the *magnitude* is bounded.
+
+### Why it matters
+
+The gradient-norm diagnostic plotted above already shows the problem: a healthy run has gradient norm in a stable band. Spikes — visible as occasional jumps of 10–100× — are the failures that clipping silences. Without clipping these spikes either (a) cause a divergent step that wrecks the run, or (b) force a much smaller learning rate to compensate, slowing every other step.
+
+Clipping is **cheap** (one norm + one scalar multiply per step), **safe** (it cannot make a healthy run worse — typical gradients are below the threshold and pass through untouched), and **standard** — nanoGPT, every major LLM training stack, and most published transformer recipes use $c = 1.0$ unconditionally.
+
+### Applying it
+
+To add clipping to the loop above, insert two lines between the gradient accumulation and the AdamW update:
+
+```rustlab
+% --- After computing dE_avg and dW_avg, before updating m, v --- (illustrative — comments only)
+% gn = sqrt(sum(dE_avg .^ 2, "all") + sum(dW_avg .^ 2, "all"));
+% if gn > clip_c
+%   scale = clip_c / gn;
+%   dE_avg = dE_avg * scale;
+%   dW_avg = dW_avg * scale;
+% end
+```
+
+The training loops in this series do *not* clip — the toy models do not produce spike gradients and clipping would only obscure the diagnostic. Production code should clip with $c = 1.0$ by default.
+
 ## Key Takeaways
 
 - The training loop is **five steps, one line each**: sample, forward, backward, optimiser step, log. Memorise it.

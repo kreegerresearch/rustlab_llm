@@ -167,6 +167,28 @@ Modern language modelling reports **bits per byte** (BPB) or **bits per characte
 
 **Forward link.** [Lesson 05](05-bigram-language-model.md) introduces **perplexity** $= e^{\mathcal{L}}$ (or $2^{\mathcal{L}_{\text{bits}}}$). Perplexity is just $2^H$ wearing different clothes — the "effective branching factor" interpretation is the source-coding bound stated as an effective alphabet size.
 
+## Sidebar: Label Smoothing
+
+### Theory
+
+The cross-entropy target so far is a **hard one-hot** vector: $y_i = 1$ for the correct class, 0 elsewhere. **Label smoothing** softens that target by reserving a small mass $\varepsilon$ (typically 0.1) for the rest of the vocabulary:
+
+$$y^{\text{smooth}}_i = (1 - \varepsilon)\,\mathbf{1}_{i = c} + \frac{\varepsilon}{|\mathcal{V}|}.$$
+
+The loss against the smoothed target is
+
+$$\mathcal{L}_{\text{smooth}} = -\sum_i y^{\text{smooth}}_i \log \hat p_i = (1 - \varepsilon)\bigl(-\log \hat p_c\bigr) + \varepsilon \cdot H_{\text{unif}}(\hat p),$$
+
+where the second term penalises the cross-entropy against a uniform distribution. The net effect: the optimum at $\hat p_c = 1$ becomes $\hat p_c = 1 - \varepsilon + \varepsilon/|\mathcal{V}|$ — the model is **forbidden from putting all its mass on the correct class**.
+
+### Why it helps
+
+- **Calibration.** Without smoothing, well-trained models become overconfident — they assign 0.999+ to whichever token they pick, even on inputs where they should be uncertain. Smoothing keeps probabilities calibrated.
+- **Generalisation.** The smoothed target acts as a mild regulariser; it discourages extreme logits and reduces overfitting on small datasets.
+- **Beam search compatibility.** The original *Attention Is All You Need* paper used $\varepsilon = 0.1$ specifically because beam search over an overconfident model fails to explore — a 0.999-vs-0.001 gap dominates the beam score.
+
+Modern GPT-style models (including [nanoGPT](https://github.com/karpathy/nanoGPT)) **do not use label smoothing** — open-ended text generation cares about ranking, not calibration, and large-scale training has its own regularisation effects (data scale, dropout, weight decay). It is still standard in machine translation and any task where calibrated probabilities matter.
+
 ## Key Takeaways
 
 - Cross-entropy loss $\mathcal{L} = -\log \hat{p}_c$ is the standard training objective for language models.

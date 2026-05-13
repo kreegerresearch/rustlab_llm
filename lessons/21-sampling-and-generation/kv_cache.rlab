@@ -1,0 +1,162 @@
+# Script:  kv_cache.rlab
+# System:  Single-head causal-attention block (d_model=4, T_max=8) — a
+#          deliberately tiny stand-in for one transformer layer.  Runs
+#          generation two ways:
+#            (a) naive  — recompute Q,K,V for ALL positions at every step
+#            (b) cached — append new (k,v) rows to a growing cache; recompute
+#                only the current Q row
+#          Verifies that the per-step output is bit-identical and counts the
+#          attention FLOPs at each step to show the O(T^3) -> O(T^2) saving.
+# Concept: In causal attention the K and V matrices for past positions do
+#          *not* depend on the future, so they can be cached across
+#          generation steps.  Only Q changes (it is the projection of the
+#          current token).  The mask drops because we only ever compute the
+#          last row of the attention matrix.
+# Equations:
+#   naive step t:    Q,K,V = X[1:t,:] * Wq,Wk,Wv             (t x d)
+#                    A_t   = softmax(Q K' / sqrt(d) + mask)  (t x t)
+#                    Out_t = A_t * V                          (t x d)
+#                    out_row = Out_t(t, :)
+#   cached step t:   q = x_t * Wq, k = x_t * Wk, v = x_t * Wv (1 x d)
+#                    K_cache <- [K_cache; k], V_cache <- [V_cache; v]
+#                    a = softmax(q * K_cache' / sqrt(d))      (1 x t)
+#                    out_row = a * V_cache                     (1 x d)
+#   attention FLOPs (rough): naive ~ 4 t^2 d + 3 t d^2, cached ~ 4 t d + 3 d^2
+# Units:   activations dimensionless; flops counted in arithmetic operations.
+
+# === 1. Setup: tiny model ===
+seed(21);
+vocab = 6;
+d_model = 4;
+T_max = 8;
+
+# Token + position embeddings, single set of attention weights.
+E_tok = randn(vocab, d_model) * 0.3;
+E_pos = randn(T_max, d_model) * 0.3;
+Wq = randn(d_model, d_model) * 0.3;
+Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;
+
+# A fixed token sequence for the test — pretend the LM already decided these.
+tokens = [1, 4, 2, 5, 3, 6, 2, 1];
+
+# === 2. Build the input embedding for positions 1..t (token + position) ===
+function X = embed_prefix(tokens, t, E_tok, E_pos)
+  d = size(E_tok)(2);
+  X = zeros(t, d);
+  for i = 1:t
+    X(i) = E_tok(tokens(i), :) + E_pos(i, :);
+  end
+end
+
+# === 3. Naive forward — recompute everything at every step. ===
+# Returns the *last row* of the attention output (the next-token feature).
+function [out_row, flops] = naive_step(tokens, t, E_tok, E_pos, Wq, Wk, Wv)
+  d = size(E_tok)(2);
+  X = embed_prefix(tokens, t, E_tok, E_pos);    % (t x d)
+  Q = X * Wq;                                    % (t x d)
+  K = X * Wk;                                    % (t x d)
+  V = X * Wv;                                    % (t x d)
+  scale = 1.0 / sqrt(d);
+  S = (Q * K') * scale;                          % (t x t)
+  # Causal mask: -1e9 above the diagonal (upper triangle).
+  for i = 1:t
+    for j = (i + 1):t
+      S(i, j) = -1e9;
+    end
+  end
+  # Row-wise softmax — for this script we only need the last row, but compute
+  # the full matrix to match what a textbook forward pass would do.
+  A = zeros(t, t);
+  for i = 1:t
+    A(i) = softmax(S(i, :));
+  end
+  Out = A * V;                                   % (t x d)
+  out_row = Out(t, :);
+  # FLOP count (multiply-adds counted once): 3*t*d^2 for QKV projections,
+  # 2*t*t*d for Q*K' and A*V, ~t*t for softmax.
+  flops = 3 * t * d * d + 2 * t * t * d + t * t;
+end
+
+# === 4. Cached forward — grow K,V across calls; recompute only q for x_t. ===
+function [out_row, K_cache_new, V_cache_new, flops] = ...
+    cached_step(tokens, t, E_tok, E_pos, Wq, Wk, Wv, K_cache, V_cache)
+  d = size(E_tok)(2);
+  x_t = E_tok(tokens(t), :) + E_pos(t, :);       % (1 x d)
+  q = x_t * Wq;                                  % (1 x d)
+  k_t = x_t * Wk;                                % (1 x d)
+  v_t = x_t * Wv;                                % (1 x d)
+  # Append k_t, v_t to the cache.
+  if t == 1
+    K_cache_new = k_t;
+    V_cache_new = v_t;
+  else
+    K_cache_new = [K_cache; k_t];
+    V_cache_new = [V_cache; v_t];
+  end
+  scale = 1.0 / sqrt(d);
+  # No mask needed — we only compute the current row, which sees all 1..t.
+  a = softmax((q * K_cache_new') * scale);       % (1 x t)
+  out_row = a * V_cache_new;                     % (1 x d)
+  # FLOP count: 3*d^2 (qkv on 1 row) + 2*t*d (q*K' and a*V) + t (softmax).
+  flops = 3 * d * d + 2 * t * d + t;
+end
+
+# === 5. Run both and compare ===
+T_run = T_max;
+naive_out  = zeros(T_run, d_model);
+cached_out = zeros(T_run, d_model);
+naive_flops_step = zeros(T_run);
+cached_flops_step = zeros(T_run);
+K_cache = zeros(0, d_model);
+V_cache = zeros(0, d_model);
+
+for t = 1:T_run
+  [n_row, n_f] = naive_step(tokens, t, E_tok, E_pos, Wq, Wk, Wv);
+  naive_out(t) = n_row;
+  naive_flops_step(t) = n_f;
+  [c_row, K_cache, V_cache, c_f] = cached_step(tokens, t, E_tok, E_pos, Wq, Wk, Wv, K_cache, V_cache);
+  cached_out(t) = c_row;
+  cached_flops_step(t) = c_f;
+end
+
+# === 6. Equivalence check ===
+max_abs_diff = max(max(abs(naive_out - cached_out)));
+print("max | naive_out - cached_out | =", max_abs_diff);
+print("(should be ~ 1e-15: the cache is mathematically identical to the");
+print(" naive forward, not an approximation.)");
+
+# === 7. FLOP comparison ===
+naive_cum  = cumsum(naive_flops_step);
+cached_cum = cumsum(cached_flops_step);
+print("Per-step FLOPs:");
+for t = 1:T_run
+  ratio = naive_flops_step(t) / cached_flops_step(t);
+  print("  t =", t, "  naive =", naive_flops_step(t), "  cached =", cached_flops_step(t), "  ratio =", ratio);
+end
+print("Cumulative FLOPs at T:", naive_cum(T_run), "(naive) vs", cached_cum(T_run), "(cached)");
+print("Cumulative ratio at T:", naive_cum(T_run) / cached_cum(T_run));
+
+# === 8. Plot: per-step and cumulative FLOPs ===
+figure()
+subplot(1, 2, 1)
+plot(1:T_run, naive_flops_step, "color", "red", "label", "naive")
+hold("on")
+plot(1:T_run, cached_flops_step, "color", "blue", "label", "cached")
+hold("off")
+title("Attention FLOPs per generation step (linear)")
+xlabel("step t")
+ylabel("FLOPs")
+legend("naive", "cached")
+
+subplot(1, 2, 2)
+plot(1:T_run, log10(naive_cum), "color", "red", "label", "naive")
+hold("on")
+plot(1:T_run, log10(cached_cum), "color", "blue", "label", "cached")
+hold("off")
+title("Cumulative FLOPs through step T (log10)")
+xlabel("step t")
+ylabel("log10 cumulative FLOPs")
+legend("naive", "cached")
+savefig("kv_cache.svg")
+print("Saved kv_cache.svg");

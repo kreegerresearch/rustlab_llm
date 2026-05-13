@@ -1,0 +1,149 @@
+# Script:  generation_loop.rlab
+# System:  Autoregressive generation loop driving the Lesson 18 24-parameter
+#          bigram-style LM on the period-4 corpus over {a, b, c}.
+# Concept: At each step, run the model on the *current* token, take the next-
+#          token distribution, pick one token, append it, repeat.  This is the
+#          basic loop every transformer-decoder uses; sampling strategies are
+#          just choices of step 3.
+# Equations:
+#   h_t      = E(x_t, :)                          (row gather)
+#   p_t      = softmax(h_t * W)                    (next-token distribution)
+#   x_{t+1}  = argmax_i p_t(i)                     (greedy)
+#       or   = sample_i ~ Categorical(p_t / T)     (temperature T)
+# Units:   parameters dimensionless; loss in nats.
+
+# === 1. Train the Lesson 18 model inline (fast: 24 params, 600 steps) ===
+seed(18);
+vocab = 3;
+d_emb = 4;
+E = randn(vocab, d_emb) * 0.3;
+W = randn(d_emb, vocab) * 0.3;
+
+function tokens = build_seq(n)
+  tokens = zeros(n);
+  pat = [1, 2, 3, 2];
+  for i = 1:n
+    tokens(i) = pat(mod(i - 1, 4) + 1);
+  end
+end
+
+corpus = build_seq(60);
+n_pairs = 49;
+
+# AdamW state
+m_E = zeros(vocab, d_emb);  v_E = zeros(vocab, d_emb);
+m_W = zeros(d_emb, vocab);  v_W = zeros(d_emb, vocab);
+beta1 = 0.9;  beta2 = 0.999;  eps_a = 1e-8;
+eta_max = 0.15;  eta_min = 0.015;  n_train = 600;  T_w = 60;
+
+for t = 1:n_train
+  if t <= T_w
+    eta_t = eta_max * (t / T_w);
+  else
+    progress = (t - T_w) / (n_train - T_w);
+    eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * progress));
+  end
+  dE_sum = zeros(vocab, d_emb);
+  dW_sum = zeros(d_emb, vocab);
+  for k = 0:(n_pairs - 1)
+    curr = corpus(1 + k);  nxt = corpus(2 + k);
+    h = E(curr, :);
+    p = softmax(h * W);
+    e_y = zeros(vocab);  e_y(nxt) = 1.0;
+    dlogits = p - e_y;
+    dW_sum = dW_sum + h' * dlogits;
+    dh = dlogits * W';
+    for j = 1:d_emb
+      dE_sum(curr, j) = dE_sum(curr, j) + dh(j);
+    end
+  end
+  dE = dE_sum / n_pairs;  dW = dW_sum / n_pairs;
+  m_E = beta1 * m_E + (1 - beta1) * dE;
+  v_E = beta2 * v_E + (1 - beta2) * (dE .^ 2);
+  E = E - eta_t * ((m_E / (1 - beta1 ^ t)) ./ (sqrt(v_E / (1 - beta2 ^ t)) + eps_a));
+  m_W = beta1 * m_W + (1 - beta1) * dW;
+  v_W = beta2 * v_W + (1 - beta2) * (dW .^ 2);
+  W = W - eta_t * ((m_W / (1 - beta1 ^ t)) ./ (sqrt(v_W / (1 - beta2 ^ t)) + eps_a));
+end
+
+# === 2. The forward pass becomes a one-liner ===
+function p = next_token_dist(x_curr, E, W)
+  p = softmax(E(x_curr, :) * W);
+end
+
+# Sanity: after training on "abcb...", P(b | a) and P(b | c) should be near 1,
+# and P(a | b), P(c | b) should be near 0.5.
+print("P(.|a) =", next_token_dist(1, E, W));
+print("P(.|b) =", next_token_dist(2, E, W));
+print("P(.|c) =", next_token_dist(3, E, W));
+
+# === 3. Greedy decoding ===
+# Pick argmax at every step.  Deterministic given the seed prompt.
+function seq = greedy_generate(x0, n_new, E, W)
+  seq = zeros(n_new + 1);
+  seq(1) = x0;
+  for t = 1:n_new
+    p = next_token_dist(seq(t), E, W);
+    seq(t + 1) = argmax(p);
+  end
+end
+
+names = {"a", "b", "c"};
+function s = seq_to_str(seq, names)
+  s = "";
+  for i = 1:length(seq)
+    s = s + names(seq(i));
+  end
+end
+
+greedy_seq = greedy_generate(1, 12, E, W);
+print("greedy from 'a':", seq_to_str(greedy_seq, names));
+greedy_seq_b = greedy_generate(2, 12, E, W);
+print("greedy from 'b':", seq_to_str(greedy_seq_b, names));
+
+# === 4. Temperature sampling ===
+# Reshape logits by 1/T before softmax.  T=1 is the trained distribution;
+# T<1 sharpens (greedy as T -> 0); T>1 flattens (uniform as T -> infinity).
+function tok = sample_categorical(p)
+  # Inverse-CDF sampling: walk the cumulative distribution until we cross r.
+  # `while c(i) < r` short-circuits at the first crossover; no `break` needed.
+  c = cumsum(p);
+  r = rand(1)(1);
+  N = length(p);
+  i = 1;
+  while i < N && c(i) < r
+    i = i + 1;
+  end
+  tok = i;
+end
+
+function seq = temperature_generate(x0, n_new, E, W, T_temp)
+  seq = zeros(n_new + 1);
+  seq(1) = x0;
+  for t = 1:n_new
+    logits = E(seq(t), :) * W;
+    p = softmax(logits / T_temp);
+    seq(t + 1) = sample_categorical(p);
+  end
+end
+
+seed(42);
+print("T=0.5 from 'a':", seq_to_str(temperature_generate(1, 12, E, W, 0.5), names));
+print("T=1.0 from 'a':", seq_to_str(temperature_generate(1, 12, E, W, 1.0), names));
+print("T=2.0 from 'a':", seq_to_str(temperature_generate(1, 12, E, W, 2.0), names));
+
+# === 5. Plot: P(. | b) at three temperatures ===
+# 'b' has the most interesting distribution (split between 'a' and 'c').
+logits_b = E(2, :) * W;
+p_05 = softmax(logits_b / 0.5);
+p_10 = softmax(logits_b / 1.0);
+p_20 = softmax(logits_b / 2.0);
+
+figure()
+bar([p_05; p_10; p_20]')
+title("P(. | b) at three temperatures: T=0.5 sharpens, T=2.0 flattens")
+xlabel("token (1=a, 2=b, 3=c)")
+ylabel("probability")
+legend("T=0.5", "T=1.0", "T=2.0")
+savefig("generation_loop.svg")
+print("Saved generation_loop.svg");

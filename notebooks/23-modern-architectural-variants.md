@@ -1,0 +1,376 @@
+# Lesson 23: Modern Architectural Variants
+
+The architecture you built in Lessons 08–14 is the **2017 Vaswani / 2019 GPT-2** transformer. Every major open LLM trained since 2022 — LLaMA, Mistral, Qwen, Falcon, GPT-NeoX-style models — has swapped out four of those components for variants that improve quality, speed, or memory while preserving the overall shape of the stack. This lesson covers the four:
+
+| Component | Lesson built | Modern variant | Used in |
+|---|---|---|---|
+| Sinusoidal / learned positional encoding | [[10-positional-encoding]] | **RoPE** (rotary) | LLaMA, Mistral, Qwen, Claude, Falcon |
+| LayerNorm | [[12-layer-norm-and-residuals]] | **RMSNorm** | LLaMA, Mistral, T5, Qwen |
+| GELU + 2-matrix FFN | [[11-feed-forward-block]] | **SwiGLU** | LLaMA, Mistral, PaLM, Qwen |
+| Multi-head attention | [[09-multi-head-attention]] | **GQA / MQA** | LLaMA 2/3, Mistral, Claude |
+
+Each is a surgical swap against the baseline — no other layers change. Read this lesson as four self-contained deltas.
+
+## Learning Objectives
+
+- Derive **RoPE** as a rotation matrix applied to Q and K, and prove its key property: the attention score depends only on the *relative* position of the query and key.
+- Compare **RMSNorm** to LayerNorm: identical on zero-mean inputs, different on shifted inputs, ~2× fewer operations.
+- Implement the **SwiGLU** FFN as a gated product of two linear paths through a SiLU activation; pick $d_{\text{ff}}$ to match the standard FFN's parameter count.
+- Implement **GQA** by sharing K and V across groups of query heads, and quantify the resulting KV-cache reduction (continues directly from [[21-sampling-and-generation]]).
+- Recognise these four variants in any modern open LLM and identify how to swap them into the lesson-14 architecture.
+
+## Background
+
+- Sinusoidal positional encoding from [[10-positional-encoding]].
+- LayerNorm from [[12-layer-norm-and-residuals]].
+- FFN with GELU from [[11-feed-forward-block]].
+- Multi-head attention from [[09-multi-head-attention]] and causal masking from [[08-scaled-dot-product-attention]].
+- The KV cache derivation from [[21-sampling-and-generation]] — the GQA section extends it directly.
+
+## RoPE — Rotary Positional Embedding
+
+### Theory
+
+Sinusoidal PE in [[10-positional-encoding]] **adds** a position-dependent vector to the embedding before the first attention block: $h_t^{(0)} = e_t + p_t$. Once added, the position is part of every downstream activation; the model has to disentangle "what the token is" from "where it is" at every layer.
+
+RoPE takes a different approach: it leaves embeddings alone and **rotates Q and K inside attention** by an angle that depends on the position. For a $d$-dimensional Q (or K) vector at position $m$, pair consecutive dimensions $(2k, 2k+1)$ and rotate each pair by angle $\phi_{m,k} = m \cdot \theta_k$:
+
+$$\theta_k = \text{base}^{-2k / d}, \qquad k = 0, 1, \dots, d/2 - 1, \qquad \text{base} = 10000.$$
+
+The rotation is a standard 2D rotation matrix per pair:
+
+$$\begin{pmatrix} q'_{2k} \\ q'_{2k+1} \end{pmatrix} = \begin{pmatrix} \cos \phi & -\sin \phi \\ \sin \phi & \cos \phi \end{pmatrix} \begin{pmatrix} q_{2k} \\ q_{2k+1} \end{pmatrix}.$$
+
+The geometric payoff falls out of the rotation algebra. For a query at position $m$ and a key at position $n$, the inner product is
+
+$$\langle R(m) q, R(n) k \rangle = q^\top R(m)^\top R(n) k = q^\top R(n - m) k.$$
+
+The two absolute positions $m$ and $n$ collapse into the single relative position $n - m$. **Attention scores under RoPE depend only on relative position**, not on absolute position. This is what gives RoPE its long-context behaviour: the model never "saw" absolute position 9000 during training, but the relative offsets between tokens at positions 8990 and 9000 are exactly the offsets it saw at positions 90 and 100.
+
+### Example — Apply RoPE to a Q/K pair
+
+```rustlab
+seed(23);
+T = 4;
+d_head = 4;
+base = 10000.0;
+
+Q = randn(T, d_head);
+K = randn(T, d_head);
+
+n_pairs = d_head / 2;
+theta = zeros(n_pairs);
+for k = 0:(n_pairs - 1)
+  theta(k + 1) = base ^ (-2 * k / d_head);
+end
+print("theta_k :", theta);
+% d_head = 4: theta_0 = 1.0, theta_1 = 0.01.  Low-k pairs rotate fast,
+% high-k pairs rotate slowly — same frequency-spread idea as sinusoidal PE.
+```
+
+The rotation itself, per vector:
+
+```rustlab
+function x_rot = rope_apply(x, m, theta)
+  d = length(x);
+  n_pairs = d / 2;
+  x_rot = zeros(d);
+  for k = 1:n_pairs
+    phi = m * theta(k);
+    cos_p = cos(phi);
+    sin_p = sin(phi);
+    x_2k  = x(2 * k - 1);
+    x_2k1 = x(2 * k);
+    x_rot(2 * k - 1) = x_2k * cos_p - x_2k1 * sin_p;
+    x_rot(2 * k)     = x_2k * sin_p + x_2k1 * cos_p;
+  end
+end
+
+% Apply to each row of Q and K with its own position.
+Q_rot = zeros(T, d_head);
+K_rot = zeros(T, d_head);
+for m = 0:(T - 1)
+  Q_rot(m + 1) = rope_apply(Q(m + 1, :), m, theta);
+  K_rot(m + 1) = rope_apply(K(m + 1, :), m, theta);
+end
+```
+
+### Example — Verify relative-position invariance
+
+Take a fixed $q$ and $k$ vector. Apply RoPE at positions $(m, n) = (2, 5)$ (relative offset 3) and at $(m, n) = (4, 7)$ (same offset 3). The two dot products must be equal:
+
+```rustlab
+T_long = 8;
+Q_long = randn(T_long, d_head);
+K_long = randn(T_long, d_head);
+
+q2 = rope_apply(Q_long(3, :), 2, theta);
+k5 = rope_apply(K_long(3, :), 5, theta);
+q4 = rope_apply(Q_long(3, :), 4, theta);
+k7 = rope_apply(K_long(3, :), 7, theta);
+print("<RoPE(q, 2), RoPE(k, 5)> =", q2 * k5');
+print("<RoPE(q, 4), RoPE(k, 7)> =", q4 * k7');
+print("(Both have relative offset 3; should match.)");
+```
+
+The dot products are equal to ~15 decimal places — the rotation algebra is exact, only floating-point round-off remains.
+
+> [!IMPORTANT]
+> RoPE's relative-position property is **algebraic**, not learned. The model doesn't have to discover it during training; it is wired into how Q and K are produced. Combined with the fact that no PE is added to the embeddings (so the residual stream is purely token information), this is why RoPE-based models extrapolate to context lengths beyond what they saw during training more gracefully than sinusoidal-PE models.
+
+## RMSNorm
+
+### Theory
+
+LayerNorm from [[12-layer-norm-and-residuals]] does two things to each row:
+
+$$\text{LayerNorm}(x) = \gamma \cdot \frac{x - \mu}{\sqrt{\sigma^2 + \varepsilon}} + \beta, \qquad \mu = \frac{1}{d} \sum x_i, \quad \sigma^2 = \frac{1}{d} \sum (x_i - \mu)^2.$$
+
+**RMSNorm** drops the mean-centering step and the bias $\beta$:
+
+$$\text{RMSNorm}(x) = \gamma \cdot \frac{x}{\sqrt{\frac{1}{d}\sum x_i^2 + \varepsilon}} = \gamma \cdot \frac{x}{\text{RMS}(x)}.$$
+
+Two things change:
+
+- **Mean centering is gone.** RMSNorm preserves a DC offset that LayerNorm would remove. Empirically, transformers don't seem to need the centering — the model has plenty of capacity to learn whatever offset compensation is useful.
+- **The bias $\beta$ is gone.** One fewer parameter per feature, one fewer add per element.
+
+When the input row is already zero-mean, RMSNorm and LayerNorm are **identical** (up to where $\varepsilon$ sits under the square root).
+
+### Why it's used
+
+- **~2× fewer ops per row.** LayerNorm needs two reductions (mean, then variance); RMSNorm needs one (the RMS itself). At $d_{\text{model}} = 4096$, that's $\sim 16389$ ops vs $\sim 8195$ ops per row — about a $2\times$ FLOP reduction in the normalisation layer. Real implementations measure ~1.4× wall-clock speedup including memory traffic.
+- **Same numerical stability.** $\sqrt{\text{mean}(x^2) + \varepsilon}$ never goes near zero on a non-trivial signal; the $\varepsilon$ floor is sufficient.
+- **No measurable quality loss.** Several papers (T5, LLaMA-1 ablations) report no perplexity difference between LayerNorm and RMSNorm at the same parameter count.
+
+### Example — Identical on zero-mean input, divergent on shifted input
+
+```rustlab
+seed(23);
+T = 5;
+d_model = 8;
+H = randn(T, d_model);
+gamma = ones(d_model);
+beta = zeros(d_model);
+eps = 1e-5;
+
+function H_out = rmsnorm_naive(H, gamma, eps)
+  T = size(H)(1);
+  d = size(H)(2);
+  H_out = zeros(T, d);
+  for t = 1:T
+    x = H(t, :);
+    rms = sqrt(mean(x .^ 2) + eps);
+    H_out(t) = (x / rms) .* gamma;
+  end
+end
+
+function H_out = layernorm_naive(H, gamma, beta, eps)
+  T = size(H)(1);
+  d = size(H)(2);
+  H_out = zeros(T, d);
+  for t = 1:T
+    x = H(t, :);
+    mu = mean(x);
+    sd = sqrt(mean((x - mu) .^ 2) + eps);
+    H_out(t) = ((x - mu) / sd) .* gamma + beta;
+  end
+end
+
+% Zero-mean inputs: RMSNorm == LayerNorm.
+H_centred = zeros(T, d_model);
+for t = 1:T
+  row = H(t, :);
+  H_centred(t) = row - mean(row);
+end
+diff = max(max(abs(rmsnorm_naive(H_centred, gamma, eps) - layernorm_naive(H_centred, gamma, beta, eps))));
+print("zero-mean inputs: max | RMSNorm - LayerNorm | =", diff);
+
+% Shifted inputs: LayerNorm removes the DC, RMSNorm doesn't.
+H_shifted = H + 2.0;
+print("shifted row 1 RMSNorm: ", rmsnorm_naive(H_shifted, gamma, eps)(1, :));
+print("shifted row 1 LayerNorm:", layernorm_naive(H_shifted, gamma, beta, eps)(1, :));
+```
+
+The first comparison gives diff = $1.1 \times 10^{-16}$ — bit-identical to floating-point round-off. The shifted comparison shows LayerNorm reproducing the unshifted output (DC removed) while RMSNorm gives a different result (DC preserved).
+
+## SwiGLU FFN
+
+### Theory
+
+The FFN from [[11-feed-forward-block]] is
+
+$$\text{FFN}(x) = W_2\, \text{GELU}(W_1 x + b_1) + b_2.$$
+
+Two matrices, one nonlinearity. **SwiGLU** replaces it with a **gated linear unit** form using *three* matrices:
+
+$$\text{SwiGLU}(x) = W_3\, \bigl(\text{SiLU}(W_1 x) \odot (W_2 x)\bigr), \qquad \text{SiLU}(z) = z \cdot \sigma(z) = \frac{z}{1 + e^{-z}}.$$
+
+The element-wise product $\odot$ between the activated path $\text{SiLU}(W_1 x)$ and the linear path $W_2 x$ is the **gate**: each component of the linear path is modulated by a (signal-dependent, smooth-step) gate from the activated path.
+
+### Parameter parity
+
+Three matrices instead of two would naively use 50% more parameters. LLaMA fixes this by choosing $d_{\text{ff}}$ smaller for SwiGLU:
+
+- Standard FFN: $2 \cdot d_{\text{model}} \cdot d_{\text{ff}}$, with $d_{\text{ff}} = 4 d_{\text{model}}$, totals $8 d_{\text{model}}^2$.
+- SwiGLU: $3 \cdot d_{\text{model}} \cdot d_{\text{ff}}$. To match $8 d_{\text{model}}^2$, set $d_{\text{ff}} = \frac{8}{3} d_{\text{model}}$.
+
+LLaMA-2 7B picks $d_{\text{ff}} = 11008$ for $d_{\text{model}} = 4096$ — exactly $\frac{8}{3} \cdot 4096$ rounded to a multiple of 256.
+
+### Why it helps
+
+The gate gives the FFN a **data-dependent on/off switch** per hidden unit. A linear-only layer cannot suppress an active dimension based on the input; SwiGLU can (the SiLU gate goes to zero for very negative inputs). Empirically this yields ~1–2% perplexity improvement at the same parameter count — small but consistent enough that essentially every open LLM trained after PaLM uses it.
+
+### Example — Forward pass + parameter parity
+
+```rustlab
+seed(23);
+T = 3;
+d_model = 8;
+d_ff_std  = 4 * d_model;                  % 32
+d_ff_swig = floor(8 * d_model / 3);        % 21
+H = randn(T, d_model);
+
+% Standard FFN (Lesson 11).
+W1s = randn(d_model, d_ff_std) * 0.3;
+b1s = randn(d_ff_std) * 0.1;
+W2s = randn(d_ff_std, d_model) * 0.3;
+b2s = randn(d_model) * 0.1;
+H_std = (gelu(H * W1s + repmat(b1s, T, 1))) * W2s + repmat(b2s, T, 1);
+
+% SwiGLU FFN.
+W1g = randn(d_model, d_ff_swig) * 0.3;
+W2g = randn(d_model, d_ff_swig) * 0.3;
+W3g = randn(d_ff_swig, d_model) * 0.3;
+gate = H * W1g;
+linr = H * W2g;
+silu_gate = gate ./ (1.0 + exp(-gate));
+H_swig = (silu_gate .* linr) * W3g;
+
+n_std  = d_model * d_ff_std  + d_ff_std  + d_ff_std  * d_model + d_model;
+n_swig = d_model * d_ff_swig + d_model * d_ff_swig + d_ff_swig * d_model;
+print("standard FFN params:", n_std);
+print("SwiGLU   FFN params:", n_swig);
+print("output shapes:", size(H_std), "vs", size(H_swig));
+```
+
+Both shapes are $(T \times d_{\text{model}})$ — SwiGLU is a drop-in replacement at the same parameter budget.
+
+## GQA — Grouped-Query Attention
+
+### Theory
+
+Multi-head attention from [[09-multi-head-attention]] has $H$ query heads, each with its own $W_Q^h, W_K^h, W_V^h$ matrices. The KV cache from [[21-sampling-and-generation]] stores $K$ and $V$ for *every* head at every past position. For a model with $H$ heads, $d_{\text{head}}$ width, $L$ layers, and context $T$, the cache holds
+
+$$\text{cache size} = 2 \cdot L \cdot H \cdot T \cdot d_{\text{head}} \quad \text{(elements)}.$$
+
+For LLaMA-2-70B-shaped numbers ($L = 80$, $H = 64$, $d_{\text{head}} = 128$, $T = 8192$, fp16), that's about **20 GB per request**. This is the dominant cost at inference time — bigger than the weights at long contexts.
+
+**Grouped-query attention** notes that the $H$ Q heads do not actually need $H$ distinct K and V heads. Pick a smaller number $H_{\text{kv}} < H$, split the query heads into $H_{\text{kv}}$ groups, and let each group share one $(K, V)$ pair. With $H = 32$ and $H_{\text{kv}} = 8$ (LLaMA-2 70B's ratio), each KV head is shared across 4 query heads — and the cache shrinks by a factor of $H / H_{\text{kv}} = 4$ in this example, $H / H_{\text{kv}} = 8$ in LLaMA-2-70B's actual config.
+
+The two extreme points have names: $H_{\text{kv}} = H$ is standard MHA; $H_{\text{kv}} = 1$ is **multi-query attention** (MQA). GQA spans the middle.
+
+The math per head is **unchanged** — query head $h$ computes $\text{softmax}(Q_h K_{g(h)}^\top / \sqrt{d}) V_{g(h)}$, where $g(h) = \lceil h \cdot H_{\text{kv}} / H \rceil$ assigns each query head to its KV group. Only the matrices used by each head are different.
+
+### Why it matters at scale
+
+For LLaMA-2-70B at $T = 8192$ in fp16:
+
+| Variant | Cache per request |
+|---|---|
+| MHA (no GQA) | ~20 GB |
+| GQA, $H_{\text{kv}} = 8$ (LLaMA-2 70B's actual choice) | ~2.5 GB |
+| MQA, $H_{\text{kv}} = 1$ | ~310 MB |
+
+Halving or quartering the cache lets you fit longer context or more concurrent requests on the same hardware, and it speeds up generation linearly because every step's attention loads less data from memory.
+
+Empirical quality cost: GQA at $H_{\text{kv}} = H/4$ to $H/8$ loses 0–0.5% perplexity vs MHA on the same training budget. MQA at $H_{\text{kv}} = 1$ loses ~1% — too much for production, which is why GQA is the modern default.
+
+### Example — 4-head model with three $H_{\text{kv}}$ configurations
+
+The standalone script `gqa.rlab` runs the full forward pass; here is the headline output:
+
+```text
+=== Configurations (n_heads = 4) ===
+MHA  (n_kv=4): Q params = 64   KV params = 128   KV cache elements = 64
+GQA  (n_kv=2): Q params = 64   KV params = 64    KV cache elements = 32
+MQA  (n_kv=1): Q params = 64   KV params = 32    KV cache elements = 16
+KV cache reduction vs MHA:  GQA: 2x   MQA: 4x
+
+=== Real-world numbers (LLaMA-2 70B, T = 8192, fp16) ===
+Hypothetical MHA  KV cache (all layers):  20 GB per request
+Actual LLaMA-2 70B GQA (n_kv = 8):         2.5 GB per request
+```
+
+The 2× and 4× reductions on the toy 4-head model scale linearly: at $H = 64$, going from MHA to $H_{\text{kv}} = 8$ gives the same 8× factor that LLaMA-2 70B's published config produces.
+
+## Composing the Variants
+
+A modern LLM (LLaMA, Mistral, Qwen) stacks all four against the lesson-14 baseline:
+
+```
+ids → embed → for each of N blocks:
+                pre-norm: RMSNorm (was LayerNorm)
+                attention: GQA + RoPE (was MHA + sinusoidal PE)
+                residual add
+                pre-norm: RMSNorm
+                FFN: SwiGLU (was GELU FFN)
+                residual add
+           → final RMSNorm → LM head (often weight-tied)
+```
+
+Every change is local. The training loop ([[18-training-loop]]) is unchanged. The KV cache derivation ([[21-sampling-and-generation]]) is unchanged in shape — only its size is smaller because of GQA. The sampling strategies ([[21-sampling-and-generation]]) are unchanged. The capstone framework ([[22-putting-it-all-together]]) would run the same way with the new components.
+
+## Key Takeaways
+
+- **RoPE** replaces additive PE with a rotation of Q and K. Attention scores depend only on relative position; long-context behaviour is materially better.
+- **RMSNorm** drops mean centering and bias from LayerNorm. ~2× fewer ops, no measurable quality loss.
+- **SwiGLU** replaces GELU + 2-matrix FFN with a 3-matrix gated form using SiLU. $d_{\text{ff}} = \frac{8}{3} d_{\text{model}}$ keeps parameters constant.
+- **GQA** shares K and V across query head groups. Directly reduces the KV cache from [[21-sampling-and-generation]] by the factor $H / H_{\text{kv}}$ (typically 4–8 in production).
+- All four are local swaps against the lesson-14 architecture. Any modern open LLM uses all four; recognise them on sight.
+
+## Standalone Scripts
+
+| Script | What it computes |
+|---|---|
+| `rope.rlab` | RoPE applied to a $(T=4, d_{\text{head}}=4)$ Q/K pair; relative-position invariance check; $(T=8)$ heatmap showing constant diagonals |
+| `rmsnorm.rlab` | RMSNorm and LayerNorm on a $(T=5, d_{\text{model}}=8)$ hidden state; equivalence on zero-mean; divergence on shifted; op count |
+| `swiglu.rlab` | SwiGLU vs GELU FFN forward; parameter parity at $d_{\text{ff}} = \frac{8}{3} d_{\text{model}}$; toy gate demo |
+| `gqa.rlab` | $H = 4$ attention with $H_{\text{kv}} \in \{4, 2, 1\}$; output equivalence (shape); KV cache scaling to LLaMA-2-70B numbers |
+
+Run all with `make lesson-23` (or `rustlab run lessons/23-modern-architectural-variants/<name>.rlab`).
+
+## Expected Numerical Outputs Summary
+
+| Variable | Expected Value |
+|---|---|
+| `theta_k` for $d_{\text{head}} = 4$, base = 10000 | $[1.0, 0.01]$ |
+| `<RoPE(q,2), RoPE(k,5)>` vs `<RoPE(q,4), RoPE(k,7)>` | bit-identical to ~$10^{-15}$ |
+| RoPE $8 \times 8$ heatmap | constant along each $(n - m)$ diagonal |
+| RMSNorm vs LayerNorm, zero-mean input | max diff $\sim 10^{-16}$ |
+| RMSNorm op count at $d_{\text{model}} = 4096$ | ~$2\times$ cheaper than LayerNorm |
+| SwiGLU vs standard FFN parameter ratio | $\approx 0.91$ (matches if $d_{\text{ff}}$ rounded to multiple of 256) |
+| GQA at $H = 4$, $H_{\text{kv}} = 2$ KV cache reduction | $2\times$ |
+| MQA at $H = 4$, $H_{\text{kv}} = 1$ KV cache reduction | $4\times$ |
+| LLaMA-2 70B-shaped GQA cache | $\approx 2.5$ GB (vs $\approx 20$ GB for MHA) |
+
+## Exercises
+
+1. **RoPE wavelength.** What is the wavelength (in token positions) of the highest-frequency RoPE rotation? Of the lowest? Given that LLaMA-2 trained at $T_{\max} = 4096$, how many full rotations does the highest-frequency pair complete over one context? The lowest?
+2. **RoPE backward.** Derive $\partial \text{RoPE}(x, m) / \partial x$ for fixed $m$. Why is the rotation matrix's gradient identical to the rotation itself (transposed)?
+3. **Why RMSNorm without bias.** Test the claim that the bias $\beta$ in LayerNorm is unused at scale: train a Lesson 18-style model with and without the bias on the same corpus. What changes?
+4. **SwiGLU vs GELU at fixed params.** Modify `swiglu.rlab` to set $d_{\text{ff}}$ exactly so the parameter counts match within 1 unit. What does that pick give for $d_{\text{model}} = 8$? For $d_{\text{model}} = 4096$?
+5. **GQA tradeoff curve.** Plot KV cache size as a function of $H_{\text{kv}}$ for a fixed $H = 32$ at $T \in \{1024, 4096, 16384\}$. Where does the "elbow" of diminishing returns sit?
+6. **All four at once.** Build a modified Lesson 14 forward pass that uses RoPE + RMSNorm + SwiGLU + GQA at $H_{\text{kv}} = H / 4$. How does parameter count change vs the original? Output shape?
+
+## What's next
+
+Lesson 22 was the capstone of the original curriculum. With Lesson 23 you have the **deltas needed to read any open LLM source** — LLaMA, Mistral, Qwen, the various forks. The math in this curriculum applied to the new components produces a faithful re-implementation of any of those models, up to the engineering layer.
+
+Natural extensions beyond Lesson 23:
+
+- **Fine-tuning.** Supervised fine-tuning (same loss, instruction-formatted data); direct preference optimisation (DPO, a contrastive loss that closes the alignment gap without RLHF's complexity).
+- **Inference scaling.** Quantisation (int8, int4, GPTQ, AWQ); speculative decoding (draft-and-verify); continuous batching.
+- **Long-context.** Sliding-window attention (Mistral), attention sinks, position interpolation, the RoPE-base-frequency tricks for context extension.
+
+None of these change the math you have already built — they extend it.

@@ -336,6 +336,45 @@ The residual stream is the **lossless backbone** ([Lesson 12](12-layer-norm-and-
 
 A useful framing: a transformer is a **conditional entropy refinement pipeline**. The bigram baseline ([Lesson 05](05-bigram-language-model.md)) gives one number per row: $H(X_{t+1} \mid X_t)$. Each transformer block lowers that conditional entropy by the amount of information it can extract from the larger context. The stack converges (in the limit of unlimited training and capacity) toward the true entropy $H(X_{t+1} \mid X_{1..t})$ of the language.
 
+## Sidebar: Dropout
+
+### Theory
+
+Real transformer blocks insert **dropout** at three points: after the attention output projection, after the FFN output projection, and on the embedded inputs before the first block. Dropout zeros each activation independently with probability $p_{\text{drop}}$ during training and scales the survivors by $1 / (1 - p_{\text{drop}})$ so the expected magnitude is preserved:
+
+$$\tilde a_i = \begin{cases} a_i / (1 - p_{\text{drop}}) & \text{w.p. } 1 - p_{\text{drop}} \\ 0 & \text{w.p. } p_{\text{drop}} \end{cases}$$
+
+At evaluation time dropout is **off** — the full forward pass runs deterministically. This train-vs-eval split is the most common source of bugs in transformer training code: forgetting to disable dropout at eval inflates the validation loss artificially.
+
+### Why it helps
+
+Dropout breaks the model's ability to rely on any specific co-adaptation between activations — every forward pass sees a different random subset of features. It acts as a cheap ensemble (averaging over $2^{n}$ thinned networks) and is one of the few regularisers cheap enough to compose with everything else in the stack.
+
+nanoGPT uses $p_{\text{drop}} = 0$ by default (large-scale pretraining is regularised by data) but exposes it as a hyperparameter. Small models, small datasets, and any fine-tune on limited data should turn it on; typical values are $0.1$ or $0.2$.
+
+These lessons do not implement dropout in the standalone scripts to keep the forward pass deterministic and verifiable against expected outputs.
+
+## Sidebar: Encoder–Decoder and Cross-Attention
+
+### Theory
+
+The original *Attention Is All You Need* architecture is **encoder–decoder**: two stacks of blocks connected by a third attention type. The encoder reads the source sequence (e.g. an English sentence); the decoder generates the target sequence (e.g. its French translation) one token at a time. The decoder block has **three** sublayers instead of two:
+
+1. **Masked self-attention** — same as in this lesson, decoder queries attend to past decoder positions only.
+2. **Cross-attention** — decoder queries attend to **encoder outputs**: $\mathrm{Attn}(Q^{\text{dec}}, K^{\text{enc}}, V^{\text{enc}})$. The Q comes from the decoder, K and V come from the encoder. There is no causal mask on the encoder side — the decoder can attend to the entire source sentence.
+3. **Feed-forward** — same as in this lesson.
+
+The encoder block has only the first and third (no cross-attention; no causal mask on its own self-attention).
+
+### Why GPT dropped the encoder
+
+For **open-ended generation** (continue this text) there is no separate "source" sequence — the model conditions on its own past tokens. A decoder-only stack with causal self-attention is sufficient and halves the parameter count for the same depth. Encoder–decoder remains standard for:
+
+- **Sequence-to-sequence tasks with a clear input/output split**: machine translation, summarisation, speech recognition.
+- **Models like T5** that frame every task as text-to-text with an explicit source.
+
+The lessons in this series build a **decoder-only stack** (GPT-style). To convert into an encoder–decoder model, add a sibling stack with no causal mask and insert a cross-attention sublayer between the masked self-attention and the FFN of each decoder block.
+
 ## Key Takeaways
 
 - The Pre-LN transformer block is `H + MHA(LN(H))` followed by `H' + FFN(LN(H'))` — two residual sublayers around the persistent residual stream.

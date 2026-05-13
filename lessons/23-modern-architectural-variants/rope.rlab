@@ -1,0 +1,128 @@
+# Script:  rope.rlab
+# System:  Rotary positional embedding applied to a 4-position, d_head=4
+#          query / key pair.  Replaces the sinusoidal-PE-add-to-embedding
+#          recipe from Lesson 10 with a per-position rotation applied
+#          directly to the Q and K matrices inside attention.
+# Concept: RoPE replaces additive positional encoding (Lesson 10) with a
+#          rotation matrix R(m) applied to Q and K.  Each consecutive pair
+#          of dimensions (2k, 2k+1) is rotated by angle m * theta_k where
+#          theta_k = base^(-2k/d_head) (default base = 10000).
+#          The key identity:
+#              <R(m) q, R(n) k> = q^T (R(m)^T R(n)) k = q^T R(n - m) k
+#          The dot product between a query at position m and a key at
+#          position n depends only on the RELATIVE position (n - m), not
+#          on the absolute positions.  This is what makes RoPE attractive
+#          for long-context generalisation: extrapolating to unseen lengths
+#          is well-behaved because the rotation periodicity is bounded.
+# Equations:
+#   theta_k    = base^(-2k / d_head)            k = 0, 1, ..., d_head/2 - 1
+#   phi_{m,k}  = m * theta_k                    position m's rotation angle
+#   rot(x, m)_{2k}   = x_{2k} cos(phi) - x_{2k+1} sin(phi)
+#   rot(x, m)_{2k+1} = x_{2k} sin(phi) + x_{2k+1} cos(phi)
+# Units:   angles in radians; activations dimensionless.
+
+# === 1. Setup ===
+seed(23);
+T = 4;
+d_head = 4;
+base = 10000.0;
+
+# Random Q, K — each row is a token's d_head-vector.
+Q = randn(T, d_head);
+K = randn(T, d_head);
+
+# === 2. Compute theta_k for k = 0, 1, ..., d/2 - 1 ===
+n_pairs = d_head / 2;
+theta = zeros(n_pairs);
+for k = 0:(n_pairs - 1)
+  theta(k + 1) = base ^ (-2 * k / d_head);
+end
+print("theta_k (k = 0..", n_pairs - 1, "):", theta);
+# d_head = 4: theta_0 = 1.0, theta_1 = 0.01.
+
+# === 3. Apply RoPE to a single vector at position m ===
+function x_rot = rope_apply(x, m, theta)
+  d = length(x);
+  n_pairs = d / 2;
+  x_rot = zeros(d);
+  for k = 1:n_pairs
+    phi = m * theta(k);
+    cos_p = cos(phi);
+    sin_p = sin(phi);
+    x_2k   = x(2 * k - 1);     % 1-indexed: pair (2k-1, 2k)
+    x_2k1  = x(2 * k);
+    x_rot(2 * k - 1) = x_2k * cos_p - x_2k1 * sin_p;
+    x_rot(2 * k)     = x_2k * sin_p + x_2k1 * cos_p;
+  end
+end
+
+# === 4. Rotate Q and K row by row ===
+Q_rot = zeros(T, d_head);
+K_rot = zeros(T, d_head);
+for m = 0:(T - 1)
+  Q_rot(m + 1) = rope_apply(Q(m + 1, :), m, theta);
+  K_rot(m + 1) = rope_apply(K(m + 1, :), m, theta);
+end
+
+# === 5. Key identity: dot product depends only on relative position ===
+# Compute <Q_rot(m), K_rot(n)> for all (m, n) pairs and inspect the matrix.
+# It should equal a function of (n - m), modulo high-frequency content.
+S_rope = (Q_rot * K_rot');                          % (T x T)
+S_orig = (Q * K');                                   % (T x T) — original, no PE
+print("");
+print("Original Q K' (no positional information):");
+print(S_orig);
+print("Q_rot K_rot' (RoPE-rotated):");
+print(S_rope);
+
+# === 6. Direct verification of the relative-position property ===
+# For any (m, n) and any shift s, S_rope(m + s, n + s) should approximately
+# equal S_rope(m, n).  Verify on a fresh Q, K with longer T.
+T_long = 8;
+Q_long = randn(T_long, d_head);
+K_long = randn(T_long, d_head);
+Q_long_rot = zeros(T_long, d_head);
+K_long_rot = zeros(T_long, d_head);
+for m = 0:(T_long - 1)
+  Q_long_rot(m + 1) = rope_apply(Q_long(m + 1, :), m, theta);
+  K_long_rot(m + 1) = rope_apply(K_long(m + 1, :), m, theta);
+end
+
+# Take a fixed q at position 2 and a fixed k at position 5 (relative 3).
+# Compare to rotating BOTH by the same shift: q at 4 vs k at 7 (still 3).
+# The dot product should match.
+q2 = rope_apply(Q_long(3, :), 2, theta);
+k5 = rope_apply(K_long(3, :), 5, theta);
+q4 = rope_apply(Q_long(3, :), 4, theta);
+k7 = rope_apply(K_long(3, :), 7, theta);
+print("");
+print("Relative-position invariance test:");
+print("  <RoPE(q, 2), RoPE(k, 5)> =", q2 * k5');
+print("  <RoPE(q, 4), RoPE(k, 7)> =", q4 * k7');
+print("  (Both have relative offset 3; should match.)");
+
+# === 7. Heatmap: <RoPE(q, m), RoPE(k, n)> as a function of (m, n) ===
+# Use the SAME q, k vector everywhere and vary the positions m, n.
+# Expect: the value depends only on (n - m), so the heatmap is constant
+# along each diagonal.
+q_fixed = [1.0, 0.5, 0.2, -0.3];
+k_fixed = [0.8, -0.4, 0.6, 0.1];
+M = zeros(T_long, T_long);
+for m = 0:(T_long - 1)
+  qr = rope_apply(q_fixed, m, theta);
+  for n = 0:(T_long - 1)
+    kr = rope_apply(k_fixed, n, theta);
+    M(m + 1, n + 1) = qr * kr';
+  end
+end
+print("");
+print("Heatmap of <RoPE(q, m), RoPE(k, n)> — diagonals are constant:");
+print(M);
+
+figure()
+imagesc(M, "viridis")
+title("<RoPE(q,m), RoPE(k,n)> — constant along (n - m) diagonals")
+xlabel("key position n")
+ylabel("query position m")
+savefig("rope.svg")
+print("Saved rope.svg");

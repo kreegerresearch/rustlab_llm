@@ -1,0 +1,145 @@
+# Script:  gqa.rlab
+# System:  Grouped-query attention (GQA) compared to standard multi-head
+#          attention (MHA, Lesson 09) on a small (T=4, d_model=8) example
+#          with 4 query heads and {4, 2, 1} KV-head configurations.
+# Concept: GQA shares K and V across groups of query heads.  With
+#          n_heads = 4 and n_kv_heads = 2, query heads {1, 2} share one
+#          (K, V) pair and {3, 4} share another.  When n_kv_heads = 1
+#          this becomes multi-query attention (MQA); when n_kv_heads =
+#          n_heads it reduces to MHA.  The mathematical operation per
+#          query head is unchanged — only the K and V matrices used by
+#          each head are different (replicated from a smaller cache).
+#          Direct payoff: KV-cache memory is proportional to n_kv_heads,
+#          not n_heads.  LLaMA-2 70B uses n_heads=64, n_kv_heads=8 — an
+#          8x cache reduction.  Mistral 7B uses 32/8, a 4x reduction.
+# Equations:
+#   For query head h in {1..n_heads}, let g(h) = ceil(h * n_kv_heads / n_heads)
+#   be the group index.  Then
+#       Q_h = X * W_Q^h             (T x d_head)
+#       K_g = X * W_K^{g(h)}         (T x d_head)  -- shared across the group
+#       V_g = X * W_V^{g(h)}         (T x d_head)
+#       Head_h = softmax(Q_h K_g^T / sqrt(d_head)) * V_g
+#   The output projection merges all heads back to d_model.
+# Units:   activations dimensionless; memory in matrix elements (scale by
+#          fp16 = 2 bytes for byte count).
+
+# === 1. Setup ===
+seed(23);
+T = 4;
+d_model = 8;
+n_heads = 4;
+d_head = d_model / n_heads;       % = 2
+
+# Inputs.
+X = randn(T, d_model);
+
+# === 2. Helper: compute one head's attention output, given that head's Q
+# === and the (possibly group-shared) K, V matrices for the right group. ===
+function head_out = attention_head(Q_h, K_g, V_g, d_head)
+  T = size(Q_h)(1);
+  scale = 1.0 / sqrt(d_head);
+  S = (Q_h * K_g') * scale;                 % (T x T)
+  # Causal mask
+  for i = 1:T
+    for j = (i + 1):T
+      S(i, j) = -1e9;
+    end
+  end
+  A = zeros(T, T);
+  for i = 1:T
+    A(i) = softmax(S(i, :));
+  end
+  head_out = A * V_g;                       % (T x d_head)
+end
+
+# === 3. Build a configurable attention pass: given n_kv_heads, compute Q
+# === per query head and K, V per KV group; assign each query head to its
+# === group; produce the concatenated output. ===
+function [Y, n_q_params, n_kv_params, kv_cache_size] = attention_gqa(X, n_heads, n_kv_heads, d_model, d_head)
+  T = size(X)(1);
+  # Q matrices — one per query head.
+  W_Q = randn(d_model, n_heads * d_head) * 0.3;
+  # K, V matrices — one per KV group.
+  W_K = randn(d_model, n_kv_heads * d_head) * 0.3;
+  W_V = randn(d_model, n_kv_heads * d_head) * 0.3;
+
+  Q_all = X * W_Q;                          % (T, n_heads * d_head)
+  K_all = X * W_K;                          % (T, n_kv_heads * d_head)
+  V_all = X * W_V;                          % (T, n_kv_heads * d_head)
+
+  # Per-head computation: assign query head h to KV group ceil(h * n_kv_heads / n_heads).
+  Y = zeros(T, n_heads * d_head);
+  for h = 1:n_heads
+    g = ceil(h * n_kv_heads / n_heads);
+    q_cols = ((h - 1) * d_head + 1):(h * d_head);
+    k_cols = ((g - 1) * d_head + 1):(g * d_head);
+    Q_h = Q_all(:, q_cols);
+    K_g = K_all(:, k_cols);
+    V_g = V_all(:, k_cols);
+    head_out = attention_head(Q_h, K_g, V_g, d_head);
+    # Place head_out into the right slice of Y.
+    for t = 1:T
+      for j = 1:d_head
+        Y(t, q_cols(j)) = head_out(t, j);
+      end
+    end
+  end
+
+  n_q_params  = d_model * n_heads    * d_head;
+  n_kv_params = d_model * n_kv_heads * d_head * 2;   % W_K + W_V
+  kv_cache_size = 2 * T * n_kv_heads * d_head;       % bytes/2 in fp16
+end
+
+# === 4. Three configurations: MHA (full), GQA (intermediate), MQA (extreme) ===
+print("=== Configurations (n_heads = 4) ===");
+[Y_mha, qp_4, kvp_4, cache_4] = attention_gqa(X, n_heads, 4, d_model, d_head);
+[Y_gqa, qp_2, kvp_2, cache_2] = attention_gqa(X, n_heads, 2, d_model, d_head);
+[Y_mqa, qp_1, kvp_1, cache_1] = attention_gqa(X, n_heads, 1, d_model, d_head);
+print("MHA  (n_kv=4): Q params =", qp_4, "  KV params =", kvp_4, "  KV cache elements =", cache_4);
+print("GQA  (n_kv=2): Q params =", qp_2, "  KV params =", kvp_2, "  KV cache elements =", cache_2);
+print("MQA  (n_kv=1): Q params =", qp_1, "  KV params =", kvp_1, "  KV cache elements =", cache_1);
+print("");
+print("KV cache reduction vs MHA:");
+print("  GQA: ", cache_4 / cache_2, "x");
+print("  MQA: ", cache_4 / cache_1, "x");
+print("Output shapes (all should be (T x d_model)):");
+print("  MHA:", size(Y_mha));
+print("  GQA:", size(Y_gqa));
+print("  MQA:", size(Y_mqa));
+
+# === 5. Realistic-scale calculation: LLaMA-2 70B ===
+print("");
+print("=== Real-world numbers (LLaMA-2 70B, T = 8192, fp16) ===");
+d_h_llama = 128;
+n_h_llama = 64;
+n_kv_llama = 8;
+T_llama = 8192;
+L_llama = 80;                  % layers
+fp16_bytes = 2;
+
+# Per-layer KV cache, then total across all layers.
+per_layer_mha = 2 * T_llama * n_h_llama  * d_h_llama * fp16_bytes;
+per_layer_gqa = 2 * T_llama * n_kv_llama * d_h_llama * fp16_bytes;
+total_mha = per_layer_mha * L_llama;
+total_gqa = per_layer_gqa * L_llama;
+
+print("Hypothetical LLaMA-2 70B-shaped MHA  KV cache (all layers):");
+print("  ", total_mha / 1024 / 1024 / 1024, "GB per request");
+print("Actual LLaMA-2 70B GQA (n_kv = 8) KV cache:");
+print("  ", total_gqa / 1024 / 1024 / 1024, "GB per request");
+print("8x reduction is the engineering reason GQA exists.");
+
+# === 6. Plot: KV cache size vs n_kv_heads, fixed n_heads ===
+n_kv_sweep = [1, 2, 4, 8, 16, 32, 64];
+cache_sweep = zeros(7);
+for i = 1:7
+  cache_sweep(i) = 2 * T_llama * n_kv_sweep(i) * d_h_llama * fp16_bytes * L_llama / 1024 / 1024 / 1024;
+end
+
+figure()
+plot(n_kv_sweep, cache_sweep, "color", "blue", "label", "KV cache (GB)")
+title("LLaMA-2-70B-shaped KV cache vs n_kv_heads (T = 8192, fp16)")
+xlabel("n_kv_heads"); ylabel("KV cache size (GB)")
+hline(cache_sweep(4), "red", "GQA at n_kv=8 (LLaMA-2 70B's actual value)")
+savefig("gqa.svg")
+print("Saved gqa.svg");

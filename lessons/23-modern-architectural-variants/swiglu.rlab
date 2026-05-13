@@ -1,0 +1,125 @@
+# Script:  swiglu.rlab
+# System:  SwiGLU feed-forward block (LLaMA, Mistral, PaLM) compared to
+#          the GELU + 2-matrix FFN from Lesson 11, on a 3-token,
+#          d_model=8, d_ff_match-by-parameter-count setup.
+# Concept: SwiGLU replaces the standard FFN
+#                  FFN(x) = W2 * GELU(W1 x + b1) + b2
+#          with a gated-linear-unit form:
+#                  SwiGLU(x) = W3 * (Swish(W1 x) .* (W2 x))
+#          where Swish(z) = z * sigmoid(z).  Three projection matrices
+#          instead of two — but to keep the parameter budget similar,
+#          LLaMA picks d_ff = (8/3) * d_model rather than the standard
+#          4 * d_model.  The gating multiplies an activated path by a
+#          linear gate, which empirically improves perplexity at the same
+#          parameter count by ~1-2%.
+# Equations:
+#   GELU FFN:   y = W2 * GELU(W1 x + b1) + b2
+#   SwiGLU FFN: u = W1 x                 (1 x d_ff_swig — the gate)
+#               v = W2 x                 (1 x d_ff_swig — the activated path)
+#               y = W3 * (silu(u) .* v)
+#   silu(z) = z * sigmoid(z) = z / (1 + exp(-z))
+#
+#   Parameter parity: standard FFN uses 2 * d_model * d_ff with d_ff = 4d
+#                     -> 8 * d_model^2.  SwiGLU uses 3 * d_model * d_ff,
+#                     so for parity pick d_ff = (8/3) * d_model.
+# Units:   activations dimensionless.
+
+# === 1. Setup ===
+seed(23);
+T = 3;
+d_model = 8;
+d_ff_std  = 4 * d_model;                              % 32 — standard FFN width
+d_ff_swig = floor(8 * d_model / 3);                    % 21 — parity-matched
+# Use integer multiple of 8 in practice; here 21 is the (8/3)*8 round.
+
+H = randn(T, d_model);                                % (T, d_model)
+
+# === 2. Standard GELU FFN (Lesson 11) ===
+W1_std = randn(d_model, d_ff_std) * 0.3;
+b1_std = randn(d_ff_std) * 0.1;
+W2_std = randn(d_ff_std, d_model) * 0.3;
+b2_std = randn(d_model) * 0.1;
+
+function H_out = ffn_gelu(H, W1, b1, W2, b2)
+  T = size(H)(1);
+  d_ff = size(W1)(2);
+  pre = H * W1 + repmat(b1, T, 1);
+  post = gelu(pre);
+  H_out = post * W2 + repmat(b2, T, 1);
+end
+
+H_std = ffn_gelu(H, W1_std, b1_std, W2_std, b2_std);
+
+# === 3. SwiGLU FFN (LLaMA, Mistral) ===
+W1_swig = randn(d_model, d_ff_swig) * 0.3;            % gate path
+W2_swig = randn(d_model, d_ff_swig) * 0.3;            % linear path
+W3_swig = randn(d_ff_swig, d_model) * 0.3;            % down projection
+
+function y = silu(z)
+  y = z ./ (1.0 + exp(-z));
+end
+
+function H_out = ffn_swiglu(H, W1, W2, W3)
+  T = size(H)(1);
+  gate = H * W1;                                       % (T, d_ff)
+  linr = H * W2;                                       % (T, d_ff)
+  acted = silu(gate) .* linr;                          % element-wise gate
+  H_out = acted * W3;                                  % (T, d_model)
+end
+
+H_swig = ffn_swiglu(H, W1_swig, W2_swig, W3_swig);
+
+# === 4. Parameter count comparison ===
+n_std  = d_model * d_ff_std + d_ff_std + d_ff_std * d_model + d_model;
+n_swig = d_model * d_ff_swig + d_model * d_ff_swig + d_ff_swig * d_model;
+print("d_model =", d_model);
+print("Standard FFN: d_ff =", d_ff_std,  "  params =", n_std);
+print("SwiGLU   FFN: d_ff =", d_ff_swig, "  params =", n_swig);
+print("Parameter ratio (SwiGLU / standard):", n_swig / n_std);
+
+# === 5. Forward-pass shape check ===
+print("");
+print("Standard FFN output shape:", size(H_std));
+print("SwiGLU   FFN output shape:", size(H_swig));
+print("Both = (T, d_model) — interchangeable as a transformer sublayer.");
+
+# === 6. Why the gate helps: a small toy where linear-only and SwiGLU
+# === differ.  Take a one-token input that has a single discriminative
+# === dimension, and check that SwiGLU can produce a strongly-nonlinear
+# === response (the silu(u) gate amplifies one path while suppressing
+# === another) that a single-matmul GELU cannot. ===
+print("");
+print("Toy gate demo:");
+print("  Two inputs to compare: x_a, x_b — same direction, different magnitude.");
+x_a = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];        % strong signal
+x_b = [0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];        % weak signal
+
+% Hand-pick weights that route x_a through the open gate, x_b through closed.
+W1_g = zeros(d_model, 1); W1_g(1, 1) = 5.0;             % gate dim 1 -> sees x*5
+W2_g = zeros(d_model, 1); W2_g(1, 1) = 1.0;             % linear path also dim 1
+W3_g = zeros(1, d_model); W3_g(1, 1) = 1.0;             % output back to dim 1
+
+H_a = ffn_swiglu(reshape(x_a, 1, d_model), W1_g, W2_g, W3_g);
+H_b = ffn_swiglu(reshape(x_b, 1, d_model), W1_g, W2_g, W3_g);
+print("  SwiGLU(x_a)[1] =", H_a(1, 1), "  (gate open  -> ~x_a(1)^2)");
+print("  SwiGLU(x_b)[1] =", H_b(1, 1), "  (gate closed -> ~0)");
+print("  A pure-matmul layer (no nonlinearity) gives x_a(1) and x_b(1) directly,");
+print("  losing the gate's data-dependent on/off behaviour.");
+
+# === 7. Plot: silu vs gelu vs relu over a range ===
+z = linspace(-5, 5, 200);
+silu_v = z ./ (1.0 + exp(-z));
+gelu_v = gelu(z);
+relu_v = relu(z);
+
+figure()
+plot(z, silu_v, "color", "blue",  "label", "silu (z*sigmoid(z), LLaMA/Mistral)")
+hold("on")
+plot(z, gelu_v, "color", "red",   "label", "gelu (Lesson 11, GPT-2)")
+plot(z, relu_v, "color", "green", "label", "relu (early Transformer)")
+hold("off")
+title("Activation functions: silu vs gelu vs relu")
+xlabel("z"); ylabel("activation")
+legend("silu", "gelu", "relu")
+savefig("swiglu.svg")
+print("Saved swiglu.svg");

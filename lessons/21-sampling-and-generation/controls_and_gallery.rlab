@@ -1,0 +1,199 @@
+# Script:  controls_and_gallery.rlab
+# System:  Re-trained Lesson 18 bigram-style LM on "abcb..." (period 4).
+#          Runs a side-by-side generation gallery under five strategies and
+#          shows the effect of repetition penalty on a single distribution.
+# Concept: Logit-level controls (repetition penalty, banned tokens, stop
+#          conditions) compose with the sampling strategy: penalty modifies
+#          z, sampling draws from softmax(z), and the loop terminates on max
+#          length or EOS.
+# Equations:
+#   repetition penalty p:  z'_i = z_i / p  if i was emitted in the last w
+#                          tokens, else z_i unchanged
+#   sampling step:         x_{t+1} ~ softmax(z' / T)  (then optional top-K / top-P)
+# Units:   logits in nats; probabilities dimensionless.
+
+# === 1. Train the Lesson 18 model (compact form, see generation_loop.rlab) ===
+seed(18);
+vocab = 3;  d_emb = 4;
+E = randn(vocab, d_emb) * 0.3;
+W = randn(d_emb, vocab) * 0.3;
+function tokens = build_seq(n)
+  tokens = zeros(n);
+  pat = [1, 2, 3, 2];
+  for i = 1:n
+    tokens(i) = pat(mod(i - 1, 4) + 1);
+  end
+end
+corpus = build_seq(60);
+n_pairs = 49;
+m_E = zeros(vocab, d_emb);  v_E = zeros(vocab, d_emb);
+m_W = zeros(d_emb, vocab);  v_W = zeros(d_emb, vocab);
+beta1 = 0.9; beta2 = 0.999; eps_a = 1e-8;
+eta_max = 0.15; eta_min = 0.015; n_train = 600; T_w = 60;
+for t = 1:n_train
+  if t <= T_w
+    eta_t = eta_max * (t / T_w);
+  else
+    progress = (t - T_w) / (n_train - T_w);
+    eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * progress));
+  end
+  dE = zeros(vocab, d_emb);
+  dW = zeros(d_emb, vocab);
+  for k = 0:(n_pairs - 1)
+    curr = corpus(1 + k);  nxt = corpus(2 + k);
+    h = E(curr, :);
+    p = softmax(h * W);
+    e_y = zeros(vocab);  e_y(nxt) = 1.0;
+    dlogits = p - e_y;
+    dW = dW + h' * dlogits;
+    dh = dlogits * W';
+    for j = 1:d_emb
+      dE(curr, j) = dE(curr, j) + dh(j);
+    end
+  end
+  dE = dE / n_pairs;  dW = dW / n_pairs;
+  m_E = beta1 * m_E + (1 - beta1) * dE;
+  v_E = beta2 * v_E + (1 - beta2) * (dE .^ 2);
+  E = E - eta_t * ((m_E / (1 - beta1 ^ t)) ./ (sqrt(v_E / (1 - beta2 ^ t)) + eps_a));
+  m_W = beta1 * m_W + (1 - beta1) * dW;
+  v_W = beta2 * v_W + (1 - beta2) * (dW .^ 2);
+  W = W - eta_t * ((m_W / (1 - beta1 ^ t)) ./ (sqrt(v_W / (1 - beta2 ^ t)) + eps_a));
+end
+
+# === 2. Sampling helpers ===
+function tok = sample_categorical(p)
+  # Inverse-CDF sampling: walk the cumulative distribution until we cross r.
+  c = cumsum(p);
+  r = rand(1)(1);
+  N = length(p);
+  i = 1;
+  while i < N && c(i) < r
+    i = i + 1;
+  end
+  tok = i;
+end
+
+function q = topk_mass(p, K_top)
+  K = length(p);
+  [s_asc, idx_asc] = sort(p);
+  desc_idx = idx_asc(K:-1:1);
+  keep = desc_idx(1:K_top);
+  q = zeros(K);
+  mass = 0.0;
+  for j = 1:K_top
+    mass = mass + p(keep(j));
+  end
+  for j = 1:K_top
+    q(keep(j)) = p(keep(j)) / mass;
+  end
+end
+
+function q = topp_mass(p, P)
+  K = length(p);
+  [s_asc, idx_asc] = sort(p);
+  desc_idx = idx_asc(K:-1:1);
+  desc_p   = s_asc(K:-1:1);
+  c = cumsum(desc_p);
+  # Walk forward to the first index where the cumulative mass clears P.
+  # `while ... < P` exits naturally — no `break` keyword needed.
+  j = 1;
+  while j < K && c(j) < P
+    j = j + 1;
+  end
+  n_keep = j;
+  q = zeros(K);
+  mass = c(n_keep);
+  for j = 1:n_keep
+    q(desc_idx(j)) = desc_p(j) / mass;
+  end
+end
+
+# === 3. Repetition penalty ===
+# Look at the last `window` emitted tokens; divide each of their logits by
+# `penalty` (penalty > 1 means *suppress* a recent repeat).  Penalty applies
+# before temperature and before top-K/top-P.
+function z_out = apply_repetition_penalty(z, recent, penalty)
+  z_out = z;
+  for i = 1:length(recent)
+    tok = recent(i);
+    if tok >= 1
+      z_out(tok) = z_out(tok) / penalty;
+    end
+  end
+end
+
+# === 4. The unified generation loop ===
+# strategy is one of: "greedy", "temperature", "topK", "topP".
+function seq = generate(x0, n_new, E, W, strategy, T_temp, K_top, P_top, penalty, window)
+  seq = zeros(n_new + 1);
+  seq(1) = x0;
+  vocab = size(W)(2);
+  for t = 1:n_new
+    logits = E(seq(t), :) * W;
+    # Repetition penalty: scan the last `window` emitted tokens.
+    if window > 0 && penalty > 1.0
+      lo = t - window + 1;
+      if lo < 1
+        lo = 1;
+      end
+      recent = seq(lo:t);
+      logits = apply_repetition_penalty(logits, recent, penalty);
+    end
+    if strategy == "greedy"
+      seq(t + 1) = argmax(logits);
+    elseif strategy == "temperature"
+      seq(t + 1) = sample_categorical(softmax(logits / T_temp));
+    elseif strategy == "topK"
+      p = softmax(logits / T_temp);
+      q = topk_mass(p, K_top);
+      seq(t + 1) = sample_categorical(q);
+    elseif strategy == "topP"
+      p = softmax(logits / T_temp);
+      q = topp_mass(p, P_top);
+      seq(t + 1) = sample_categorical(q);
+    end
+  end
+end
+
+# === 5. Generation gallery — 12 tokens starting from 'a' under each. ===
+names = {"a", "b", "c"};
+function s = seq_to_str(seq, names)
+  s = "";
+  for i = 1:length(seq)
+    s = s + names(seq(i));
+  end
+end
+
+seed(101);
+print("=== Generation gallery (12 tokens, prompt 'a') ===");
+print("greedy        :", seq_to_str(generate(1, 12, E, W, "greedy",     1.0, 0, 0.0, 1.0, 0), names));
+print("temp T=1.0    :", seq_to_str(generate(1, 12, E, W, "temperature", 1.0, 0, 0.0, 1.0, 0), names));
+print("temp T=0.5    :", seq_to_str(generate(1, 12, E, W, "temperature", 0.5, 0, 0.0, 1.0, 0), names));
+print("temp T=2.0    :", seq_to_str(generate(1, 12, E, W, "temperature", 2.0, 0, 0.0, 1.0, 0), names));
+print("top-K=2 T=1.0 :", seq_to_str(generate(1, 12, E, W, "topK",        1.0, 2, 0.0, 1.0, 0), names));
+print("top-P=0.9 T=1 :", seq_to_str(generate(1, 12, E, W, "topP",        1.0, 0, 0.9, 1.0, 0), names));
+
+# === 6. Repetition penalty in action.  Greedy without penalty mode-collapses
+# ===  to a 2-cycle (e.g. "abababa..."); with penalty=2.0 over a window of 4
+# ===  it occasionally breaks the cycle by suppressing recent tokens. ===
+print("");
+print("=== Repetition penalty (greedy with penalty=2.0, window=4) ===");
+print("greedy (no penalty)  :", seq_to_str(generate(1, 16, E, W, "greedy", 1.0, 0, 0.0, 1.0, 0), names));
+print("greedy (penalty=2)   :", seq_to_str(generate(1, 16, E, W, "greedy", 1.0, 0, 0.0, 2.0, 4), names));
+
+# === 7. Plot: distribution at 'b' under three logit transforms. ===
+# The 'b' row of the bigram is the only one with non-trivial structure
+# (P(a|b) = P(c|b) = 0.5), so any logit-level intervention shows up clearly.
+logits_b = E(2, :) * W;
+p_raw  = softmax(logits_b);
+p_pen  = softmax(apply_repetition_penalty(logits_b, [1, 1], 2.0));   % 'a' recently emitted twice
+p_t05  = softmax(logits_b / 0.5);
+
+figure()
+bar([p_raw; p_pen; p_t05]')
+title("P(. | b) under (raw, penalty on 'a', temp 0.5)")
+xlabel("token (1=a, 2=b, 3=c)")
+ylabel("probability")
+legend("raw", "penalty[a]=2", "T=0.5")
+savefig("controls_and_gallery.svg")
+print("Saved controls_and_gallery.svg");

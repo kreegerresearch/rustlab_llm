@@ -1,0 +1,141 @@
+# Script:  sampling_strategies.rlab
+# System:  Single 10-class logit vector; visualise how each decoding strategy
+#          reshapes the next-token distribution before drawing.
+# Concept: Greedy, temperature, top-K, and top-P (nucleus) are all
+#          deterministic *transformations* of the model's distribution; the
+#          random draw afterwards is the same Categorical sample.
+# Equations:
+#   greedy:  q_i = 1 if i = argmax z, else 0
+#   temp T:  q_i = softmax(z / T)_i
+#   top-K:   q_i = softmax(z)_i for i in argtop_K(z), 0 elsewhere; renormalise
+#   top-P:   sort softmax(z) descending, keep prefix with sum <= P (and the
+#            first element that pushes the sum past P); renormalise
+# Units:   logits in nats; probabilities dimensionless.
+
+# === A handcrafted logit vector with one near-mode, three plausible alts,
+# ===  and a long tail of unlikely tokens — chosen to make the four
+# ===  strategies look visibly different on the same bar chart. ===
+logits = [3.0, 2.5, 2.0, 1.5, 1.0, 0.5, 0.0, -0.5, -1.0, -1.5];
+K = length(logits);
+p_base = softmax(logits);
+print("p_base:", p_base);
+print("argmax:", argmax(logits), "  p_max:", p_base(argmax(logits)));
+
+# === Greedy ===
+function q = greedy_dist(z)
+  K = length(z);
+  q = zeros(K);
+  q(argmax(z)) = 1.0;
+end
+
+# === Temperature ===
+function q = temperature_dist(z, T)
+  q = softmax(z / T);
+end
+
+# === Top-K — keep the K largest logits; zero the rest; renormalise. ===
+function q = topk_dist(z, K_top)
+  K = length(z);
+  [s_asc, idx_asc] = sort(z);
+  # Descending order
+  desc_idx = idx_asc(K:-1:1);
+  keep_idx = desc_idx(1:K_top);
+  q = zeros(K);
+  # Use only the kept logits' probability mass.
+  p = softmax(z);
+  mass = 0.0;
+  for j = 1:K_top
+    mass = mass + p(keep_idx(j));
+  end
+  for j = 1:K_top
+    q(keep_idx(j)) = p(keep_idx(j)) / mass;
+  end
+end
+
+# === Top-P (nucleus) — sort softmax(z) descending, take the smallest set
+# ===  whose cumulative probability is >= P. ===
+function q = topp_dist(z, P)
+  K = length(z);
+  p = softmax(z);
+  [s_asc, idx_asc] = sort(p);
+  desc_idx = idx_asc(K:-1:1);
+  desc_p = s_asc(K:-1:1);
+  c = cumsum(desc_p);
+  # First index where c >= P; keep through there.  A `while` loop with a
+  # short-circuit `&&` (rustlab 0.3.0+) walks forward and stops naturally
+  # at the first hit, without a `break` keyword.
+  j = 1;
+  while j < K && c(j) < P
+    j = j + 1;
+  end
+  n_keep = j;
+  q = zeros(K);
+  mass = c(n_keep);
+  for j = 1:n_keep
+    q(desc_idx(j)) = desc_p(j) / mass;
+  end
+end
+
+# === Compute all four ===
+q_greedy = greedy_dist(logits);
+q_t05    = temperature_dist(logits, 0.5);
+q_t10    = temperature_dist(logits, 1.0);
+q_t20    = temperature_dist(logits, 2.0);
+q_k3     = topk_dist(logits, 3);
+q_p09    = topp_dist(logits, 0.9);
+
+print("greedy support size :", sum(q_greedy > 0));
+print("T=0.5 support size  :", sum(q_t05  > 1e-6));
+print("T=2.0 support size  :", sum(q_t20  > 1e-6));
+print("top-K=3 support     :", sum(q_k3   > 0));
+print("top-P=0.9 support   :", sum(q_p09  > 0));
+
+# === Entropy (in nats) of each transformed distribution — quantifies the
+# ===  diversity each strategy admits.  Greedy = 0.  Uniform-ish high. ===
+function H = nat_entropy(p)
+  s = 0.0;
+  for i = 1:length(p)
+    if p(i) > 1e-12
+      s = s - p(i) * log(p(i));
+    end
+  end
+  H = s;
+end
+print("H greedy :", nat_entropy(q_greedy));
+print("H T=0.5  :", nat_entropy(q_t05));
+print("H T=1.0  :", nat_entropy(q_t10));
+print("H T=2.0  :", nat_entropy(q_t20));
+print("H top-K=3:", nat_entropy(q_k3));
+print("H top-P=0.9:", nat_entropy(q_p09));
+
+# === Plot: four strategies side by side ===
+figure()
+subplot(2, 2, 1)
+bar(q_t05)
+title("Temperature T=0.5 (sharpened)")
+xlabel("token")
+ylabel("probability")
+ylim([0, 1])
+
+subplot(2, 2, 2)
+bar(q_t20)
+title("Temperature T=2.0 (flattened)")
+xlabel("token")
+ylabel("probability")
+ylim([0, 1])
+
+subplot(2, 2, 3)
+bar(q_k3)
+title("Top-K=3 (truncate to top 3 logits)")
+xlabel("token")
+ylabel("probability")
+ylim([0, 1])
+
+subplot(2, 2, 4)
+bar(q_p09)
+title("Top-P=0.9 (nucleus)")
+xlabel("token")
+ylabel("probability")
+ylim([0, 1])
+savefig("sampling_strategies.svg")
+print("Saved sampling_strategies.svg");

@@ -20,7 +20,8 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 | 5 | Full GPT Architecture | Complete |
 | 6 | Training | Complete |
 | 7 | Tokenization & Evaluation | Complete |
-| 8 | Generation & Capstone | Not started |
+| 8 | Generation & Capstone | Complete |
+| 9 | Modern Architectural Variants (post-curriculum extension) | Complete |
 
 ---
 
@@ -226,7 +227,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 
 **Handoff notes:**
 - Last completed lesson: 20-perplexity-and-evaluation
-- Next action: Start Phase 8 with `notebooks/21-sampling-strategies.md`.
+- Next action: Phase 8 complete. The curriculum is complete.
 - Known blockers: None.
 - New rustlab gap recorded in AGENTS.md during Phase 7:
   3. **`&&` and `||` do NOT short-circuit.** Both operands are eagerly evaluated, which breaks the common idiom `if i < L && seq(i+1) == val ...` (the second operand reads out-of-bounds when `i == L`). Workaround: nest the bound check explicitly, with the second condition inside the first's `if` block. Use a `matched = 0/1` flag if you need to combine many conditions cleanly.
@@ -238,25 +239,63 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 **Goal:** Implement and compare text generation strategies, then tie the entire series together in a single end-to-end lesson that trains a small GPT and generates text.
 
 **Lessons in this phase:**
-- `21-sampling-strategies`
+- `21-sampling-and-generation` (renamed from `21-sampling-strategies` — scope expanded to cover the autoregressive loop, KV cache, and logit-level controls in addition to the four sampling strategies)
 - `22-putting-it-all-together`
 
 **Deliverables:**
-- [ ] Lesson 21 plots probability distributions under greedy, temperature (T=0.5, 1.0, 2.0), top-K (K=10, 50), and top-P (P=0.9) on the same axes
-- [ ] Lesson 22 is the capstone: a single end-to-end script that tokenizes a small corpus, runs a simplified training loop, checkpoints at intervals, and generates sample text at each checkpoint
-- [ ] Lesson 22 `lesson.md` explicitly references every prior lesson by number where each component appears
+- [x] Lesson 21 plots probability distributions under greedy, temperature (T=0.5, 1.0, 2.0), top-K (K=3), and top-P (P=0.9) on the same axes
+- [x] Lesson 21 implements the autoregressive generation loop and runs it under every strategy from the Lesson 18 trained model
+- [x] Lesson 21 implements naive vs. KV-cached single-head attention forward, verifies bit-equivalent output, and quantifies the FLOP saving (cumulative ~5× at T=8, growing linearly with T)
+- [x] Lesson 21 covers repetition penalty, banned tokens / logit bias, and stop conditions
+- [x] Lesson 22 is the capstone: a single end-to-end script that tokenizes a small corpus, runs a simplified training loop, checkpoints at intervals, and generates sample text at each checkpoint
+- [x] Lesson 22 notebook explicitly references every prior lesson (01–21) by number where each component appears
 
 **Acceptance criteria:**
-- Lesson 21 explains the diversity/quality tradeoff for each strategy.
-- The Lesson 22 capstone script produces visible improvement in generated text quality across checkpoints.
-- After Lesson 22, a student has seen every component of GPT built up from scratch.
+- [x] Lesson 21 explains the diversity/quality tradeoff for each strategy.
+- [x] The Lesson 22 capstone script produces visible improvement in generated text quality across checkpoints. Concrete trace: step 0 outputs random gibberish; step 100 outputs `" at sat sat sat sat sat s"` (model collapsed onto `"sat"`); step 300+ outputs `" at the cat the cat …"` (full bigram learned, greedy mode-collapsed); step 800 with temperature sampling recovers `"sat on the mat"`. Train PPL drops $19.5 \to 1.5$, val PPL drops to $1.4$.
+- [x] After Lesson 22, a student has seen every component of GPT built up from scratch.
 
-**Status:** Not started
+**Status:** Complete.
 
 **Handoff notes:**
-- Last completed lesson: —
-- Next action: Start with `lessons/21-sampling-strategies/lesson.md` after Phases 1–7 are complete.
-- Known blockers: None — all required functions confirmed available.
+- Last completed lesson: 22-putting-it-all-together (notebook + `capstone.rlab`).
+- Next action: The curriculum is complete. Possible future work: implement the full transformer block backward path ([[15-backpropagation]]'s derivations applied to lessons 13/14 forward) and retrain the capstone with the full architecture in the gradient loop.
+- ~~Renderer caveat~~ The rustlab 0.3.1 math-escape regression is **fixed in rustlab 0.3.2** (May 12, 2026); a fresh `make notebooks` produces clean book/ output across the curriculum. The workaround note in AGENTS.md is marked ✅ resolved.
+
+**Gap-closing sidebars added during Phase 8 (alongside lessons 21 and 22):**
+- Lesson 03 — `## Sidebar: Label Smoothing`
+- Lesson 13 — `## Sidebar: Dropout` and `## Sidebar: Encoder–Decoder and Cross-Attention`
+- Lesson 14 — `## Sidebar: Initialization` and `## Sidebar: Weight Tying (in practice)`
+- Lesson 18 — `## Sidebar: Gradient Clipping`
+- Lesson 20 — `## Sidebar: Parallel Evaluation with parmap`
+
+These close the gaps surfaced by the nanoGPT / *Attention Is All You Need* coverage audit (May 2026). They are documentation-only — no script changes — so the existing training scripts continue to run unmodified.
+
+---
+
+## Phase 9 — Modern Architectural Variants (post-curriculum extension)
+
+**Goal:** Cover the four post-2020 architectural deltas that every open LLM (LLaMA, Mistral, Qwen, Falcon) uses against the Vaswani / GPT-2 baseline built in Phases 1–8. Each variant is a surgical swap at one component of the Lesson 14 stack.
+
+**Lessons in this phase:**
+- `23-modern-architectural-variants`
+
+**Deliverables:**
+- [x] Lesson 23 covers **RoPE** as a rotation matrix replacement for sinusoidal PE (Lesson 10), with a relative-position invariance demonstration.
+- [x] Lesson 23 covers **RMSNorm** as a LayerNorm replacement (Lesson 12), with equivalence-on-zero-mean and op-count comparison.
+- [x] Lesson 23 covers **SwiGLU** as a GELU-FFN replacement (Lesson 11) with parameter parity at $d_{\text{ff}} = (8/3) d_{\text{model}}$.
+- [x] Lesson 23 covers **GQA / MQA** as MHA variants (Lesson 09), extending the KV-cache derivation from Lesson 21 with concrete LLaMA-2-70B-scale memory numbers (20 GB → 2.5 GB).
+
+**Acceptance criteria:**
+- [x] Each variant has its own runnable `.rlab` script demonstrating the math.
+- [x] Lesson 23 explicitly identifies which earlier lesson each variant swaps against.
+- [x] After Lesson 23, a student can read any open LLM source (LLaMA, Mistral, Qwen) and recognise every architectural choice as a delta against the baseline curriculum.
+
+**Status:** Complete.
+
+**Handoff notes:**
+- Last completed lesson: 23-modern-architectural-variants (notebook + 4 scripts: `rope`, `rmsnorm`, `swiglu`, `gqa`).
+- Possible future work: **Lesson 24 — Fine-Tuning** (SFT, DPO) for post-pretraining alignment; would require implementing full transformer backprop, which Lesson 22 deliberately defers.
 
 ---
 

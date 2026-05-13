@@ -58,7 +58,7 @@ Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts
 | 13 | The Transformer Block | Assembling: MHA → Add&Norm → MLP → Add&Norm |
 | 14 | Full GPT Architecture | Token embed + pos embed + N blocks + LM head |
 
-### Phase 6 — Training
+### Phase 6 — Training `(Complete)`
 
 | # | Title | Core Concept |
 |---|-------|-------------|
@@ -67,19 +67,25 @@ Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts
 | 17 | Learning Rate Scheduling | Linear warmup + cosine decay; why both matter |
 | 18 | The Complete Training Loop | Forward → loss → backward → clip → step → repeat |
 
-### Phase 7 — Tokenization & Evaluation
+### Phase 7 — Tokenization & Evaluation `(Complete)`
 
 | # | Title | Core Concept |
 |---|-------|-------------|
 | 19 | Byte Pair Encoding (BPE) | Iterative merge algorithm; subword vocabulary |
 | 20 | Perplexity & Evaluation | Perplexity = exp(loss); train/val split; overfitting diagnosis |
 
-### Phase 8 — Generation & Capstone
+### Phase 8 — Generation & Capstone `(Complete)`
 
 | # | Title | Core Concept |
 |---|-------|-------------|
-| 21 | Sampling Strategies | Greedy; temperature; top-K; top-P (nucleus) |
-| 22 | Putting It All Together | End-to-end: tokenize → train small GPT → generate text |
+| 21 | Sampling and Generation | Autoregressive loop; greedy / temperature / top-K / top-P; KV cache; repetition penalty |
+| 22 | Putting It All Together | End-to-end: char tokenize → BPE → train embedding+head → sample at checkpoints |
+
+### Phase 9 — Modern Architectural Variants (post-curriculum extension) `(Complete)`
+
+| # | Title | Core Concept |
+|---|-------|-------------|
+| 23 | Modern Architectural Variants | RoPE (replaces sinusoidal PE); RMSNorm (replaces LayerNorm); SwiGLU (replaces GELU FFN); GQA / MQA (KV-cache-shrinking MHA variant) |
 
 ---
 
@@ -105,7 +111,7 @@ make all                # render committed book/<slug>.md + local book/*.html
 make notebooks          # regenerate book/<slug>.md from notebooks/<slug>.md
 make html               # build book/index.html for local Plotly view (gitignored)
 make notebooks-check    # CI drift guard
-make lesson-06          # run lesson 06's .rlab scripts (works for 01–09)
+make lesson-06          # run lesson 06's .rlab scripts (pattern target: lesson-NN for any 01–23)
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 

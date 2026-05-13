@@ -110,12 +110,12 @@ end
 ```
 
 ```text
-Merge 1 :  pair ( 2 , 5 )  count = 6   new_id = 7   new len = 29
-Merge 2 :  pair ( 1 , 7 )  count = 6   new_id = 8   new len = 23
-Merge 3 :  pair ( 8 , 1 )  count = 6   new_id = 9   new len = 17
+Merge 1 :  pair ( 5 , 1 )  count = 6   new_id = 7   new len = 29
+Merge 2 :  pair ( 1 , 2 )  count = 6   new_id = 8   new len = 23
+Merge 3 :  pair ( 8 , 7 )  count = 6   new_id = 9   new len = 17
 ```
 
-The first merge picks the most frequent pair `(b, r)` (it appears in every `"abra"`); subsequent merges build up `(a, b, r) → (a, br)`, then the full `"abra"`. After three merges the sequence shortens noticeably and the vocabulary grows from 6 to 9.
+The first merge picks the most frequent pair `(r, a)` (it appears in every `"abra"`); subsequent merges build up `(a, b) → (a, b, ra) → (ab, ra)`, fusing the full `"abra"`. After three merges the sequence shortens noticeably and the vocabulary grows from 6 to 9.
 
 ## Token-Length Distribution
 
@@ -198,8 +198,8 @@ Run all with `make lesson-19` (or `rustlab run lessons/19-byte-pair-encoding/<na
 |---|---|
 | Initial seq length | `35` (3× `"abracadabra"` + 2× `' '`) |
 | Initial vocab | `6` (`a, b, c, d, r, space`) |
-| First merge pair | `(a, b)` — appears 9 times |
-| After merge 1 vocab | `7`; sequence length drops by 9 |
+| First merge pair | `(r, a)` — appears 6 times |
+| After merge 1 vocab | `7`; sequence length drops by 6 (35 → 29) |
 | After 5 merges | sequence length roughly halved |
 | Histogram peak | `1` token (most common) |
 

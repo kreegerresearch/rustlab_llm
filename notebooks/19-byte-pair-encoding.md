@@ -116,7 +116,7 @@ for m = 1:3
 end
 ```
 
-The first merge picks the most frequent pair `(b, r)` (it appears in every `"abra"`); subsequent merges build up `(a, b, r) → (a, br)`, then the full `"abra"`. After three merges the sequence shortens noticeably and the vocabulary grows from 6 to 9.
+The first merge picks the most frequent pair `(r, a)` (it appears in every `"abra"`); subsequent merges build up `(a, b) → (a, b, ra) → (ab, ra)`, fusing the full `"abra"`. After three merges the sequence shortens noticeably and the vocabulary grows from 6 to 9.
 
 ## Token-Length Distribution
 
@@ -193,8 +193,8 @@ Run all with `make lesson-19` (or `rustlab run lessons/19-byte-pair-encoding/<na
 |---|---|
 | Initial seq length | `35` (3× `"abracadabra"` + 2× `' '`) |
 | Initial vocab | `6` (`a, b, c, d, r, space`) |
-| First merge pair | `(a, b)` — appears 9 times |
-| After merge 1 vocab | `7`; sequence length drops by 9 |
+| First merge pair | `(r, a)` — appears 6 times |
+| After merge 1 vocab | `7`; sequence length drops by 6 (35 → 29) |
 | After 5 merges | sequence length roughly halved |
 | Histogram peak | `1` token (most common) |
 

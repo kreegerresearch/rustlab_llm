@@ -299,6 +299,56 @@ A trained GPT is, by [Lesson 03](03-cross-entropy-loss.md)'s framing, a parametr
 
 The empirical "neural scaling laws" (Kaplan et al. 2020, Hoffmann et al. 2022) say that under fixed compute, a model's bits-per-byte improves smoothly with parameter count and training tokens. Mechanically: more parameters means more capacity to *store* extracted mutual information; more tokens means more *opportunities* to extract it. The architecture above is the substrate; the rest of this curriculum (Phases 6–8) is how to actually train it well.
 
+## Sidebar: Initialization
+
+### Theory
+
+Random initial weights determine the variance of activations at each layer of the forward pass. Pick them poorly and the network either saturates (every layer outputs the same vector) or blows up (activations grow exponentially with depth). Two standard schemes solve this:
+
+- **Xavier / Glorot:** $W_{ij} \sim \mathcal{N}(0, 2 / (n_{\text{in}} + n_{\text{out}}))$. Designed for tanh / sigmoid networks.
+- **Kaiming / He:** $W_{ij} \sim \mathcal{N}(0, 2 / n_{\text{in}})$. Designed for ReLU and GELU; preserves variance through nonlinearities that zero out roughly half the activations.
+
+[nanoGPT](https://github.com/karpathy/nanoGPT) uses a third scheme, specifically tuned for the transformer residual stream:
+
+$$W_{ij} \sim \mathcal{N}(0, 0.02^2), \qquad \text{except residual projections: } W_{ij} \sim \mathcal{N}\!\left(0, \frac{0.02^2}{2 N}\right).$$
+
+Two things are happening:
+
+1. **Base scale $0.02$.** The fixed standard deviation $0.02$ comes from GPT-2 (Radford et al. 2019); it works empirically for $d_{\text{model}}$ in the typical 512–2048 range and is close to Xavier at those widths.
+2. **Residual projection rescaling by $1/\sqrt{2N}$.** Every transformer block adds two sublayer outputs (attention output + FFN output) to the residual stream. After $N$ blocks the residual stream has accumulated $2N$ projections; without rescaling its variance grows linearly with depth. Dividing the output-projection variance by $2N$ keeps the residual stream's variance bounded.
+
+The biases are initialised to zero. LayerNorm parameters initialise as $\gamma = 1$, $\beta = 0$ (the identity at layer zero).
+
+### Why it matters
+
+A 12-layer transformer with naive $\mathcal{N}(0, 1)$ initialisation produces activations that grow by a factor of $\sim 2^N$ through the residual stream — gradients explode immediately and training fails. The same model with the nanoGPT scheme has bounded activations at step 0 and trains cleanly. Initialisation is the *most* often-skipped detail when porting a transformer implementation between frameworks; many "untrainable" implementations have a single line-of-code bug in this section.
+
+These lessons use a simpler $\mathcal{N}(0, 0.3^2)$ scaling on small models where the depth issue does not arise. Production-scale code should follow the nanoGPT recipe.
+
+## Sidebar: Weight Tying (in practice)
+
+### Theory
+
+The [parameter-count section](#parameter-count) introduces weight tying as a formula-level identity: $\mathbf{W}_U = \mathbf{E}^\top$. In code it is a single assignment that ties the two parameter tensors so the optimiser updates them as one:
+
+```python
+# nanoGPT (PyTorch):
+self.transformer.wte.weight = self.lm_head.weight   # tied — one tensor, two views
+```
+
+The gradient back through the LM head and back through the embedding lookup both flow into the same buffer, so a single AdamW step updates both simultaneously. The semantics are:
+
+- **Forward:** the LM head is $h W_U = h E^\top$ — the dot product of the final hidden state against every row of the embedding table.
+- **Backward:** $\partial \mathcal{L} / \partial E$ gets contributions from both the embedding lookup (one row, the input token) and the LM head (every row, weighted by the output gradient).
+
+### Why GPT-2 does it
+
+- **Parameter savings.** For GPT-2 small the LM head is $50257 \cdot 768 \approx 38.6$ M parameters — nearly a third of the total 124 M. Tying eliminates the duplicate.
+- **Representation alignment.** Both $E$ and $W_U$ map between "token id" and "$d_{\text{model}}$-dim vector". Tying forces them to use the same coordinate system; the model cannot learn two unrelated representations for the same vocabulary.
+- **Slight regularisation.** Half the parameters can't co-adapt independently; the model has less surface area to overfit.
+
+The downside is one extra constraint on what the model can express. Empirically this is a net win at every scale that has been tested for autoregressive LMs. The lessons keep $E$ and $W_U$ separate for pedagogical clarity (the LM head as a distinct layer is easier to read) — production code should tie them.
+
 ## Key Takeaways
 
 - A GPT decoder is `ids → embed + PE → N × Block → LN_f → W_U → logits`. Every component you've already studied; only the wiring is new.

@@ -66,7 +66,7 @@ make all                # render committed book/<slug>.md + interactive book/*.h
 make notebooks          # render book/<slug>.md from notebooks/<slug>.md (markdown)
 make html               # render book/index.html + per-notebook html (gitignored)
 make notebooks-check    # CI drift guard: fails if book/ is out of sync with sources
-make lesson-01          # run only lesson 01's .rlab scripts (works for 01–09)
+make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–23)
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
@@ -332,3 +332,58 @@ A = softmax(S_masked, 2);                   % per-row softmax on a T × T scores
 **Hit while writing:** Lessons 18 and (preventatively) 16, 17.
 **Symptom:** The idiom `logits = h * W; p = softmax(logits(1))` mis-fires when `h` is a vector — `h * W` returns a *vector*, so `logits(1)` extracts the first scalar element. Softmax of a scalar yields a 1×1 matrix that breaks downstream `p(j)` indexing.
 **Workaround in use:** Call `softmax(h * W)` directly. The vector-valued result indexes correctly with `p(j)`. If a 1×N matrix really is needed, write `reshape(h * W, 1, vocab)`.
+
+### ✅ Renderer math-escape regression — **fixed in rustlab 0.3.2**
+**Was hit during Phase 8 with rustlab 0.3.1:** the markdown renderer doubled every backslash spacing command inside LaTeX math (`\;` → `\\;`, `\!` → `\\!`, `\,` → `\\,`, `\|` → `\\|`) and rewrote `^*` → `^{\ast}`. The bug was purely in the render path; notebook source files were untouched.
+**Fix verified:** `make notebooks` under rustlab 0.3.2 produces output bit-identical to the pre-0.3.1 renders for every unchanged source file. Lessons 21 and 22 (authored to dodge the regression) still render unchanged. Lessons 03, 13, 14, 18, 20 (sidebar additions from May 2026) render their new content cleanly with single-backslash spacing.
+**Workaround removed:** lessons no longer need to avoid `\;` / `\!` / `\,` / `\|` / `^*` in math.
+
+### `break` keyword not supported in `for` / `while` loops
+**Hit during Phase 8** (Lesson 21 — top-P sampling, inverse-CDF sampling).
+**Symptom:** `break;` inside `for i = 1:K ... end` raises `error: ... undefined variable 'break'`. Same for `while` loops.
+**Workaround in use:** rewrite the loop as a `while` whose condition encodes "keep going until the hit", and rely on short-circuit `&&` (rustlab 0.3.0+) to guard the bound check. The exit is natural — no flag needed.
+```
+% Walk forward to the first index whose cumulative mass clears P.
+j = 1;
+while j < K && c(j) < P
+  j = j + 1;
+end
+n_keep = j;
+```
+Avoid the older `found = 0/1` flag pattern and avoid `return;` mid-`for`-loop — both work but the `while` form is the canonical idiom for this curriculum.
+**Wanted:** Standard `break` / `continue` keywords in `for` and `while`.
+
+### `A(i, :) = vec` row-write not supported; use `A(i) = vec` instead
+**Hit during Phase 8** (Lesson 21 — the same row-write pattern that lesson 19's BPE merge uses).
+**Symptom:** `A(i, :) = softmax(S(i, :))` errors with `expected scalar, got all-index` even though the RHS is a $1 \times N$ vector that fits the destination row exactly.
+**Workaround in use:** `A(i) = vec` is the row-write form per the M(scalar) breaking-change note above. This is documented but easy to forget when reaching for the symmetric `A(i, :)` form.
+**Wanted:** Accept `A(i, :) = vec` as an alias for the row write; the asymmetric "row read uses `:`, row write doesn't" is a frequent source of confusion.
+
+### `parmap` should accept vector/matrix-returning lambdas
+**Hit while writing:** Lesson 20 `## Sidebar: Parallel Evaluation with parmap` — and the natural next applications across the curriculum.
+**Symptom:** `parmap(@(t) M(t, :) * W, 1:T)` errors with `parmap: lambda must return a scalar (got vector at index 1); vector/matrix return values are not yet supported`. Only scalar-returning lambdas work today.
+**Why it matters for this curriculum:** The most pedagogically valuable parallelism sites in a transformer are *vector-valued by construction* and currently locked out:
+- **Per-row attention softmax** (Lessons 08, 13, 14): each row of the $T \times T$ attention matrix is independent, but produces a $T$-vector. `softmax(M[, dim])` (already requested) would address this for the specific case of softmax, but parmap is the general form.
+- **Per-position FFN** (Lesson 11): the "per-position independence" demonstration is the structural reason the FFN is position-wise — `parmap(@(t) ffn(H(t, :), W1, b1, W2, b2), 1:T)` would express that directly. Currently a `for` loop with row-write.
+- **Multi-head attention** (Lesson 09): each head is *defined* as an independent attention computation. `parmap(@(h) head_forward(H, h, Wq, Wk, Wv), 1:H)` would map the architectural definition onto code; today each head's $T \times d_v$ matrix output blocks parmap.
+- **Batched autoregressive sampling** (Lesson 21): "generate $S$ diverse samples in parallel" is the diversity-evaluation idiom — each sample is an independent $T$-vector.
+**What works today:** Scalar reductions over independent indices — per-token loss / per-token PPL (Lessons 18, 20), pairwise cosine similarity (Lesson 04). Lesson 20 uses parmap in this form and `mean(parmap(...))` is bit-identical to the serial loop.
+**Wanted:** Accept any rustlab value as lambda return — scalar, vector, or matrix. Two natural output shapes for a `parmap(f, 1:N)` call where `f(i)` returns a row of length $d$: (a) an $N \times d$ matrix (stacked rows) or (b) a cell array of $N$ vectors. The matrix form is the natural fit for the four use cases above (sequence × features, head × sample, etc.) and matches how `softmax(M, 2)` already returns row-stacked output.
+**Example (target):**
+```
+% Per-row softmax of a (T, T) attention-score matrix:
+A = parmap(@(t) softmax(S(t, :)), 1:T);     % returns T × T matrix
+
+% Per-position FFN:
+H_out = parmap(@(t) ffn(H(t, :), W1, b1, W2, b2), 1:T);   % returns T × d_model
+
+% Per-head attention:
+heads = parmap(@(h) head_forward(H, h, Wq, Wk, Wv), 1:n_heads);
+% returns n_heads × T × d_v (3D), or a length-n_heads cell of T × d_v matrices
+```
+
+### `rand()` requires at least 1 argument; no zero-arg form for a single scalar
+**Hit during Phase 8** (Lesson 21 — `sample_categorical` helper).
+**Symptom:** `r = rand();` errors with `wrong number of arguments for 'rand': expected 1..2, got 0`.
+**Workaround in use:** `r = rand(1)(1);` — request a $1 \times 1$ matrix and chain-index the scalar.
+**Wanted:** `rand()` returning a scalar in `[0, 1)`, matching MATLAB / Octave convention.

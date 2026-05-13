@@ -32,8 +32,8 @@ print("output      (T, d):   ", size(out));
 
 # === Per-position independence check ===
 # Permute the rows of H using a permutation matrix P (perm = [3, 1, 2, 5, 4]),
-# run FFN, and verify FFN(P*H) == P*FFN(H).
-# Vector indexing M([3,1,2,5,4]) is not yet in rustlab — TODO: replace with M(idx) when available.
+# run FFN, and verify FFN(P*H) == P*FFN(H). The matrix form makes the
+# permutation explicit and lets the equality be read as linear algebra.
 P_perm = [0, 0, 1, 0, 0;
           1, 0, 0, 0, 0;
           0, 1, 0, 0, 0;
