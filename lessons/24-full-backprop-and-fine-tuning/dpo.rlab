@@ -1,0 +1,496 @@
+# Script:  dpo.rlab
+# System:  Direct Preference Optimization (DPO, Rafailov et al. 2023) for
+#          the single-block transformer.  Phase 1 pre-trains on the abb
+#          corpus.  Phase 2 fine-tunes on preference pairs (prompt, chosen
+#          response, rejected response) — the chosen response is the one
+#          the user prefers, the rejected one is not.  The DPO loss
+#          contrasts the policy's log-prob of (chosen, rejected) against
+#          a frozen reference copy of the model.
+# Concept: DPO replaces SFT's "maximise log-prob of the response" with
+#          "increase the policy's preference margin over chosen vs
+#          rejected, RELATIVE to a frozen reference model".  The
+#          reference-model term is what stops the policy from drifting
+#          off-distribution.  No reward model, no RL, no PPO.
+# Equations:
+#   r_theta(x, y) = beta * (log pi_theta(y | x) - log pi_ref(y | x))
+#   L_DPO(theta)  = - log sigmoid(r_theta(x, y_w) - r_theta(x, y_l))
+#   where y_w is the preferred (chosen) response, y_l the rejected one,
+#   and pi_theta is the trainable policy, pi_ref a frozen copy of the
+#   initial (pre-trained) policy.  beta is a temperature controlling how
+#   far the policy can drift from the reference.
+# Units:   log-probs in nats; loss in nats.
+
+# === 1. Hyperparameters and pre-training corpus (same as sft.rlab) ===
+seed(242);
+vocab = 3;             # a=1, b=2, sep=3
+d_model = 4;
+d_ff = 8;
+T_max = 16;
+pat = [1, 2, 2];
+T_pre = 12;
+ids_pre = zeros(T_pre);
+for i = 1:T_pre
+  ids_pre(i) = pat(mod(i - 1, 3) + 1);
+end
+
+# === 2. Trainable + reference parameters ===
+E = randn(vocab, d_model) * 0.3;
+PE = zeros(T_max, d_model);
+for t = 1:T_max
+  for k = 0:(d_model / 2 - 1)
+    omega = 10000.0 ^ (-2 * k / d_model);
+    PE(t, 2 * k + 1) = sin((t - 1) * omega);
+    PE(t, 2 * k + 2) = cos((t - 1) * omega);
+  end
+end
+gamma1 = ones(d_model);   beta1 = zeros(d_model);
+gamma2 = ones(d_model);   beta2 = zeros(d_model);
+Wq = randn(d_model, d_model) * 0.3;
+Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;
+Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W_U = randn(d_model, vocab) * 0.3;
+
+# === 3. Forward + backward library (same as sft.rlab) ===
+function [Y, x_norm_M, sigma_v] = layernorm_fwd(X, gamma, beta)
+  T = size(X)(1);  d = size(X)(2);  eps = 1e-5;
+  Y = zeros(T, d);  x_norm_M = zeros(T, d);  sigma_v = zeros(T);
+  for t = 1:T
+    x = X(t, :);  mu = mean(x);  var = mean((x - mu) .^ 2);
+    sigma = sqrt(var + eps);  xn = (x - mu) / sigma;
+    sigma_v(t) = sigma;  x_norm_M(t, :) = xn;
+    Y(t, :) = xn .* gamma + beta;
+  end
+end
+
+function [dX, dgamma, dbeta] = layernorm_bwd(dY, x_norm_M, sigma_v, gamma)
+  T = size(dY)(1);  d = size(dY)(2);
+  dX = zeros(T, d);  dgamma = zeros(d);  dbeta = zeros(d);
+  for t = 1:T
+    dgamma = dgamma + dY(t, :) .* x_norm_M(t, :);
+    dbeta  = dbeta  + dY(t, :);
+  end
+  for t = 1:T
+    dx_norm = dY(t, :) .* gamma;  xn = x_norm_M(t, :);
+    dX(t, :) = (1.0 / sigma_v(t)) * (dx_norm - mean(dx_norm) - xn * mean(dx_norm .* xn));
+  end
+end
+
+function y = gelu_grad(z)
+  c = sqrt(2.0 / pi);  u = c * (z + 0.044715 * z .^ 3);  th = tanh(u);
+  du_dz = c * (1.0 + 0.044715 * 3.0 * z .^ 2);  sech2 = 1.0 - th .^ 2;
+  y = 0.5 * (1.0 + th) + 0.5 * z .* sech2 .* du_dz;
+end
+
+function [logits, cache] = forward_only(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                          Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U)
+  T = length(ids);  d_model = size(E)(2);  vocab = size(E)(1);
+  H_in = zeros(T, d_model);
+  for t = 1:T
+    H_in(t, :) = E(ids(t), :) + PE(t, :);
+  end
+  [H_ln1, x_norm1, sigma1] = layernorm_fwd(H_in, gamma1, beta1);
+  Q = H_ln1 * Wq;  K = H_ln1 * Wk;  V = H_ln1 * Wv;
+  scale = 1.0 / sqrt(d_model);
+  S = (Q * K') * scale;
+  for i = 1:T
+    for j = (i + 1):T
+      S(i, j) = -1e9;
+    end
+  end
+  A = softmax(S);
+  attn_out = A * V;  proj = attn_out * Wo;  H_mid = H_in + proj;
+  [H_ln2, x_norm2, sigma2] = layernorm_fwd(H_mid, gamma2, beta2);
+  pre_gelu = H_ln2 * W1 + repmat(b1f, T, 1);
+  hidden = gelu(pre_gelu);
+  ffn_out = hidden * W2 + repmat(b2f, T, 1);
+  H_out = H_mid + ffn_out;
+  logits = H_out * W_U;
+  cache = struct("T", T, "H_in", H_in, "H_ln1", H_ln1, "x_norm1", x_norm1, "sigma1", sigma1, ...
+                 "Q", Q, "K", K, "V", V, "S", S, "A", A, "attn_out", attn_out, "proj", proj, ...
+                 "H_mid", H_mid, "H_ln2", H_ln2, "x_norm2", x_norm2, "sigma2", sigma2, ...
+                 "pre_gelu", pre_gelu, "hidden", hidden, "ffn_out", ffn_out, "H_out", H_out, ...
+                 "logits", logits, "scale", scale);
+end
+
+# Log-prob of a response (response_pos_start .. response_pos_end positions
+# of `ids` predicted from their prefixes), under the model's logits.
+function lp = response_logprob(ids, response_start, response_end, logits)
+  lp = 0.0;
+  for t = (response_start - 1):(response_end - 1)
+    p = softmax(logits(t, :));
+    lp = lp + log(p(ids(t + 1)));
+  end
+end
+
+# Backward through a single sequence, with a custom `dlogits` upstream.
+# Returns gradients for every parameter.
+function [dE, dgamma1, dbeta1, dgamma2, dbeta2, ...
+          dWq, dWk, dWv, dWo, dW1, db1f, dW2, db2f, dW_U] = ...
+    backward_from_dlogits(ids, dlogits, cache, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U)
+  T = cache.T;
+  H_ln1 = cache.H_ln1;  x_norm1 = cache.x_norm1;  sigma1 = cache.sigma1;
+  Q = cache.Q;  K = cache.K;  V = cache.V;  A = cache.A;
+  attn_out = cache.attn_out;  H_mid = cache.H_mid;
+  H_ln2 = cache.H_ln2;  x_norm2 = cache.x_norm2;  sigma2 = cache.sigma2;
+  pre_gelu = cache.pre_gelu;  hidden = cache.hidden;  H_out = cache.H_out;
+  scale = cache.scale;
+  d_model = size(E)(2);  vocab = size(E)(1);
+
+  dW_U = H_out' * dlogits;
+  dH_out = dlogits * W_U';
+  d_ffn_out = dH_out;  dH_mid = dH_out;
+  dhidden = d_ffn_out * W2';
+  dW2 = hidden' * d_ffn_out;
+  db2f = zeros(d_model);
+  for t = 1:T
+    db2f = db2f + d_ffn_out(t, :);
+  end
+  dpre_gelu = dhidden .* gelu_grad(pre_gelu);
+  dH_ln2 = dpre_gelu * W1';
+  dW1 = H_ln2' * dpre_gelu;
+  d_ff = size(W1)(2);
+  db1f = zeros(d_ff);
+  for t = 1:T
+    db1f = db1f + dpre_gelu(t, :);
+  end
+  [dH_mid_from_ln, dgamma2, dbeta2] = layernorm_bwd(dH_ln2, x_norm2, sigma2, gamma2);
+  dH_mid = dH_mid + dH_mid_from_ln;
+  dH_in = dH_mid;  dproj = dH_mid;
+  dattn_out = dproj * Wo';  dWo = attn_out' * dproj;
+  dA = dattn_out * V';  dV = A' * dattn_out;
+  dS = zeros(T, T);
+  for t = 1:T
+    a_row = A(t, :);  da_row = dA(t, :);
+    dS(t, :) = a_row .* (da_row - sum(a_row .* da_row));
+  end
+  dQ = (dS * K) * scale;  dK = (dS' * Q) * scale;
+  dH_ln1 = dQ * Wq' + dK * Wk' + dV * Wv';
+  dWq = H_ln1' * dQ;  dWk = H_ln1' * dK;  dWv = H_ln1' * dV;
+  [dH_in_from_ln, dgamma1, dbeta1] = layernorm_bwd(dH_ln1, x_norm1, sigma1, gamma1);
+  dH_in = dH_in + dH_in_from_ln;
+  dE = zeros(vocab, d_model);
+  for t = 1:T
+    tok = ids(t);
+    dE(tok, :) = dE(tok, :) + dH_in(t, :);
+  end
+end
+
+# Standard cross-entropy dlogits for a single sequence with loss-mask
+# array (1 at counted positions, 0 elsewhere).  Used for pretraining.
+function dl = ce_dlogits(ids, loss_mask, logits, vocab, total)
+  T = size(logits)(1);
+  dl = zeros(T, vocab);
+  if total > 0
+    for t = 1:(T - 1)
+      if loss_mask(t) > 0
+        p = softmax(logits(t, :));
+        e_y = zeros(vocab); e_y(ids(t + 1)) = 1.0;
+        dl(t, :) = (p - e_y) / total;
+      end
+    end
+  end
+end
+
+# === 4. Phase 1: pretrain (same recipe as full_backprop.rlab, 400 steps) ===
+mask_pre = ones(T_pre - 1);
+m_E = zeros(vocab, d_model);     v_E = zeros(vocab, d_model);
+m_g1 = zeros(d_model);           v_g1 = zeros(d_model);
+m_b1 = zeros(d_model);           v_b1 = zeros(d_model);
+m_g2 = zeros(d_model);           v_g2 = zeros(d_model);
+m_b2 = zeros(d_model);           v_b2 = zeros(d_model);
+m_Wq = zeros(d_model, d_model);  v_Wq = zeros(d_model, d_model);
+m_Wk = zeros(d_model, d_model);  v_Wk = zeros(d_model, d_model);
+m_Wv = zeros(d_model, d_model);  v_Wv = zeros(d_model, d_model);
+m_Wo = zeros(d_model, d_model);  v_Wo = zeros(d_model, d_model);
+m_W1 = zeros(d_model, d_ff);     v_W1 = zeros(d_model, d_ff);
+m_b1f = zeros(d_ff);             v_b1f = zeros(d_ff);
+m_W2 = zeros(d_ff, d_model);     v_W2 = zeros(d_ff, d_model);
+m_b2f = zeros(d_model);          v_b2f = zeros(d_model);
+m_WU = zeros(d_model, vocab);    v_WU = zeros(d_model, vocab);
+
+bet1 = 0.9; bet2 = 0.999; eps_a = 1e-8;
+n_pre = 400;  eta_max = 0.05; eta_min = 0.005;  T_w = 40;
+print("=== Pre-training (400 steps) ===");
+for step = 1:n_pre
+  if step <= T_w
+    eta_t = eta_max * (step / T_w);
+  else
+    prog = (step - T_w) / (n_pre - T_w);
+    eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * prog));
+  end
+  [lo, ca] = forward_only(ids_pre, E, PE, gamma1, beta1, gamma2, beta2, ...
+                           Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  dl = ce_dlogits(ids_pre, mask_pre, lo, vocab, T_pre - 1);
+  [dE, dg1, db1, dg2, db2, dWq, dWk, dWv, dWo, dW1, db1f_g, dW2, db2f_g, dW_U] = ...
+      backward_from_dlogits(ids_pre, dl, ca, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U);
+  m_E = bet1 * m_E + (1 - bet1) * dE;
+  v_E = bet2 * v_E + (1 - bet2) * (dE .^ 2);
+  E = E - eta_t * ((m_E / (1 - bet1 ^ step)) ./ (sqrt(v_E / (1 - bet2 ^ step)) + eps_a));
+  m_g1 = bet1 * m_g1 + (1 - bet1) * dg1;  v_g1 = bet2 * v_g1 + (1 - bet2) * (dg1 .^ 2);
+  gamma1 = gamma1 - eta_t * ((m_g1 / (1 - bet1 ^ step)) ./ (sqrt(v_g1 / (1 - bet2 ^ step)) + eps_a));
+  m_b1 = bet1 * m_b1 + (1 - bet1) * db1;  v_b1 = bet2 * v_b1 + (1 - bet2) * (db1 .^ 2);
+  beta1 = beta1 - eta_t * ((m_b1 / (1 - bet1 ^ step)) ./ (sqrt(v_b1 / (1 - bet2 ^ step)) + eps_a));
+  m_g2 = bet1 * m_g2 + (1 - bet1) * dg2;  v_g2 = bet2 * v_g2 + (1 - bet2) * (dg2 .^ 2);
+  gamma2 = gamma2 - eta_t * ((m_g2 / (1 - bet1 ^ step)) ./ (sqrt(v_g2 / (1 - bet2 ^ step)) + eps_a));
+  m_b2 = bet1 * m_b2 + (1 - bet1) * db2;  v_b2 = bet2 * v_b2 + (1 - bet2) * (db2 .^ 2);
+  beta2 = beta2 - eta_t * ((m_b2 / (1 - bet1 ^ step)) ./ (sqrt(v_b2 / (1 - bet2 ^ step)) + eps_a));
+  m_Wq = bet1 * m_Wq + (1 - bet1) * dWq;  v_Wq = bet2 * v_Wq + (1 - bet2) * (dWq .^ 2);
+  Wq = Wq - eta_t * ((m_Wq / (1 - bet1 ^ step)) ./ (sqrt(v_Wq / (1 - bet2 ^ step)) + eps_a));
+  m_Wk = bet1 * m_Wk + (1 - bet1) * dWk;  v_Wk = bet2 * v_Wk + (1 - bet2) * (dWk .^ 2);
+  Wk = Wk - eta_t * ((m_Wk / (1 - bet1 ^ step)) ./ (sqrt(v_Wk / (1 - bet2 ^ step)) + eps_a));
+  m_Wv = bet1 * m_Wv + (1 - bet1) * dWv;  v_Wv = bet2 * v_Wv + (1 - bet2) * (dWv .^ 2);
+  Wv = Wv - eta_t * ((m_Wv / (1 - bet1 ^ step)) ./ (sqrt(v_Wv / (1 - bet2 ^ step)) + eps_a));
+  m_Wo = bet1 * m_Wo + (1 - bet1) * dWo;  v_Wo = bet2 * v_Wo + (1 - bet2) * (dWo .^ 2);
+  Wo = Wo - eta_t * ((m_Wo / (1 - bet1 ^ step)) ./ (sqrt(v_Wo / (1 - bet2 ^ step)) + eps_a));
+  m_W1 = bet1 * m_W1 + (1 - bet1) * dW1;  v_W1 = bet2 * v_W1 + (1 - bet2) * (dW1 .^ 2);
+  W1 = W1 - eta_t * ((m_W1 / (1 - bet1 ^ step)) ./ (sqrt(v_W1 / (1 - bet2 ^ step)) + eps_a));
+  m_b1f = bet1 * m_b1f + (1 - bet1) * db1f_g;  v_b1f = bet2 * v_b1f + (1 - bet2) * (db1f_g .^ 2);
+  b1f = b1f - eta_t * ((m_b1f / (1 - bet1 ^ step)) ./ (sqrt(v_b1f / (1 - bet2 ^ step)) + eps_a));
+  m_W2 = bet1 * m_W2 + (1 - bet1) * dW2;  v_W2 = bet2 * v_W2 + (1 - bet2) * (dW2 .^ 2);
+  W2 = W2 - eta_t * ((m_W2 / (1 - bet1 ^ step)) ./ (sqrt(v_W2 / (1 - bet2 ^ step)) + eps_a));
+  m_b2f = bet1 * m_b2f + (1 - bet1) * db2f_g;  v_b2f = bet2 * v_b2f + (1 - bet2) * (db2f_g .^ 2);
+  b2f = b2f - eta_t * ((m_b2f / (1 - bet1 ^ step)) ./ (sqrt(v_b2f / (1 - bet2 ^ step)) + eps_a));
+  m_WU = bet1 * m_WU + (1 - bet1) * dW_U;  v_WU = bet2 * v_WU + (1 - bet2) * (dW_U .^ 2);
+  W_U = W_U - eta_t * ((m_WU / (1 - bet1 ^ step)) ./ (sqrt(v_WU / (1 - bet2 ^ step)) + eps_a));
+end
+
+# === 5. Freeze the pretrained policy as the reference for DPO. ===
+E_ref = E;
+gamma1_ref = gamma1;  beta1_ref = beta1;
+gamma2_ref = gamma2;  beta2_ref = beta2;
+Wq_ref = Wq;  Wk_ref = Wk;  Wv_ref = Wv;  Wo_ref = Wo;
+W1_ref = W1;  b1f_ref = b1f;  W2_ref = W2;  b2f_ref = b2f;
+W_U_ref = W_U;
+print("Pretrained policy frozen as reference (pi_ref).");
+
+# === 6. Phase 2: DPO on preference pairs ===
+# Preference dataset: same prompts as sft.rlab, but each prompt has TWO
+# responses — the chosen response is "a a", the rejected is "b b".  The
+# DPO loss pushes the policy to prefer "a a" over "b b".
+# Sequences are stored as full token lists; chosen / rejected differ in
+# the last two positions only.
+chosen   = [1, 2, 3, 1, 1;
+            2, 2, 3, 1, 1;
+            2, 1, 3, 1, 1];
+rejected = [1, 2, 3, 2, 2;
+            2, 2, 3, 2, 2;
+            2, 1, 3, 2, 2];
+n_prefs = size(chosen)(1);
+# Both responses occupy positions 4..5 (predicted from positions 3..4).
+resp_start = 4;
+resp_end   = 5;
+
+beta_dpo = 0.5;             # KL temperature: smaller = looser to reference
+
+# Helper that returns the policy and reference log-probs of one response.
+function [lp_pol, lp_ref, ca_pol] = response_logprobs(ids, resp_start, resp_end, ...
+    E, PE, gamma1, beta1, gamma2, beta2, Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U, ...
+    E_ref, gamma1_ref, beta1_ref, gamma2_ref, beta2_ref, ...
+    Wq_ref, Wk_ref, Wv_ref, Wo_ref, W1_ref, b1f_ref, W2_ref, b2f_ref, W_U_ref)
+  [logits_pol, ca_pol] = forward_only(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                        Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  [logits_ref, ca_ref] = forward_only(ids, E_ref, PE, gamma1_ref, beta1_ref, gamma2_ref, beta2_ref, ...
+                                        Wq_ref, Wk_ref, Wv_ref, Wo_ref, W1_ref, b1f_ref, W2_ref, b2f_ref, W_U_ref);
+  lp_pol = response_logprob(ids, resp_start, resp_end, logits_pol);
+  lp_ref = response_logprob(ids, resp_start, resp_end, logits_ref);
+end
+
+# Build the dlogits upstream gradient for the DPO loss with respect to the
+# policy's logits, for one (chosen, rejected) pair.  The math:
+#   L = -log sigma(beta * (lp_w_pol - lp_w_ref - lp_l_pol + lp_l_ref))
+#   d/dlp_w_pol = -beta * (1 - sigma) = -beta * sigma_neg
+#   d/dlp_l_pol = +beta * (1 - sigma) = +beta * sigma_neg
+#   d/dlogits_w(t, :) = d/dlp_w_pol * d log p_w(t+1) / d logits(t, :)
+#                     = -beta * sigma_neg * (e_{y_w(t+1)} - softmax(logits(t, :)))
+# Each response position contributes one such term; positions outside the
+# response don't appear in lp, so their dlogits are zero.
+function dl = dpo_dlogits(ids, resp_start, resp_end, logits, vocab, sign, weight)
+  T = size(logits)(1);
+  dl = zeros(T, vocab);
+  for t = (resp_start - 1):(resp_end - 1)
+    p = softmax(logits(t, :));
+    e_y = zeros(vocab); e_y(ids(t + 1)) = 1.0;
+    dl(t, :) = sign * weight * (p - e_y);
+  end
+end
+
+# Reset AdamW state for the DPO phase.
+m_E = zeros(vocab, d_model);     v_E = zeros(vocab, d_model);
+m_g1 = zeros(d_model);           v_g1 = zeros(d_model);
+m_b1 = zeros(d_model);           v_b1 = zeros(d_model);
+m_g2 = zeros(d_model);           v_g2 = zeros(d_model);
+m_b2 = zeros(d_model);           v_b2 = zeros(d_model);
+m_Wq = zeros(d_model, d_model);  v_Wq = zeros(d_model, d_model);
+m_Wk = zeros(d_model, d_model);  v_Wk = zeros(d_model, d_model);
+m_Wv = zeros(d_model, d_model);  v_Wv = zeros(d_model, d_model);
+m_Wo = zeros(d_model, d_model);  v_Wo = zeros(d_model, d_model);
+m_W1 = zeros(d_model, d_ff);     v_W1 = zeros(d_model, d_ff);
+m_b1f = zeros(d_ff);             v_b1f = zeros(d_ff);
+m_W2 = zeros(d_ff, d_model);     v_W2 = zeros(d_ff, d_model);
+m_b2f = zeros(d_model);          v_b2f = zeros(d_model);
+m_WU = zeros(d_model, vocab);    v_WU = zeros(d_model, vocab);
+
+n_dpo = 200;
+eta_dpo = 0.005;
+dpo_loss_curve = zeros(n_dpo + 1);
+abb_loss_curve = zeros(n_dpo + 1);
+
+# Initial logging.
+L0_dpo = 0.0;
+for s = 1:n_prefs
+  [lp_w_pol, lp_w_ref, ca_w] = response_logprobs(chosen(s, :), resp_start, resp_end, ...
+      E, PE, gamma1, beta1, gamma2, beta2, Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U, ...
+      E_ref, gamma1_ref, beta1_ref, gamma2_ref, beta2_ref, ...
+      Wq_ref, Wk_ref, Wv_ref, Wo_ref, W1_ref, b1f_ref, W2_ref, b2f_ref, W_U_ref);
+  [lp_l_pol, lp_l_ref, ca_l] = response_logprobs(rejected(s, :), resp_start, resp_end, ...
+      E, PE, gamma1, beta1, gamma2, beta2, Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U, ...
+      E_ref, gamma1_ref, beta1_ref, gamma2_ref, beta2_ref, ...
+      Wq_ref, Wk_ref, Wv_ref, Wo_ref, W1_ref, b1f_ref, W2_ref, b2f_ref, W_U_ref);
+  margin = beta_dpo * (lp_w_pol - lp_w_ref - lp_l_pol + lp_l_ref);
+  L0_dpo = L0_dpo - log(1.0 / (1.0 + exp(-margin)));
+end
+L0_dpo = L0_dpo / n_prefs;
+dpo_loss_curve(1) = L0_dpo;
+
+# Abb-corpus loss probe (catastrophic-forgetting check).
+[lo_pre, ca_pre] = forward_only(ids_pre, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                  Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+L_abb_pre = 0.0;
+for t = 1:(T_pre - 1)
+  p = softmax(lo_pre(t, :));
+  L_abb_pre = L_abb_pre - log(p(ids_pre(t + 1)));
+end
+L_abb_pre = L_abb_pre / (T_pre - 1);
+abb_loss_curve(1) = L_abb_pre;
+print("");
+print("=== DPO (200 steps, beta =", beta_dpo, ") ===");
+print("Initial DPO L:", L0_dpo, "   abb-corpus L:", L_abb_pre);
+
+# === 7. DPO loop ===
+for step = 1:n_dpo
+  # Round-robin pick a preference pair.
+  s = mod(step - 1, n_prefs) + 1;
+  ids_w = chosen(s, :);
+  ids_l = rejected(s, :);
+
+  [lo_w, ca_w] = forward_only(ids_w, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  [lo_l, ca_l] = forward_only(ids_l, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  [lo_w_ref, ca_w_ref] = forward_only(ids_w, E_ref, PE, gamma1_ref, beta1_ref, gamma2_ref, beta2_ref, ...
+                                        Wq_ref, Wk_ref, Wv_ref, Wo_ref, W1_ref, b1f_ref, W2_ref, b2f_ref, W_U_ref);
+  [lo_l_ref, ca_l_ref] = forward_only(ids_l, E_ref, PE, gamma1_ref, beta1_ref, gamma2_ref, beta2_ref, ...
+                                        Wq_ref, Wk_ref, Wv_ref, Wo_ref, W1_ref, b1f_ref, W2_ref, b2f_ref, W_U_ref);
+
+  lp_w_pol = response_logprob(ids_w, resp_start, resp_end, lo_w);
+  lp_l_pol = response_logprob(ids_l, resp_start, resp_end, lo_l);
+  lp_w_ref = response_logprob(ids_w, resp_start, resp_end, lo_w_ref);
+  lp_l_ref = response_logprob(ids_l, resp_start, resp_end, lo_l_ref);
+
+  margin = beta_dpo * (lp_w_pol - lp_w_ref - lp_l_pol + lp_l_ref);
+  sig = 1.0 / (1.0 + exp(-margin));
+  L = -log(sig + 1e-12);
+  dpo_loss_curve(step + 1) = L;
+  # Weight on each response's per-token logit gradient.  Derivation in the
+  # equations block above: chosen contributes -beta * (1 - sig); rejected
+  # contributes +beta * (1 - sig).
+  w_grad = beta_dpo * (1.0 - sig);
+
+  # Backward through the chosen sequence.  Gradient direction matches
+  # ordinary cross-entropy (sign = +1) — the chosen response should
+  # become MORE likely under the policy.
+  dl_w = dpo_dlogits(ids_w, resp_start, resp_end, lo_w, vocab, +1.0, w_grad);
+  [dEw, dg1w, db1w, dg2w, db2w, dWqw, dWkw, dWvw, dWow, dW1w, db1fw, dW2w, db2fw, dWUw] = ...
+      backward_from_dlogits(ids_w, dl_w, ca_w, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U);
+
+  # Backward through the rejected sequence with the OPPOSITE sign (-1) —
+  # the rejected response should become LESS likely under the policy.
+  dl_l = dpo_dlogits(ids_l, resp_start, resp_end, lo_l, vocab, -1.0, w_grad);
+  [dEl, dg1l, db1l, dg2l, db2l, dWql, dWkl, dWvl, dWol, dW1l, db1fl, dW2l, db2fl, dWUl] = ...
+      backward_from_dlogits(ids_l, dl_l, ca_l, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U);
+
+  # Sum the two gradient contributions.
+  dE_t = dEw + dEl;
+  dg1_t = dg1w + dg1l;  db1_t = db1w + db1l;
+  dg2_t = dg2w + dg2l;  db2_t = db2w + db2l;
+  dWq_t = dWqw + dWql;  dWk_t = dWkw + dWkl;  dWv_t = dWvw + dWvl;  dWo_t = dWow + dWol;
+  dW1_t = dW1w + dW1l;  db1f_t = db1fw + db1fl;
+  dW2_t = dW2w + dW2l;  db2f_t = db2fw + db2fl;
+  dWU_t = dWUw + dWUl;
+
+  # AdamW update.
+  m_E = bet1 * m_E + (1 - bet1) * dE_t;  v_E = bet2 * v_E + (1 - bet2) * (dE_t .^ 2);
+  E = E - eta_dpo * ((m_E / (1 - bet1 ^ step)) ./ (sqrt(v_E / (1 - bet2 ^ step)) + eps_a));
+  m_g1 = bet1 * m_g1 + (1 - bet1) * dg1_t;  v_g1 = bet2 * v_g1 + (1 - bet2) * (dg1_t .^ 2);
+  gamma1 = gamma1 - eta_dpo * ((m_g1 / (1 - bet1 ^ step)) ./ (sqrt(v_g1 / (1 - bet2 ^ step)) + eps_a));
+  m_b1 = bet1 * m_b1 + (1 - bet1) * db1_t;  v_b1 = bet2 * v_b1 + (1 - bet2) * (db1_t .^ 2);
+  beta1 = beta1 - eta_dpo * ((m_b1 / (1 - bet1 ^ step)) ./ (sqrt(v_b1 / (1 - bet2 ^ step)) + eps_a));
+  m_g2 = bet1 * m_g2 + (1 - bet1) * dg2_t;  v_g2 = bet2 * v_g2 + (1 - bet2) * (dg2_t .^ 2);
+  gamma2 = gamma2 - eta_dpo * ((m_g2 / (1 - bet1 ^ step)) ./ (sqrt(v_g2 / (1 - bet2 ^ step)) + eps_a));
+  m_b2 = bet1 * m_b2 + (1 - bet1) * db2_t;  v_b2 = bet2 * v_b2 + (1 - bet2) * (db2_t .^ 2);
+  beta2 = beta2 - eta_dpo * ((m_b2 / (1 - bet1 ^ step)) ./ (sqrt(v_b2 / (1 - bet2 ^ step)) + eps_a));
+  m_Wq = bet1 * m_Wq + (1 - bet1) * dWq_t;  v_Wq = bet2 * v_Wq + (1 - bet2) * (dWq_t .^ 2);
+  Wq = Wq - eta_dpo * ((m_Wq / (1 - bet1 ^ step)) ./ (sqrt(v_Wq / (1 - bet2 ^ step)) + eps_a));
+  m_Wk = bet1 * m_Wk + (1 - bet1) * dWk_t;  v_Wk = bet2 * v_Wk + (1 - bet2) * (dWk_t .^ 2);
+  Wk = Wk - eta_dpo * ((m_Wk / (1 - bet1 ^ step)) ./ (sqrt(v_Wk / (1 - bet2 ^ step)) + eps_a));
+  m_Wv = bet1 * m_Wv + (1 - bet1) * dWv_t;  v_Wv = bet2 * v_Wv + (1 - bet2) * (dWv_t .^ 2);
+  Wv = Wv - eta_dpo * ((m_Wv / (1 - bet1 ^ step)) ./ (sqrt(v_Wv / (1 - bet2 ^ step)) + eps_a));
+  m_Wo = bet1 * m_Wo + (1 - bet1) * dWo_t;  v_Wo = bet2 * v_Wo + (1 - bet2) * (dWo_t .^ 2);
+  Wo = Wo - eta_dpo * ((m_Wo / (1 - bet1 ^ step)) ./ (sqrt(v_Wo / (1 - bet2 ^ step)) + eps_a));
+  m_W1 = bet1 * m_W1 + (1 - bet1) * dW1_t;  v_W1 = bet2 * v_W1 + (1 - bet2) * (dW1_t .^ 2);
+  W1 = W1 - eta_dpo * ((m_W1 / (1 - bet1 ^ step)) ./ (sqrt(v_W1 / (1 - bet2 ^ step)) + eps_a));
+  m_b1f = bet1 * m_b1f + (1 - bet1) * db1f_t;  v_b1f = bet2 * v_b1f + (1 - bet2) * (db1f_t .^ 2);
+  b1f = b1f - eta_dpo * ((m_b1f / (1 - bet1 ^ step)) ./ (sqrt(v_b1f / (1 - bet2 ^ step)) + eps_a));
+  m_W2 = bet1 * m_W2 + (1 - bet1) * dW2_t;  v_W2 = bet2 * v_W2 + (1 - bet2) * (dW2_t .^ 2);
+  W2 = W2 - eta_dpo * ((m_W2 / (1 - bet1 ^ step)) ./ (sqrt(v_W2 / (1 - bet2 ^ step)) + eps_a));
+  m_b2f = bet1 * m_b2f + (1 - bet1) * db2f_t;  v_b2f = bet2 * v_b2f + (1 - bet2) * (db2f_t .^ 2);
+  b2f = b2f - eta_dpo * ((m_b2f / (1 - bet1 ^ step)) ./ (sqrt(v_b2f / (1 - bet2 ^ step)) + eps_a));
+  m_WU = bet1 * m_WU + (1 - bet1) * dWU_t;  v_WU = bet2 * v_WU + (1 - bet2) * (dWU_t .^ 2);
+  W_U = W_U - eta_dpo * ((m_WU / (1 - bet1 ^ step)) ./ (sqrt(v_WU / (1 - bet2 ^ step)) + eps_a));
+
+  # Abb-corpus loss probe.
+  [lo_pre, ca_pre] = forward_only(ids_pre, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                    Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  L_abb = 0.0;
+  for t = 1:(T_pre - 1)
+    p = softmax(lo_pre(t, :));
+    L_abb = L_abb - log(p(ids_pre(t + 1)));
+  end
+  L_abb = L_abb / (T_pre - 1);
+  abb_loss_curve(step + 1) = L_abb;
+end
+print("Final DPO L:", dpo_loss_curve(n_dpo + 1));
+print("Final abb-corpus L:", abb_loss_curve(n_dpo + 1));
+
+# === 8. Sanity: compare margins under chosen vs rejected per prompt ===
+print("");
+print("=== Per-prompt log-prob margins (lp_w_pol - lp_l_pol) after DPO ===");
+for s = 1:n_prefs
+  [lp_w, lp_wr, ca_w] = response_logprobs(chosen(s, :), resp_start, resp_end, ...
+      E, PE, gamma1, beta1, gamma2, beta2, Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U, ...
+      E_ref, gamma1_ref, beta1_ref, gamma2_ref, beta2_ref, ...
+      Wq_ref, Wk_ref, Wv_ref, Wo_ref, W1_ref, b1f_ref, W2_ref, b2f_ref, W_U_ref);
+  [lp_l, lp_lr, ca_l] = response_logprobs(rejected(s, :), resp_start, resp_end, ...
+      E, PE, gamma1, beta1, gamma2, beta2, Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U, ...
+      E_ref, gamma1_ref, beta1_ref, gamma2_ref, beta2_ref, ...
+      Wq_ref, Wk_ref, Wv_ref, Wo_ref, W1_ref, b1f_ref, W2_ref, b2f_ref, W_U_ref);
+  print("  prompt", s, ":  lp(chosen)=", lp_w, "  lp(rejected)=", lp_l, "  margin=", lp_w - lp_l);
+end
+
+# === 9. Plot DPO and abb-corpus loss curves ===
+figure()
+subplot(1, 2, 1)
+plot(0:n_dpo, dpo_loss_curve, "color", "blue", "label", "DPO loss")
+title("DPO loss (lower = better margin chosen/rejected)")
+xlabel("step")
+ylabel("L_DPO")
+subplot(1, 2, 2)
+plot(0:n_dpo, abb_loss_curve, "color", "red", "label", "abb-corpus L")
+title("Pretraining-distribution loss during DPO")
+xlabel("step")
+ylabel("L (nats / pair)")
+savefig("dpo.svg")
+print("Saved dpo.svg");

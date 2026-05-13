@@ -66,7 +66,7 @@ make all                # render committed book/<slug>.md + interactive book/*.h
 make notebooks          # render book/<slug>.md from notebooks/<slug>.md (markdown)
 make html               # render book/index.html + per-notebook html (gitignored)
 make notebooks-check    # CI drift guard: fails if book/ is out of sync with sources
-make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–23)
+make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–24)
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 

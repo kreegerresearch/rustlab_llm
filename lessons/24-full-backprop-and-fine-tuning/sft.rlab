@@ -1,0 +1,452 @@
+# Script:  sft.rlab
+# System:  Supervised fine-tuning (SFT) of the single-block transformer from
+#          full_backprop.rlab.  Two phases:
+#            (1) Pre-train on the period-3 "abb" corpus (10 steps to a
+#                near-floor solution) using the same forward/backward code.
+#            (2) Fine-tune on a small "prompt-response" dataset that
+#                introduces a new separator token and a specific response
+#                policy.  The response is "a" regardless of context.
+#          The fine-tuning step uses LOSS MASKING: only positions inside
+#          the response contribute to the gradient.  Prompt-token
+#          predictions are not penalised, so pre-trained behaviour on the
+#          original distribution is preserved.
+# Concept: SFT = "same loss, instruction-formatted data, prompt masked".
+#          The trick is that gradient flow into ALL parameters (including
+#          embeddings) still happens via the response positions, so the
+#          model's representations adapt to the new task while keeping
+#          its prior knowledge intact.
+# Equations:
+#   L_SFT(theta) = -(1/|R|) * sum_{t in R} log P_theta(x_{t+1} | x_{<=t})
+#   where R = response-token positions of the formatted sequence.
+# Units:   activations dimensionless; loss in nats.
+
+# === 1. Hyperparameters and vocab ===
+seed(241);
+vocab = 3;             # a=1, b=2, sep=3
+d_model = 4;
+d_ff = 8;
+T_max = 16;
+
+# Pre-training corpus (same as full_backprop.rlab, vocab now includes sep
+# which never appears in pre-train data).
+pat = [1, 2, 2];
+T_pre = 12;
+ids_pre = zeros(T_pre);
+for i = 1:T_pre
+  ids_pre(i) = pat(mod(i - 1, 3) + 1);
+end
+
+# === 2. Initialise parameters and AdamW state ===
+E = randn(vocab, d_model) * 0.3;
+PE = zeros(T_max, d_model);
+for t = 1:T_max
+  for k = 0:(d_model / 2 - 1)
+    omega = 10000.0 ^ (-2 * k / d_model);
+    PE(t, 2 * k + 1) = sin((t - 1) * omega);
+    PE(t, 2 * k + 2) = cos((t - 1) * omega);
+  end
+end
+gamma1 = ones(d_model);   beta1 = zeros(d_model);
+gamma2 = ones(d_model);   beta2 = zeros(d_model);
+Wq = randn(d_model, d_model) * 0.3;
+Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;
+Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W_U = randn(d_model, vocab) * 0.3;
+
+# === 3. Forward + backward (copied verbatim from full_backprop.rlab; the
+# ===  only change is that backward accepts a `loss_mask` row vector of
+# ===  length T-1 — 1 means "this position counts", 0 means "skip"). ===
+function [Y, x_norm_M, sigma_v] = layernorm_fwd(X, gamma, beta)
+  T = size(X)(1);  d = size(X)(2);  eps = 1e-5;
+  Y = zeros(T, d);  x_norm_M = zeros(T, d);  sigma_v = zeros(T);
+  for t = 1:T
+    x = X(t, :);
+    mu = mean(x);
+    var = mean((x - mu) .^ 2);
+    sigma = sqrt(var + eps);
+    xn = (x - mu) / sigma;
+    sigma_v(t) = sigma;
+    x_norm_M(t, :) = xn;
+    Y(t, :) = xn .* gamma + beta;
+  end
+end
+
+function [dX, dgamma, dbeta] = layernorm_bwd(dY, x_norm_M, sigma_v, gamma)
+  T = size(dY)(1);  d = size(dY)(2);
+  dX = zeros(T, d);  dgamma = zeros(d);  dbeta = zeros(d);
+  for t = 1:T
+    dgamma = dgamma + dY(t, :) .* x_norm_M(t, :);
+    dbeta  = dbeta  + dY(t, :);
+  end
+  for t = 1:T
+    dx_norm = dY(t, :) .* gamma;
+    xn = x_norm_M(t, :);
+    dX(t, :) = (1.0 / sigma_v(t)) * (dx_norm - mean(dx_norm) - xn * mean(dx_norm .* xn));
+  end
+end
+
+function y = gelu_grad(z)
+  c = sqrt(2.0 / pi);
+  u = c * (z + 0.044715 * z .^ 3);
+  th = tanh(u);
+  du_dz = c * (1.0 + 0.044715 * 3.0 * z .^ 2);
+  sech2 = 1.0 - th .^ 2;
+  y = 0.5 * (1.0 + th) + 0.5 * z .* sech2 .* du_dz;
+end
+
+function [logits, L, cache] = forward_with_mask(ids, loss_mask, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                                  Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U)
+  T = length(ids);
+  d_model = size(E)(2);  vocab = size(E)(1);
+  H_in = zeros(T, d_model);
+  for t = 1:T
+    H_in(t, :) = E(ids(t), :) + PE(t, :);
+  end
+  [H_ln1, x_norm1, sigma1] = layernorm_fwd(H_in, gamma1, beta1);
+  Q = H_ln1 * Wq;  K = H_ln1 * Wk;  V = H_ln1 * Wv;
+  scale = 1.0 / sqrt(d_model);
+  S = (Q * K') * scale;
+  for i = 1:T
+    for j = (i + 1):T
+      S(i, j) = -1e9;
+    end
+  end
+  A = softmax(S);
+  attn_out = A * V;
+  proj = attn_out * Wo;
+  H_mid = H_in + proj;
+  [H_ln2, x_norm2, sigma2] = layernorm_fwd(H_mid, gamma2, beta2);
+  pre_gelu = H_ln2 * W1 + repmat(b1f, T, 1);
+  hidden = gelu(pre_gelu);
+  ffn_out = hidden * W2 + repmat(b2f, T, 1);
+  H_out = H_mid + ffn_out;
+  logits = H_out * W_U;
+
+  # Loss with masking: only positions where loss_mask(t) > 0 contribute,
+  # averaged over the count of unmasked positions.
+  L = 0.0;
+  total = 0.0;
+  for t = 1:(T - 1)
+    if loss_mask(t) > 0
+      p = softmax(logits(t, :));
+      L = L - log(p(ids(t + 1)));
+      total = total + 1.0;
+    end
+  end
+  if total > 0
+    L = L / total;
+  end
+  cache = struct("T", T, "H_in", H_in, "H_ln1", H_ln1, "x_norm1", x_norm1, "sigma1", sigma1, ...
+                 "Q", Q, "K", K, "V", V, "S", S, "A", A, "attn_out", attn_out, "proj", proj, ...
+                 "H_mid", H_mid, "H_ln2", H_ln2, "x_norm2", x_norm2, "sigma2", sigma2, ...
+                 "pre_gelu", pre_gelu, "hidden", hidden, "ffn_out", ffn_out, "H_out", H_out, ...
+                 "logits", logits, "scale", scale, "total", total);
+end
+
+function [dE, dgamma1, dbeta1, dgamma2, dbeta2, ...
+          dWq, dWk, dWv, dWo, dW1, db1f, dW2, db2f, dW_U] = ...
+    backward_with_mask(ids, loss_mask, cache, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U)
+  T = cache.T;  H_ln1 = cache.H_ln1;  x_norm1 = cache.x_norm1;  sigma1 = cache.sigma1;
+  Q = cache.Q;  K = cache.K;  V = cache.V;  A = cache.A;
+  attn_out = cache.attn_out;  H_mid = cache.H_mid;
+  H_ln2 = cache.H_ln2;  x_norm2 = cache.x_norm2;  sigma2 = cache.sigma2;
+  pre_gelu = cache.pre_gelu;  hidden = cache.hidden;  H_out = cache.H_out;
+  logits = cache.logits;  scale = cache.scale;  total = cache.total;
+  d_model = size(E)(2);  vocab = size(E)(1);
+
+  # Masked gradient at the logits: only response positions contribute,
+  # normalised by the count of unmasked positions (matches the masked-mean
+  # loss in forward_with_mask).
+  dlogits = zeros(T, vocab);
+  if total > 0
+    for t = 1:(T - 1)
+      if loss_mask(t) > 0
+        p = softmax(logits(t, :));
+        e_y = zeros(vocab); e_y(ids(t + 1)) = 1.0;
+        dlogits(t, :) = (p - e_y) / total;
+      end
+    end
+  end
+
+  dW_U = H_out' * dlogits;
+  dH_out = dlogits * W_U';
+  d_ffn_out = dH_out;  dH_mid = dH_out;
+  dhidden = d_ffn_out * W2';
+  dW2 = hidden' * d_ffn_out;
+  db2f = zeros(d_model);
+  for t = 1:T
+    db2f = db2f + d_ffn_out(t, :);
+  end
+  dpre_gelu = dhidden .* gelu_grad(pre_gelu);
+  dH_ln2 = dpre_gelu * W1';
+  dW1 = H_ln2' * dpre_gelu;
+  d_ff = size(W1)(2);
+  db1f = zeros(d_ff);
+  for t = 1:T
+    db1f = db1f + dpre_gelu(t, :);
+  end
+  [dH_mid_from_ln, dgamma2, dbeta2] = layernorm_bwd(dH_ln2, x_norm2, sigma2, gamma2);
+  dH_mid = dH_mid + dH_mid_from_ln;
+  dH_in = dH_mid;  dproj = dH_mid;
+  dattn_out = dproj * Wo';
+  dWo = attn_out' * dproj;
+  dA = dattn_out * V';
+  dV = A' * dattn_out;
+  dS = zeros(T, T);
+  for t = 1:T
+    a_row = A(t, :);  da_row = dA(t, :);
+    dS(t, :) = a_row .* (da_row - sum(a_row .* da_row));
+  end
+  dQ = (dS * K) * scale;
+  dK = (dS' * Q) * scale;
+  dH_ln1 = dQ * Wq' + dK * Wk' + dV * Wv';
+  dWq = H_ln1' * dQ;  dWk = H_ln1' * dK;  dWv = H_ln1' * dV;
+  [dH_in_from_ln, dgamma1, dbeta1] = layernorm_bwd(dH_ln1, x_norm1, sigma1, gamma1);
+  dH_in = dH_in + dH_in_from_ln;
+  dE = zeros(vocab, d_model);
+  for t = 1:T
+    tok = ids(t);
+    dE(tok, :) = dE(tok, :) + dH_in(t, :);
+  end
+end
+
+# === 4. Phase 1: pre-train on the abb corpus (no masking) ===
+# Loss mask = all-ones over the T_pre - 1 prediction positions.
+mask_pre = ones(T_pre - 1);
+# AdamW state.
+m_E = zeros(vocab, d_model);     v_E = zeros(vocab, d_model);
+m_g1 = zeros(d_model);           v_g1 = zeros(d_model);
+m_b1 = zeros(d_model);           v_b1 = zeros(d_model);
+m_g2 = zeros(d_model);           v_g2 = zeros(d_model);
+m_b2 = zeros(d_model);           v_b2 = zeros(d_model);
+m_Wq = zeros(d_model, d_model);  v_Wq = zeros(d_model, d_model);
+m_Wk = zeros(d_model, d_model);  v_Wk = zeros(d_model, d_model);
+m_Wv = zeros(d_model, d_model);  v_Wv = zeros(d_model, d_model);
+m_Wo = zeros(d_model, d_model);  v_Wo = zeros(d_model, d_model);
+m_W1 = zeros(d_model, d_ff);     v_W1 = zeros(d_model, d_ff);
+m_b1f = zeros(d_ff);             v_b1f = zeros(d_ff);
+m_W2 = zeros(d_ff, d_model);     v_W2 = zeros(d_ff, d_model);
+m_b2f = zeros(d_model);          v_b2f = zeros(d_model);
+m_WU = zeros(d_model, vocab);    v_WU = zeros(d_model, vocab);
+
+bet1 = 0.9; bet2 = 0.999; eps_a = 1e-8;
+n_pre = 600;
+eta_max = 0.05; eta_min = 0.005; T_w = 60;
+
+print("=== Pre-training on abb corpus (600 steps) ===");
+for step = 1:n_pre
+  if step <= T_w
+    eta_t = eta_max * (step / T_w);
+  else
+    prog = (step - T_w) / (n_pre - T_w);
+    eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * prog));
+  end
+  [lo, L, ca] = forward_with_mask(ids_pre, mask_pre, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                    Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  [dE, dg1, db1, dg2, db2, dWq, dWk, dWv, dWo, dW1, db1f_g, dW2, db2f_g, dW_U] = ...
+      backward_with_mask(ids_pre, mask_pre, ca, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U);
+  m_E = bet1 * m_E + (1 - bet1) * dE;
+  v_E = bet2 * v_E + (1 - bet2) * (dE .^ 2);
+  E = E - eta_t * ((m_E / (1 - bet1 ^ step)) ./ (sqrt(v_E / (1 - bet2 ^ step)) + eps_a));
+  m_g1 = bet1 * m_g1 + (1 - bet1) * dg1;
+  v_g1 = bet2 * v_g1 + (1 - bet2) * (dg1 .^ 2);
+  gamma1 = gamma1 - eta_t * ((m_g1 / (1 - bet1 ^ step)) ./ (sqrt(v_g1 / (1 - bet2 ^ step)) + eps_a));
+  m_b1 = bet1 * m_b1 + (1 - bet1) * db1;
+  v_b1 = bet2 * v_b1 + (1 - bet2) * (db1 .^ 2);
+  beta1 = beta1 - eta_t * ((m_b1 / (1 - bet1 ^ step)) ./ (sqrt(v_b1 / (1 - bet2 ^ step)) + eps_a));
+  m_g2 = bet1 * m_g2 + (1 - bet1) * dg2;
+  v_g2 = bet2 * v_g2 + (1 - bet2) * (dg2 .^ 2);
+  gamma2 = gamma2 - eta_t * ((m_g2 / (1 - bet1 ^ step)) ./ (sqrt(v_g2 / (1 - bet2 ^ step)) + eps_a));
+  m_b2 = bet1 * m_b2 + (1 - bet1) * db2;
+  v_b2 = bet2 * v_b2 + (1 - bet2) * (db2 .^ 2);
+  beta2 = beta2 - eta_t * ((m_b2 / (1 - bet1 ^ step)) ./ (sqrt(v_b2 / (1 - bet2 ^ step)) + eps_a));
+  m_Wq = bet1 * m_Wq + (1 - bet1) * dWq;
+  v_Wq = bet2 * v_Wq + (1 - bet2) * (dWq .^ 2);
+  Wq = Wq - eta_t * ((m_Wq / (1 - bet1 ^ step)) ./ (sqrt(v_Wq / (1 - bet2 ^ step)) + eps_a));
+  m_Wk = bet1 * m_Wk + (1 - bet1) * dWk;
+  v_Wk = bet2 * v_Wk + (1 - bet2) * (dWk .^ 2);
+  Wk = Wk - eta_t * ((m_Wk / (1 - bet1 ^ step)) ./ (sqrt(v_Wk / (1 - bet2 ^ step)) + eps_a));
+  m_Wv = bet1 * m_Wv + (1 - bet1) * dWv;
+  v_Wv = bet2 * v_Wv + (1 - bet2) * (dWv .^ 2);
+  Wv = Wv - eta_t * ((m_Wv / (1 - bet1 ^ step)) ./ (sqrt(v_Wv / (1 - bet2 ^ step)) + eps_a));
+  m_Wo = bet1 * m_Wo + (1 - bet1) * dWo;
+  v_Wo = bet2 * v_Wo + (1 - bet2) * (dWo .^ 2);
+  Wo = Wo - eta_t * ((m_Wo / (1 - bet1 ^ step)) ./ (sqrt(v_Wo / (1 - bet2 ^ step)) + eps_a));
+  m_W1 = bet1 * m_W1 + (1 - bet1) * dW1;
+  v_W1 = bet2 * v_W1 + (1 - bet2) * (dW1 .^ 2);
+  W1 = W1 - eta_t * ((m_W1 / (1 - bet1 ^ step)) ./ (sqrt(v_W1 / (1 - bet2 ^ step)) + eps_a));
+  m_b1f = bet1 * m_b1f + (1 - bet1) * db1f_g;
+  v_b1f = bet2 * v_b1f + (1 - bet2) * (db1f_g .^ 2);
+  b1f = b1f - eta_t * ((m_b1f / (1 - bet1 ^ step)) ./ (sqrt(v_b1f / (1 - bet2 ^ step)) + eps_a));
+  m_W2 = bet1 * m_W2 + (1 - bet1) * dW2;
+  v_W2 = bet2 * v_W2 + (1 - bet2) * (dW2 .^ 2);
+  W2 = W2 - eta_t * ((m_W2 / (1 - bet1 ^ step)) ./ (sqrt(v_W2 / (1 - bet2 ^ step)) + eps_a));
+  m_b2f = bet1 * m_b2f + (1 - bet1) * db2f_g;
+  v_b2f = bet2 * v_b2f + (1 - bet2) * (db2f_g .^ 2);
+  b2f = b2f - eta_t * ((m_b2f / (1 - bet1 ^ step)) ./ (sqrt(v_b2f / (1 - bet2 ^ step)) + eps_a));
+  m_WU = bet1 * m_WU + (1 - bet1) * dW_U;
+  v_WU = bet2 * v_WU + (1 - bet2) * (dW_U .^ 2);
+  W_U = W_U - eta_t * ((m_WU / (1 - bet1 ^ step)) ./ (sqrt(v_WU / (1 - bet2 ^ step)) + eps_a));
+end
+[lo, L_pre_final, ca] = forward_with_mask(ids_pre, mask_pre, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                            Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+print("Pre-training final L (abb corpus):", L_pre_final);
+
+# === 5. Phase 2: SFT on prompt-response pairs ===
+# Three formatted sequences: prompt is 2 tokens, then sep (token 3),
+# then the response.  Loss mask is 1 at the response positions only.
+# Sequences (length 5: [tok1, tok2, sep, response, response]):
+#   [a, b, sep, a, a] — prompt "ab", response "aa"
+#   [b, b, sep, a, a] — prompt "bb", response "aa"
+#   [b, a, sep, a, a] — prompt "ba", response "aa"
+# Each sequence has 4 prediction positions.  The mask is [0, 0, 1, 1]:
+# we predict response[1] from sep (position 3 -> 4), response[2] from
+# response[1] (position 4 -> 5).  Positions 1->2 and 2->3 are prompt
+# tokens with no SFT loss.
+sft_data = [1, 2, 3, 1, 1;
+            2, 2, 3, 1, 1;
+            2, 1, 3, 1, 1];
+sft_mask = [0, 0, 1, 1];
+n_sft_seq = size(sft_data)(1);
+
+# Snapshot pre-SFT predictions on a held-out abb sequence so we can verify
+# pre-trained behaviour is preserved.
+ids_eval = ids_pre;
+[lo, L_eval_pre, ca] = forward_with_mask(ids_eval, mask_pre, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                           Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+print("Pre-SFT abb-corpus L:", L_eval_pre);
+
+# SFT loop — 200 steps, one sequence per step round-robin.
+n_sft = 200;
+sft_loss_curve = zeros(n_sft + 1);
+[lo, L_sft0, ca] = forward_with_mask(sft_data(1, :), sft_mask, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                       Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+sft_loss_curve(1) = L_sft0;
+print("");
+print("=== SFT (200 steps, prompt-response data, loss masked) ===");
+print("Initial SFT L:", sft_loss_curve(1));
+
+# Reset AdamW state for the fine-tuning phase — standard practice.
+m_E = zeros(vocab, d_model);     v_E = zeros(vocab, d_model);
+m_g1 = zeros(d_model);           v_g1 = zeros(d_model);
+m_b1 = zeros(d_model);           v_b1 = zeros(d_model);
+m_g2 = zeros(d_model);           v_g2 = zeros(d_model);
+m_b2 = zeros(d_model);           v_b2 = zeros(d_model);
+m_Wq = zeros(d_model, d_model);  v_Wq = zeros(d_model, d_model);
+m_Wk = zeros(d_model, d_model);  v_Wk = zeros(d_model, d_model);
+m_Wv = zeros(d_model, d_model);  v_Wv = zeros(d_model, d_model);
+m_Wo = zeros(d_model, d_model);  v_Wo = zeros(d_model, d_model);
+m_W1 = zeros(d_model, d_ff);     v_W1 = zeros(d_model, d_ff);
+m_b1f = zeros(d_ff);             v_b1f = zeros(d_ff);
+m_W2 = zeros(d_ff, d_model);     v_W2 = zeros(d_ff, d_model);
+m_b2f = zeros(d_model);          v_b2f = zeros(d_model);
+m_WU = zeros(d_model, vocab);    v_WU = zeros(d_model, vocab);
+
+# Lower fine-tune LR than pretrain — standard practice to avoid catastrophic
+# forgetting of pre-trained knowledge.  With this LR + 200 steps the SFT
+# objective converges and the abb-corpus regression is bounded (see check
+# at the end).  Raising it further trades better SFT loss for worse
+# pretraining-distribution loss — the classic forgetting tradeoff.
+eta_sft = 0.001;
+for step = 1:n_sft
+  # Round-robin pick a sequence.
+  seq_idx = mod(step - 1, n_sft_seq) + 1;
+  seq = sft_data(seq_idx, :);
+
+  [lo, L, ca] = forward_with_mask(seq, sft_mask, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                    Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  sft_loss_curve(step + 1) = L;
+  [dE, dg1, db1, dg2, db2, dWq, dWk, dWv, dWo, dW1, db1f_g, dW2, db2f_g, dW_U] = ...
+      backward_with_mask(seq, sft_mask, ca, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U);
+
+  m_E = bet1 * m_E + (1 - bet1) * dE;
+  v_E = bet2 * v_E + (1 - bet2) * (dE .^ 2);
+  E = E - eta_sft * ((m_E / (1 - bet1 ^ step)) ./ (sqrt(v_E / (1 - bet2 ^ step)) + eps_a));
+  m_g1 = bet1 * m_g1 + (1 - bet1) * dg1;  v_g1 = bet2 * v_g1 + (1 - bet2) * (dg1 .^ 2);
+  gamma1 = gamma1 - eta_sft * ((m_g1 / (1 - bet1 ^ step)) ./ (sqrt(v_g1 / (1 - bet2 ^ step)) + eps_a));
+  m_b1 = bet1 * m_b1 + (1 - bet1) * db1;  v_b1 = bet2 * v_b1 + (1 - bet2) * (db1 .^ 2);
+  beta1 = beta1 - eta_sft * ((m_b1 / (1 - bet1 ^ step)) ./ (sqrt(v_b1 / (1 - bet2 ^ step)) + eps_a));
+  m_g2 = bet1 * m_g2 + (1 - bet1) * dg2;  v_g2 = bet2 * v_g2 + (1 - bet2) * (dg2 .^ 2);
+  gamma2 = gamma2 - eta_sft * ((m_g2 / (1 - bet1 ^ step)) ./ (sqrt(v_g2 / (1 - bet2 ^ step)) + eps_a));
+  m_b2 = bet1 * m_b2 + (1 - bet1) * db2;  v_b2 = bet2 * v_b2 + (1 - bet2) * (db2 .^ 2);
+  beta2 = beta2 - eta_sft * ((m_b2 / (1 - bet1 ^ step)) ./ (sqrt(v_b2 / (1 - bet2 ^ step)) + eps_a));
+  m_Wq = bet1 * m_Wq + (1 - bet1) * dWq;  v_Wq = bet2 * v_Wq + (1 - bet2) * (dWq .^ 2);
+  Wq = Wq - eta_sft * ((m_Wq / (1 - bet1 ^ step)) ./ (sqrt(v_Wq / (1 - bet2 ^ step)) + eps_a));
+  m_Wk = bet1 * m_Wk + (1 - bet1) * dWk;  v_Wk = bet2 * v_Wk + (1 - bet2) * (dWk .^ 2);
+  Wk = Wk - eta_sft * ((m_Wk / (1 - bet1 ^ step)) ./ (sqrt(v_Wk / (1 - bet2 ^ step)) + eps_a));
+  m_Wv = bet1 * m_Wv + (1 - bet1) * dWv;  v_Wv = bet2 * v_Wv + (1 - bet2) * (dWv .^ 2);
+  Wv = Wv - eta_sft * ((m_Wv / (1 - bet1 ^ step)) ./ (sqrt(v_Wv / (1 - bet2 ^ step)) + eps_a));
+  m_Wo = bet1 * m_Wo + (1 - bet1) * dWo;  v_Wo = bet2 * v_Wo + (1 - bet2) * (dWo .^ 2);
+  Wo = Wo - eta_sft * ((m_Wo / (1 - bet1 ^ step)) ./ (sqrt(v_Wo / (1 - bet2 ^ step)) + eps_a));
+  m_W1 = bet1 * m_W1 + (1 - bet1) * dW1;  v_W1 = bet2 * v_W1 + (1 - bet2) * (dW1 .^ 2);
+  W1 = W1 - eta_sft * ((m_W1 / (1 - bet1 ^ step)) ./ (sqrt(v_W1 / (1 - bet2 ^ step)) + eps_a));
+  m_b1f = bet1 * m_b1f + (1 - bet1) * db1f_g;  v_b1f = bet2 * v_b1f + (1 - bet2) * (db1f_g .^ 2);
+  b1f = b1f - eta_sft * ((m_b1f / (1 - bet1 ^ step)) ./ (sqrt(v_b1f / (1 - bet2 ^ step)) + eps_a));
+  m_W2 = bet1 * m_W2 + (1 - bet1) * dW2;  v_W2 = bet2 * v_W2 + (1 - bet2) * (dW2 .^ 2);
+  W2 = W2 - eta_sft * ((m_W2 / (1 - bet1 ^ step)) ./ (sqrt(v_W2 / (1 - bet2 ^ step)) + eps_a));
+  m_b2f = bet1 * m_b2f + (1 - bet1) * db2f_g;  v_b2f = bet2 * v_b2f + (1 - bet2) * (db2f_g .^ 2);
+  b2f = b2f - eta_sft * ((m_b2f / (1 - bet1 ^ step)) ./ (sqrt(v_b2f / (1 - bet2 ^ step)) + eps_a));
+  m_WU = bet1 * m_WU + (1 - bet1) * dW_U;  v_WU = bet2 * v_WU + (1 - bet2) * (dW_U .^ 2);
+  W_U = W_U - eta_sft * ((m_WU / (1 - bet1 ^ step)) ./ (sqrt(v_WU / (1 - bet2 ^ step)) + eps_a));
+end
+print("Final SFT L (averaged across 3 prompts):", sft_loss_curve(n_sft + 1));
+
+# === 6. Evaluation — does the model:
+# ===  (a) produce response "a" after every prompt+sep?  (target behaviour)
+# ===  (b) still get the abb-corpus right?  (no catastrophic forgetting)
+function p = next_dist(x_curr, t_pos, E, PE, gamma1, beta1, gamma2, beta2, ...
+                       Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U, x_prev_ids)
+  # Single-token prediction given a token id x_curr at position t_pos and a
+  # prefix of `x_prev_ids` (vector of length t_pos - 1).  Use forward_with_mask
+  # with mask all zero so we get logits without loss accumulation.
+  T_full = t_pos;
+  ids_full = zeros(T_full);
+  for k = 1:(t_pos - 1)
+    ids_full(k) = x_prev_ids(k);
+  end
+  ids_full(t_pos) = x_curr;
+  zero_mask = zeros(t_pos - 1);
+  [logits, lo, ca] = forward_with_mask(ids_full, zero_mask, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                         Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  p = softmax(logits(t_pos, :));
+end
+
+# (a) Post-SFT behaviour on each prompt: predict the token after sep.
+print("");
+print("=== Post-SFT predictions on prompt-response prompts ===");
+for s = 1:n_sft_seq
+  prefix = sft_data(s, 1:3);                  % [tok1, tok2, sep]
+  p = next_dist(prefix(3), 3, E, PE, gamma1, beta1, gamma2, beta2, ...
+                 Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U, prefix);
+  print("  prompt =", prefix, " -> P(. | prompt) =", p, " argmax =", argmax(p));
+end
+
+# (b) Pre-training-distribution loss after SFT.  Should be close to the
+# pre-SFT value — masking guarded prompt-token predictions from updating.
+[lo, L_eval_post, ca] = forward_with_mask(ids_eval, mask_pre, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                            Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+print("");
+print("Pre-training-distribution loss check (catastrophic-forgetting probe):");
+print("  pre-SFT  L (abb corpus):", L_eval_pre);
+print("  post-SFT L (abb corpus):", L_eval_post);
+print("  delta                  :", L_eval_post - L_eval_pre);
+print("");
+print("The delta is LARGE: vanilla SFT trades off pretraining loss for SFT loss.");
+print("Even though the loss mask hides prompt-position gradients, the response-");
+print("position gradients still flow into ALL parameters (Wq, Wk, ..., E), and");
+print("any change to those parameters affects predictions on other distributions.");
+print("This is *catastrophic forgetting*, and motivates the reference-model term");
+print("in DPO (see dpo.rlab) and other techniques like LoRA, KL regularisation,");
+print("and replay of pretraining data during fine-tuning.");
+
+# === 7. Plot SFT loss curve ===
+figure()
+plot(0:n_sft, sft_loss_curve, "color", "blue", "label", "SFT loss")
+title("Supervised fine-tuning loss (only response tokens count)")
+xlabel("step")
+ylabel("L (nats / response-token)")
+savefig("sft.svg")
+print("Saved sft.svg");

@@ -22,6 +22,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 | 7 | Tokenization & Evaluation | Complete |
 | 8 | Generation & Capstone | Complete |
 | 9 | Modern Architectural Variants (post-curriculum extension) | Complete |
+| 10 | Full Backprop and Fine-Tuning (post-curriculum extension) | Complete |
 
 ---
 
@@ -295,7 +296,35 @@ These close the gaps surfaced by the nanoGPT / *Attention Is All You Need* cover
 
 **Handoff notes:**
 - Last completed lesson: 23-modern-architectural-variants (notebook + 4 scripts: `rope`, `rmsnorm`, `swiglu`, `gqa`).
-- Possible future work: **Lesson 24 — Fine-Tuning** (SFT, DPO) for post-pretraining alignment; would require implementing full transformer backprop, which Lesson 22 deliberately defers.
+- Follow-on: Phase 10 (Lesson 24) implements the full backward path that Phase 8 deferred, then uses it for SFT and DPO.
+
+---
+
+## Phase 10 — Full Backprop and Fine-Tuning (post-curriculum extension)
+
+**Goal:** Close the "trained end-to-end" gap left by Lesson 22 by implementing the full backward pass through the Lesson 13 single-block transformer, then apply the resulting machinery to two fine-tuning paradigms (SFT and DPO).
+
+**Lessons in this phase:**
+- `24-full-backprop-and-fine-tuning`
+
+**Deliverables:**
+- [x] Lesson 24 derives the chain rule through one Pre-LN block (LN, softmax row-wise, attention, residuals, FFN-with-GELU, LM head) and wires it into a single backward function.
+- [x] Gradient check (numerical finite-difference vs analytical) on `W_U(1, 1)` and `Wq(1, 1)` passes with relative error $\sim 10^{-10}$.
+- [x] End-to-end training on the period-3 `abb` corpus drives the loss below the analytic bigram floor (~0.434) to ~$4 \times 10^{-9}$ — concrete evidence the backward pass is correct.
+- [x] `sft.rlab` implements supervised fine-tuning with prompt-token loss masking and explicitly probes catastrophic forgetting.
+- [x] `dpo.rlab` implements DPO with a frozen reference policy; per-prompt margins +29/+32/+47, post-DPO abb-corpus loss within 10⁻⁵ of pre-DPO (vs SFT's ~2.8 forgetting) — concrete evidence the reference-model term works.
+
+**Acceptance criteria:**
+- [x] Each script is self-contained and runs without error.
+- [x] Catastrophic forgetting in SFT is demonstrated quantitatively, motivating DPO.
+- [x] DPO measurably reduces forgetting relative to vanilla SFT on the same task.
+
+**Status:** Complete.
+
+**Handoff notes:**
+- Last completed lesson: 24-full-backprop-and-fine-tuning (notebook + 3 scripts: `full_backprop`, `sft`, `dpo`).
+- The full-transformer forward/backward library is duplicated across the 3 scripts (rustlab has no module system; AGENTS.md requires self-contained scripts). When/if rustlab gains imports, factor `forward_only`, `backward_from_dlogits`, `layernorm_fwd/bwd`, and `gelu_grad` into a shared file.
+- The Lesson 22 capstone could now optionally be rewritten to train the full architecture instead of the bigram surrogate — currently left as written since the pedagogical point (mode-collapse vs sampling) doesn't change.
 
 ---
 

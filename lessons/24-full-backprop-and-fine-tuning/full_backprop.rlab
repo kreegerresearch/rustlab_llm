@@ -1,0 +1,460 @@
+# Script:  full_backprop.rlab
+# System:  Single-block, single-head transformer trained end-to-end with
+#          analytical gradients on the period-3 corpus "abbabbabbabb".
+#          The corpus is chosen so that a bigram model cannot solve it
+#          (after "b" the next token splits between "a" and "b" depending
+#          on context-2) but a 2-position context CAN: every (curr, prev)
+#          pair determines the next token exactly.  Attention is what
+#          lets the model use the prev-prev token.
+# Concept: Compose Lesson 15's per-layer chain-rule derivations into a
+#          full backward pass through:
+#              embed -> LN1 -> attention -> residual -> LN2 -> FFN
+#                    -> residual -> LM head -> softmax + cross-entropy.
+#          Verify with a numerical gradient check (forward-finite-diff vs
+#          analytical) on a randomly-chosen scalar parameter.  Then train
+#          for 600 steps with AdamW and watch the loss drop below the
+#          analytic bigram floor (~ 0.434 nats / pair) toward 0.
+# Equations:  see notebooks/24-full-backprop-and-fine-tuning.md "Full
+#             Backward Pass" section — every line of code here corresponds
+#             to a named equation there.
+# Units:   activations dimensionless; loss in nats; learning rate, betas
+#          standard AdamW.
+
+# === 1. Hyperparameters and corpus ===
+seed(24);
+vocab = 2;             # tokens: a=1, b=2
+d_model = 4;
+d_ff = 8;
+T_max = 16;            # max sequence length used for positional embeddings
+n_train = 600;
+
+# Periodic corpus "abbabbabbabb..." — 12 tokens, 11 pairs.
+pat = [1, 2, 2];       # a, b, b
+T = 12;
+ids = zeros(T);
+for i = 1:T
+  ids(i) = pat(mod(i - 1, 3) + 1);
+end
+print("tokens:", ids);
+n_pairs = T - 1;
+
+# === 2. Parameters (trainable) ===
+# Embedding + sinusoidal PE (PE is fixed, not trainable here for clarity).
+E = randn(vocab, d_model) * 0.3;
+PE = zeros(T_max, d_model);
+for t = 1:T_max
+  for k = 0:(d_model / 2 - 1)
+    omega = 10000.0 ^ (-2 * k / d_model);
+    PE(t, 2 * k + 1) = sin((t - 1) * omega);
+    PE(t, 2 * k + 2) = cos((t - 1) * omega);
+  end
+end
+
+# Block parameters: LN gammas/betas, Q/K/V/O projections, FFN.
+gamma1 = ones(d_model);   beta1 = zeros(d_model);
+gamma2 = ones(d_model);   beta2 = zeros(d_model);
+Wq = randn(d_model, d_model) * 0.3;
+Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;
+Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;
+b1f = zeros(d_ff);
+W2 = randn(d_ff, d_model) * 0.3;
+b2f = zeros(d_model);
+W_U = randn(d_model, vocab) * 0.3;     # LM head (not weight-tied)
+
+# === 3. Helper: per-row LayerNorm forward + cache (cache is reused in backward) ===
+function [Y, x_norm_M, sigma_v] = layernorm_fwd(X, gamma, beta)
+  T = size(X)(1);
+  d = size(X)(2);
+  eps = 1e-5;
+  Y = zeros(T, d);
+  x_norm_M = zeros(T, d);
+  sigma_v = zeros(T);
+  for t = 1:T
+    x = X(t, :);
+    mu = mean(x);
+    var = mean((x - mu) .^ 2);
+    sigma = sqrt(var + eps);
+    xn = (x - mu) / sigma;
+    sigma_v(t) = sigma;
+    x_norm_M(t, :) = xn;
+    Y(t, :) = xn .* gamma + beta;
+  end
+end
+
+# Per-row LayerNorm backward.
+# Given dY (T, d), x_norm (T, d), sigma (T,), gamma (d,):
+#   dgamma   = sum_t dY(t, :) .* x_norm(t, :)         (d,)
+#   dbeta    = sum_t dY(t, :)                          (d,)
+#   dx_norm  = dY .* gamma                              (T, d)
+#   dx(t, :) = (1/sigma_t) *
+#              (dx_norm(t, :) - mean(dx_norm(t, :))
+#               - x_norm(t, :) * mean(dx_norm(t, :) .* x_norm(t, :)))
+function [dX, dgamma, dbeta] = layernorm_bwd(dY, x_norm_M, sigma_v, gamma)
+  T = size(dY)(1);
+  d = size(dY)(2);
+  dX = zeros(T, d);
+  dgamma = zeros(d);
+  dbeta = zeros(d);
+  for t = 1:T
+    dgamma = dgamma + dY(t, :) .* x_norm_M(t, :);
+    dbeta  = dbeta  + dY(t, :);
+  end
+  for t = 1:T
+    dx_norm = dY(t, :) .* gamma;
+    xn = x_norm_M(t, :);
+    dX(t, :) = (1.0 / sigma_v(t)) * (dx_norm - mean(dx_norm) - xn * mean(dx_norm .* xn));
+  end
+end
+
+# GELU and its derivative (tanh approximation matches lesson 11).
+function y = gelu_grad(z)
+  # d/dz [0.5 z (1 + tanh(sqrt(2/pi) (z + 0.044715 z^3)))]
+  # Use the exact-form derivative via numerical-stable composition:
+  c = sqrt(2.0 / pi);
+  u = c * (z + 0.044715 * z .^ 3);
+  th = tanh(u);
+  du_dz = c * (1.0 + 0.044715 * 3.0 * z .^ 2);
+  sech2 = 1.0 - th .^ 2;
+  y = 0.5 * (1.0 + th) + 0.5 * z .* sech2 .* du_dz;
+end
+
+# === 4. Forward pass — returns logits, loss, and a cache of intermediates ===
+function [logits, L, cache] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                       Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U)
+  T = length(ids);
+  d_model = size(E)(2);
+  vocab = size(E)(1);
+
+  # Token + position embedding.
+  H_in = zeros(T, d_model);
+  for t = 1:T
+    H_in(t, :) = E(ids(t), :) + PE(t, :);
+  end
+
+  # Pre-LN attention sublayer.
+  [H_ln1, x_norm1, sigma1] = layernorm_fwd(H_in, gamma1, beta1);
+  Q = H_ln1 * Wq;
+  K = H_ln1 * Wk;
+  V = H_ln1 * Wv;
+  scale = 1.0 / sqrt(d_model);
+  S = (Q * K') * scale;
+  # Causal mask: -1e9 above the diagonal.
+  for i = 1:T
+    for j = (i + 1):T
+      S(i, j) = -1e9;
+    end
+  end
+  A = softmax(S);          # row-wise, rustlab 0.3.3+
+  attn_out = A * V;
+  proj = attn_out * Wo;
+  H_mid = H_in + proj;
+
+  # Pre-LN FFN sublayer.
+  [H_ln2, x_norm2, sigma2] = layernorm_fwd(H_mid, gamma2, beta2);
+  pre_gelu = H_ln2 * W1 + repmat(b1f, T, 1);
+  hidden = gelu(pre_gelu);
+  ffn_out = hidden * W2 + repmat(b2f, T, 1);
+  H_out = H_mid + ffn_out;
+
+  # LM head.
+  logits = H_out * W_U;
+
+  # Cross-entropy loss over the n_pairs = T-1 next-token predictions.
+  L = 0.0;
+  for t = 1:(T - 1)
+    p = softmax(logits(t, :));
+    L = L - log(p(ids(t + 1)));
+  end
+  L = L / (T - 1);
+
+  # Cache everything backward will need.
+  cache = struct("T", T, "H_in", H_in, "H_ln1", H_ln1, "x_norm1", x_norm1, "sigma1", sigma1, ...
+                 "Q", Q, "K", K, "V", V, "S", S, "A", A, "attn_out", attn_out, "proj", proj, ...
+                 "H_mid", H_mid, "H_ln2", H_ln2, "x_norm2", x_norm2, "sigma2", sigma2, ...
+                 "pre_gelu", pre_gelu, "hidden", hidden, "ffn_out", ffn_out, "H_out", H_out, ...
+                 "logits", logits, "scale", scale);
+end
+
+# === 5. Backward pass — every line follows the chain rule in the notebook ===
+function [dE, dgamma1, dbeta1, dgamma2, dbeta2, ...
+          dWq, dWk, dWv, dWo, dW1, db1f, dW2, db2f, dW_U] = ...
+    backward(ids, cache, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U)
+  # Pull cache fields into locals — `cache.M(t, :)` would be parsed as a
+  # function call to `M(...)`.  Locals dodge that.
+  T        = cache.T;
+  H_ln1    = cache.H_ln1;
+  x_norm1  = cache.x_norm1;
+  sigma1   = cache.sigma1;
+  Q        = cache.Q;
+  K        = cache.K;
+  V        = cache.V;
+  A        = cache.A;
+  attn_out = cache.attn_out;
+  H_mid    = cache.H_mid;
+  H_ln2    = cache.H_ln2;
+  x_norm2  = cache.x_norm2;
+  sigma2   = cache.sigma2;
+  pre_gelu = cache.pre_gelu;
+  hidden   = cache.hidden;
+  H_out    = cache.H_out;
+  logits   = cache.logits;
+  scale    = cache.scale;
+
+  d_model = size(E)(2);
+  vocab = size(E)(1);
+  n_pairs = T - 1;
+
+  # Initial gradient at the logits: average over the T-1 prediction
+  # positions; the last position has no target so its row stays zero.
+  dlogits = zeros(T, vocab);
+  for t = 1:n_pairs
+    p = softmax(logits(t, :));
+    e_y = zeros(vocab); e_y(ids(t + 1)) = 1.0;
+    dlogits(t, :) = (p - e_y) / n_pairs;
+  end
+
+  # LM head.
+  dW_U = H_out' * dlogits;
+  dH_out = dlogits * W_U';
+
+  # FFN residual splits dH_out into the residual path and the FFN path.
+  d_ffn_out = dH_out;
+  dH_mid    = dH_out;
+
+  # FFN backward.
+  dhidden = d_ffn_out * W2';
+  dW2 = hidden' * d_ffn_out;
+  db2f = zeros(d_model);
+  for t = 1:T
+    db2f = db2f + d_ffn_out(t, :);
+  end
+
+  dpre_gelu = dhidden .* gelu_grad(pre_gelu);
+  dH_ln2 = dpre_gelu * W1';
+  dW1 = H_ln2' * dpre_gelu;
+  d_ff = size(W1)(2);
+  db1f = zeros(d_ff);
+  for t = 1:T
+    db1f = db1f + dpre_gelu(t, :);
+  end
+
+  # LayerNorm 2 backward — adds to the residual contribution at H_mid.
+  [dH_mid_from_ln, dgamma2, dbeta2] = layernorm_bwd(dH_ln2, x_norm2, sigma2, gamma2);
+  dH_mid = dH_mid + dH_mid_from_ln;
+
+  # Attention residual splits dH_mid into the residual path and the attention path.
+  dH_in = dH_mid;
+  dproj = dH_mid;
+
+  # Output projection.
+  dattn_out = dproj * Wo';
+  dWo = attn_out' * dproj;
+
+  # Attention backward: dA from dattn_out, dV from A^T @ dattn_out.
+  dA = dattn_out * V';
+  dV = A' * dattn_out;
+
+  # Softmax row-wise backward: dS_row = A_row .* (dA_row - sum(A_row .* dA_row)).
+  dS = zeros(T, T);
+  for t = 1:T
+    a_row = A(t, :);
+    da_row = dA(t, :);
+    dS(t, :) = a_row .* (da_row - sum(a_row .* da_row));
+  end
+
+  # Scaled-dot-product backward.
+  dQ = (dS * K) * scale;
+  dK = (dS' * Q) * scale;
+
+  # Q, K, V projections back through H_ln1.
+  dH_ln1 = dQ * Wq' + dK * Wk' + dV * Wv';
+  dWq = H_ln1' * dQ;
+  dWk = H_ln1' * dK;
+  dWv = H_ln1' * dV;
+
+  # LayerNorm 1 backward — adds to dH_in via the LN1 path.
+  [dH_in_from_ln, dgamma1, dbeta1] = layernorm_bwd(dH_ln1, x_norm1, sigma1, gamma1);
+  dH_in = dH_in + dH_in_from_ln;
+
+  # Embedding gradient.  Positional embeddings are not trainable here.
+  dE = zeros(vocab, d_model);
+  for t = 1:T
+    tok = ids(t);
+    dE(tok, :) = dE(tok, :) + dH_in(t, :);
+  end
+end
+
+# === 6. Gradient check.  Pick one element of W_U, perturb by eps, compare
+# ===  the finite-difference loss change to the analytical gradient there. ===
+function ok = grad_check(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                          Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U)
+  eps_g = 1e-4;
+  [logits_0, L_0, cache] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                                    Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  [dE, dgamma1, dbeta1, dgamma2, dbeta2, ...
+   dWq, dWk, dWv, dWo, dW1, db1f, dW2, db2f, dW_U] = ...
+      backward(ids, cache, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U);
+
+  # Perturb W_U(1, 1).
+  W_U_plus = W_U; W_U_plus(1, 1) = W_U_plus(1, 1) + eps_g;
+  [lo, L_plus, ca] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                              Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U_plus);
+  W_U_minus = W_U; W_U_minus(1, 1) = W_U_minus(1, 1) - eps_g;
+  [lo, L_minus, ca] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                               Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U_minus);
+
+  num_grad = (L_plus - L_minus) / (2.0 * eps_g);
+  ana_grad = dW_U(1, 1);
+  rel_err = abs(num_grad - ana_grad) / (abs(num_grad) + abs(ana_grad) + 1e-12);
+  print("Gradient check on W_U(1, 1):");
+  print("  numerical  =", num_grad);
+  print("  analytical =", ana_grad);
+  print("  rel error  =", rel_err, "(should be < 1e-5)");
+  ok = rel_err < 1e-5;
+
+  # Also check one Wq element to verify attention backprop.
+  Wq_plus = Wq; Wq_plus(1, 1) = Wq_plus(1, 1) + eps_g;
+  [lo, L_qp, ca] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                            Wq_plus, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  Wq_minus = Wq; Wq_minus(1, 1) = Wq_minus(1, 1) - eps_g;
+  [lo, L_qm, ca] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                            Wq_minus, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  num_q = (L_qp - L_qm) / (2.0 * eps_g);
+  ana_q = dWq(1, 1);
+  rel_q = abs(num_q - ana_q) / (abs(num_q) + abs(ana_q) + 1e-12);
+  print("Gradient check on Wq(1, 1):");
+  print("  numerical  =", num_q);
+  print("  analytical =", ana_q);
+  print("  rel error  =", rel_q, "(should be < 1e-5)");
+  ok = ok && (rel_q < 1e-5);
+end
+
+# === 7. Run the gradient check before training ===
+print("=== Gradient check ===");
+ok = grad_check(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                 Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+print("Both checks pass:", ok);
+
+# === 8. Bigram-floor reference for the abb corpus ===
+# After 'a': next is 'b' (4 occurrences), loss contribution -log(1) = 0.
+# After 'b': next is 'b' 4 times, 'a' 3 times.  Bigram P(b|b) = 4/7,
+# P(a|b) = 3/7.  Mean loss = (4 * 0 + 4 * -log(4/7) + 3 * -log(3/7)) / 11.
+L_bigram_a = 0.0;
+L_bigram_b = -log(4.0 / 7.0);
+L_bigram_a_after_b = -log(3.0 / 7.0);
+L_bigram = (4 * 0.0 + 4 * L_bigram_b + 3 * L_bigram_a_after_b) / 11;
+print("");
+print("Bigram-floor reference on this corpus: L =", L_bigram, "nats/pair");
+print("(Trigram / context-2 model can achieve L = 0 exactly.)");
+
+# === 9. AdamW training loop ===
+print("");
+print("=== Training (AdamW, 600 steps) ===");
+# AdamW state — one buffer per trainable matrix.
+m_E = zeros(vocab, d_model);     v_E = zeros(vocab, d_model);
+m_g1 = zeros(d_model);           v_g1 = zeros(d_model);
+m_b1 = zeros(d_model);           v_b1 = zeros(d_model);
+m_g2 = zeros(d_model);           v_g2 = zeros(d_model);
+m_b2 = zeros(d_model);           v_b2 = zeros(d_model);
+m_Wq = zeros(d_model, d_model);  v_Wq = zeros(d_model, d_model);
+m_Wk = zeros(d_model, d_model);  v_Wk = zeros(d_model, d_model);
+m_Wv = zeros(d_model, d_model);  v_Wv = zeros(d_model, d_model);
+m_Wo = zeros(d_model, d_model);  v_Wo = zeros(d_model, d_model);
+m_W1 = zeros(d_model, d_ff);     v_W1 = zeros(d_model, d_ff);
+m_b1f = zeros(d_ff);             v_b1f = zeros(d_ff);
+m_W2 = zeros(d_ff, d_model);     v_W2 = zeros(d_ff, d_model);
+m_b2f = zeros(d_model);          v_b2f = zeros(d_model);
+m_WU = zeros(d_model, vocab);    v_WU = zeros(d_model, vocab);
+
+bet1 = 0.9; bet2 = 0.999; eps_a = 1e-8;
+eta_max = 0.05; eta_min = 0.005; T_w = 60;
+
+loss_curve = zeros(n_train + 1);
+[lo, L0, ca] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                        Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+loss_curve(1) = L0;
+print("Step 0    L =", loss_curve(1));
+
+for step = 1:n_train
+  # LR schedule
+  if step <= T_w
+    eta_t = eta_max * (step / T_w);
+  else
+    prog = (step - T_w) / (n_train - T_w);
+    eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * prog));
+  end
+
+  # Forward + backward.
+  [lo, L, ca] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+                         Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
+  loss_curve(step + 1) = L;
+  [dE, dg1, db1, dg2, db2, dWq, dWk, dWv, dWo, dW1, db1f, dW2, db2f, dW_U] = ...
+      backward(ids, ca, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U);
+
+  # AdamW update macro: m = bet1*m + (1-bet1)*g; v = bet2*v + (1-bet2)*g^2;
+  # p -= eta_t * (m / (1 - bet1^step)) ./ (sqrt(v / (1 - bet2^step)) + eps_a)
+  m_E = bet1 * m_E + (1 - bet1) * dE;
+  v_E = bet2 * v_E + (1 - bet2) * (dE .^ 2);
+  E = E - eta_t * ((m_E / (1 - bet1 ^ step)) ./ (sqrt(v_E / (1 - bet2 ^ step)) + eps_a));
+
+  m_g1 = bet1 * m_g1 + (1 - bet1) * dg1;
+  v_g1 = bet2 * v_g1 + (1 - bet2) * (dg1 .^ 2);
+  gamma1 = gamma1 - eta_t * ((m_g1 / (1 - bet1 ^ step)) ./ (sqrt(v_g1 / (1 - bet2 ^ step)) + eps_a));
+  m_b1 = bet1 * m_b1 + (1 - bet1) * db1;
+  v_b1 = bet2 * v_b1 + (1 - bet2) * (db1 .^ 2);
+  beta1 = beta1 - eta_t * ((m_b1 / (1 - bet1 ^ step)) ./ (sqrt(v_b1 / (1 - bet2 ^ step)) + eps_a));
+
+  m_g2 = bet1 * m_g2 + (1 - bet1) * dg2;
+  v_g2 = bet2 * v_g2 + (1 - bet2) * (dg2 .^ 2);
+  gamma2 = gamma2 - eta_t * ((m_g2 / (1 - bet1 ^ step)) ./ (sqrt(v_g2 / (1 - bet2 ^ step)) + eps_a));
+  m_b2 = bet1 * m_b2 + (1 - bet1) * db2;
+  v_b2 = bet2 * v_b2 + (1 - bet2) * (db2 .^ 2);
+  beta2 = beta2 - eta_t * ((m_b2 / (1 - bet1 ^ step)) ./ (sqrt(v_b2 / (1 - bet2 ^ step)) + eps_a));
+
+  m_Wq = bet1 * m_Wq + (1 - bet1) * dWq;
+  v_Wq = bet2 * v_Wq + (1 - bet2) * (dWq .^ 2);
+  Wq = Wq - eta_t * ((m_Wq / (1 - bet1 ^ step)) ./ (sqrt(v_Wq / (1 - bet2 ^ step)) + eps_a));
+  m_Wk = bet1 * m_Wk + (1 - bet1) * dWk;
+  v_Wk = bet2 * v_Wk + (1 - bet2) * (dWk .^ 2);
+  Wk = Wk - eta_t * ((m_Wk / (1 - bet1 ^ step)) ./ (sqrt(v_Wk / (1 - bet2 ^ step)) + eps_a));
+  m_Wv = bet1 * m_Wv + (1 - bet1) * dWv;
+  v_Wv = bet2 * v_Wv + (1 - bet2) * (dWv .^ 2);
+  Wv = Wv - eta_t * ((m_Wv / (1 - bet1 ^ step)) ./ (sqrt(v_Wv / (1 - bet2 ^ step)) + eps_a));
+  m_Wo = bet1 * m_Wo + (1 - bet1) * dWo;
+  v_Wo = bet2 * v_Wo + (1 - bet2) * (dWo .^ 2);
+  Wo = Wo - eta_t * ((m_Wo / (1 - bet1 ^ step)) ./ (sqrt(v_Wo / (1 - bet2 ^ step)) + eps_a));
+
+  m_W1 = bet1 * m_W1 + (1 - bet1) * dW1;
+  v_W1 = bet2 * v_W1 + (1 - bet2) * (dW1 .^ 2);
+  W1 = W1 - eta_t * ((m_W1 / (1 - bet1 ^ step)) ./ (sqrt(v_W1 / (1 - bet2 ^ step)) + eps_a));
+  m_b1f = bet1 * m_b1f + (1 - bet1) * db1f;
+  v_b1f = bet2 * v_b1f + (1 - bet2) * (db1f .^ 2);
+  b1f = b1f - eta_t * ((m_b1f / (1 - bet1 ^ step)) ./ (sqrt(v_b1f / (1 - bet2 ^ step)) + eps_a));
+  m_W2 = bet1 * m_W2 + (1 - bet1) * dW2;
+  v_W2 = bet2 * v_W2 + (1 - bet2) * (dW2 .^ 2);
+  W2 = W2 - eta_t * ((m_W2 / (1 - bet1 ^ step)) ./ (sqrt(v_W2 / (1 - bet2 ^ step)) + eps_a));
+  m_b2f = bet1 * m_b2f + (1 - bet1) * db2f;
+  v_b2f = bet2 * v_b2f + (1 - bet2) * (db2f .^ 2);
+  b2f = b2f - eta_t * ((m_b2f / (1 - bet1 ^ step)) ./ (sqrt(v_b2f / (1 - bet2 ^ step)) + eps_a));
+
+  m_WU = bet1 * m_WU + (1 - bet1) * dW_U;
+  v_WU = bet2 * v_WU + (1 - bet2) * (dW_U .^ 2);
+  W_U = W_U - eta_t * ((m_WU / (1 - bet1 ^ step)) ./ (sqrt(v_WU / (1 - bet2 ^ step)) + eps_a));
+end
+print("Final L =", loss_curve(n_train + 1));
+print("Bigram floor =", L_bigram, "  -- attention model should beat this.");
+
+# === 10. Plot the loss curve against the bigram floor ===
+figure()
+plot(0:n_train, loss_curve, "color", "blue", "label", "train loss")
+hold("on")
+hline(L_bigram, "red", "bigram floor")
+hold("off")
+title("Single-block transformer end-to-end loss vs bigram floor")
+xlabel("step")
+ylabel("L (nats / pair)")
+legend("train loss", "bigram floor")
+savefig("full_backprop.svg")
+print("Saved full_backprop.svg");

@@ -87,6 +87,12 @@ Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts
 |---|-------|-------------|
 | 23 | Modern Architectural Variants | RoPE (replaces sinusoidal PE); RMSNorm (replaces LayerNorm); SwiGLU (replaces GELU FFN); GQA / MQA (KV-cache-shrinking MHA variant) |
 
+### Phase 10 — Full Backprop and Fine-Tuning (post-curriculum extension) `(Complete)`
+
+| # | Title | Core Concept |
+|---|-------|-------------|
+| 24 | Full Backprop and Fine-Tuning | End-to-end analytical gradients through one transformer block + gradient check; SFT with prompt-token loss masking; DPO with frozen reference policy |
+
 ---
 
 ## Prerequisites
@@ -111,7 +117,7 @@ make all                # render committed book/<slug>.md + local book/*.html
 make notebooks          # regenerate book/<slug>.md from notebooks/<slug>.md
 make html               # build book/index.html for local Plotly view (gitignored)
 make notebooks-check    # CI drift guard
-make lesson-06          # run lesson 06's .rlab scripts (pattern target: lesson-NN for any 01–23)
+make lesson-06          # run lesson 06's .rlab scripts (pattern target: lesson-NN for any 01–24)
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
