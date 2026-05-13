@@ -17,7 +17,9 @@ This file guides AI coding tools working in this repository.
 
 Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts and integrated notebooks that produce visualisations. The series builds from raw probability and linear algebra to a complete GPT-style decoder — nothing is a black box.
 
-**Learning goal:** Derive every core LLM algorithm — tokenisation, attention, transformer blocks, training, and inference — with working code and plots at each step, following the architecture of [nanoGPT](https://github.com/karpathy/nanoGPT).
+**Curriculum status:** 24 lessons across 10 phases, all complete. Phases 1–8 (Lessons 01–22) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end. Phase 9 (Lesson 23) covers post-2020 architectural variants — RoPE, RMSNorm, SwiGLU, GQA — as drop-in swaps. Phase 10 (Lesson 24) wires the full analytical backward pass through the Lesson 13 transformer block and uses it for SFT and DPO. The Lesson 22 capstone trains the full architecture end-to-end (PPL → 1.00008 on a context-2 corpus where bigram floors at 1.5).
+
+**Learning goal:** Derive every core LLM algorithm — tokenisation, attention, transformer blocks, training, fine-tuning, and inference — with working code and plots at each step. Follows the architecture of [nanoGPT](https://github.com/karpathy/nanoGPT) through Phase 8 and extends it through Phases 9–10.
 
 **Prerequisites:** Linear algebra, basic probability and information theory. No deep learning background required.
 
@@ -188,9 +190,9 @@ Rustlab is a scientific computing CLI (`../rustlab`) with a MATLAB-like scriptin
 
 **Statistics:** `sum`, `prod`, `cumsum`, `min`, `max`, `argmin`, `argmax`, `mean`, `median`, `std`, `sort`, `trapz`, `hist(v,n)`, `all`, `any`
 
-**ML / Activations:** `softmax(v)`, `relu(v)`, `gelu(v)`, `layernorm(v)`, `layernorm(v, eps)`
+**ML / Activations:** `softmax(v)` / `softmax(M)` (row-wise, 0.3.3+), `relu(v)`, `gelu(v)`, `layernorm(v)` / `layernorm(M)` (row-wise) / `layernorm(v, eps)`
 
-**Array construction:** `zeros(n)` / `zeros(m,n)`, `ones(n)` / `ones(m,n)`, `eye(n)`, `linspace(a,b,n)`, `logspace(a,b,n)`, `rand(n)`, `randn(n)` / `randn(m,n)`, `randi(imax,n)`, `randi([lo,hi],n)`
+**Array construction:** `zeros(n)` / `zeros(m,n)`, `ones(n)` / `ones(m,n)`, `eye(n)`, `linspace(a,b,n)`, `logspace(a,b,n)`, `rand()` (0.3.4+, scalar in [0,1)) / `rand(n)`, `randn(n)` / `randn(m,n)`, `randi(imax,n)`, `randi([lo,hi],n)`
 
 **Array inspection:** `len(v)`, `length(v)`, `numel(x)`, `size(x)`
 
@@ -202,7 +204,7 @@ Rustlab is a scientific computing CLI (`../rustlab`) with a MATLAB-like scriptin
 
 **String arrays:** `{"a","b","c"}`, `sa(i)`, `iscell(x)`, `length(sa)`, `numel(sa)`
 
-**Higher-order:** `arrayfun(f, v)`, `feval("name", args...)`
+**Higher-order:** `arrayfun(f, v)`, `feval("name", args...)`, `parmap(f, indices)` (scalar / vector / matrix-returning lambdas; 0.3.3+)
 
 **I/O:** `print(x,...)`, `disp(x)`, `fprintf(fmt,...)`, `sprintf(fmt,...)`, `commas(x)`, `save(file,x)`, `save(file,"name",x,...)` (NPZ), `load(file)`, `load(file,"name")`, `whos`
 
@@ -252,6 +254,12 @@ savefig("outputs/heatmap.svg")
 
 ## Rustlab Recommendations
 
+This section is the running record of rustlab feature requests, breaking changes, and idiomatic patterns the curriculum has had to adapt to. Three groups, ordered for triage:
+
+1. **Open feature requests** — wanted but not yet landed.
+2. **Required idioms / breaking changes** — current rules new code MUST follow.
+3. **Landed (✅)** — historical record, most-recent rustlab version first.
+
 When a needed function is missing from rustlab, record it here with the format:
 
 ```
@@ -260,6 +268,10 @@ When a needed function is missing from rustlab, record it here with the format:
 **Purpose:** [what it computes]
 **Example:** result = function_name(arg1, arg2)
 ```
+
+---
+
+## Open feature requests
 
 ### CLI should announce itself as the `.rlab` handler
 **Needed for:** language identity. Lessons in this repo use the `.rlab` extension, but `rustlab run foo.rlab` produces output indistinguishable from running a `.r` or unsuffixed file — there is no banner or log line that identifies rustlab as the handler.
@@ -273,70 +285,21 @@ Corpus: to be or not to be
 ...
 ```
 
-### ✅ `seed(n)` — **landed in rustlab** (commit `2bf8156`)
-**Was needed for:** Lessons 04 (embeddings) and 05 (bigram sampling), and any later lesson that uses `rand()` / `randn()`.
-**Use:** `seed(N)` sets the global RNG to a deterministic state; subsequent `rand` / `randn` / `randi` / `sprand` calls are bit-stable. `seed()` (no argument) re-randomizes from system entropy.
-**Migrated:** Lessons 04 and 05 originally used a sin/cos-based pseudo-random matrix and a hand-set `draws` vector with TODO markers; both have been updated to use `seed(N)` followed by `randn` / `rand`.
-**Example:**
-```
-seed(42);
-E = randn(8, 6) * 0.1;   % bit-identical across runs
-```
+---
 
-### ✅ Vector + 1×N matrix arithmetic — **landed in rustlab 0.2.0** (commit `31ff3e3`)
-**Was hit while writing:** Lesson 12 (residual signal) and every subsequent lesson that mixes a `vector` and a `1×N matrix` in arithmetic.
-**Now works:** `vec + 1×N_matrix`, `vec .* 1×N_matrix`, etc. — implicit broadcasting promotes both sides. The `(W * x')'` returns-a-matrix path no longer breaks per-step updates like `x = x + alpha * f(x)`.
-**Status of existing workarounds:** the lessons still use the explicit `M(1)` row-extract (`dL_da1_m(1)`) and `x * W'` patterns. They remain correct under 0.2.0; not rewritten because the workarounds make the type story explicit, which is pedagogically useful.
-
-### ✅ `M([3, 1, 2], :)` row gather — **landed in rustlab 0.2.0 and 0.3.0**
-**Was needed for:** Lesson 11 (FFN per-position independence check) and any later lesson that wants to permute, gather, or sample a subset of rows.
-**Now works:** `M([3, 1, 2], :)` returns a matrix of those rows (0.2.0), and `M([3, 1, 2])` returns a *column-major linear gather* (0.3.0; new column-major linear-index semantics — see breaking change below). For ordered row gathers, prefer `M(rows, :)` for clarity.
-**Example:**
-```
-H_perm = H([3, 1, 2, 5, 4], :);   % gather those rows in any order
-```
-
-### ✅ Multi-output function definitions — **landed in rustlab 0.3.0** (commit `18523a3`)
-**Was hit while writing:** Lesson 18 (training loop) and Lesson 20 (perplexity curve).
-**Now works:** `function [dE, dW, L] = step_grad(...)` with `[dE, dW, L] = step_grad(curr, nxt, E, W)` at the call site. The struct-return workaround is no longer needed; lessons 18 and 20 have been migrated to the native multi-output form.
-
-### ✅ Logical `&&` and `||` short-circuit — **landed in rustlab 0.3.0** (commit `18523a3`)
-**Was hit while writing:** Lesson 19 (BPE merge step).
-**Now works:** `if i < L && seq(i + 1) == val` evaluates LHS first and skips RHS when LHS is false, so the last-position OOB read no longer happens. Lesson 19 has been migrated back to the canonical idiom; the nested-`if` workaround is gone.
-
-### ✅ `layernorm(M)` row-wise matrix overload — **landed in rustlab 0.3.0** (commit `18523a3`)
-**Was needed for:** Lesson 12 (LayerNorm sublayer) and every later transformer lesson.
-**Now works:** `layernorm(M)` returns a matrix of the same shape with each row normalised to mean 0, std 1. Lessons 12, 13, 14 have been migrated from the per-row loop to the matrix overload.
-**Example:**
-```
-H_normed = layernorm(H);                    % shape (T, d_model), per-row mean=0 std=1
-```
-
-### ✅ `softmax(M)` row-wise matrix overload — **landed in rustlab 0.3.3**
-**Was hit while writing:** Lessons 08, 13, 14, 15 — the per-row softmax loop in attention.
-**Now works:** `softmax(M)` returns a matrix of the same shape with each row softmax-normalised (dim=2, ML convention). One call replaces the `for t = 1:T; A(t) = softmax(S(t, :)); end` idiom.
-**Migrated in 0.3.3:** Lessons 21 (`kv_cache.rlab`) and 23 (`gqa.rlab`) — the two scripts written before 0.3.3 that still had the per-row loop. Lessons 08, 13, 14 already used the matrix overload (migrated earlier on the back of the original feature request).
-**Example:**
-```
-A = softmax(S_masked);                      % per-row softmax on a T × T scores matrix
-```
+## Required idioms (breaking changes and rules)
 
 ### ⚠️ BREAKING (rustlab 0.3.0): `M(scalar)` is now a linear-index element, not a row
 **Hit during the 0.3.0 audit.** Previously `M(2)` returned the second *row* of a matrix; in 0.3.0 it returns the second column-major *linear element* (matches `find(M)`'s 1-based linear indices and is consistent with vector indexing).
 **Migration recipe:** anywhere a script meant "row `t` of M", rewrite as `M(t, :)`. The notebooks and scripts in this repo were swept after the 0.3.0 release; the canonical idioms are:
 - Row read: `S(t, :)`, `E(curr, :)`, `H(t, :)`, etc.
 - Element read: `M(t)` returns a scalar.
-- Row write: `M(t) = vec` still assigns row `t` (legacy compat — `M(scalar) = vec` reads as "assign the vector starting at linear index `t * nrows`", which lines up with the row when `t` is a row index and the RHS is a row vector). For clarity, lessons keep `M(t, j) = scalar` for element writes and `M(t) = vec` for row writes.
+- Row write: rustlab 0.3.4 added the symmetric `M(t, :) = vec` form; new code should prefer it. The legacy `M(t) = vec` (assign linear-index starting at `t * nrows`, which lines up with row `t` when the RHS is a row vector) still works and is bit-identical, so existing scripts have been left as-is to avoid churn.
 
 ### `softmax(logits(1))` after a vector × matrix
 **Hit while writing:** Lessons 18 and (preventatively) 16, 17.
 **Symptom:** The idiom `logits = h * W; p = softmax(logits(1))` mis-fires when `h` is a vector — `h * W` returns a *vector*, so `logits(1)` extracts the first scalar element. Softmax of a scalar yields a 1×1 matrix that breaks downstream `p(j)` indexing.
 **Workaround in use:** Call `softmax(h * W)` directly. The vector-valued result indexes correctly with `p(j)`. If a 1×N matrix really is needed, write `reshape(h * W, 1, vocab)`.
-
-### ✅ Renderer math-escape regression — **fixed in rustlab 0.3.2**
-**Was hit during Phase 8 with rustlab 0.3.1:** the markdown renderer doubled every backslash spacing command inside LaTeX math (`\;` → `\\;`, `\!` → `\\!`, `\,` → `\\,`, `\|` → `\\|`) and rewrote `^*` → `^{\ast}`. The bug was purely in the render path; notebook source files were untouched.
-**Fix verified:** `make notebooks` under rustlab 0.3.2 produces output bit-identical to the pre-0.3.1 renders for every unchanged source file. Lessons 21 and 22 (authored to dodge the regression) still render unchanged. Lessons 03, 13, 14, 18, 20 (sidebar additions from May 2026) render their new content cleanly with single-backslash spacing.
-**Workaround removed:** lessons no longer need to avoid `\;` / `\!` / `\,` / `\|` / `^*` in math.
 
 ### ⛔ `break` / `continue` — **declined upstream**; use `while ... && cond` instead
 **Status:** The rustlab project has declined to add `break` / `continue` keywords. The canonical idiom for early-exit in this curriculum is a `while` loop whose condition encodes "keep going until the hit", relying on short-circuit `&&` (rustlab 0.3.0+) to guard the bound check.
@@ -353,7 +316,7 @@ n_keep = j;
 ```
 % Walk the cumulative distribution until we cross r.
 c = cumsum(p);
-r = rand(1)(1);
+r = rand();                      % rustlab 0.3.4+
 N = length(p);
 i = 1;
 while i < N && c(i) < r
@@ -369,34 +332,65 @@ tok = i;
 
 All currently-committed scripts and notebooks use the `while` form; new lessons should follow suit.
 
-### ✅ `A(i, :) = vec` symmetric row-write — **landed in rustlab 0.3.4**
-**Was needed for:** Lesson 21 and many earlier scripts that fell back to `A(i) = vec` (the linear-index legacy form) because `A(i, :) = vec` errored.
-**Now works:** `A(i, :) = vec` writes a row exactly symmetric to the `A(i, :)` row-read. The older `A(i) = vec` legacy form still works and produces identical results; **new code should prefer the symmetric `A(i, :)` form**.
-**Status:** existing scripts continue to use the legacy `M(t) = vec` row-write — verified bit-identical to the symmetric form and left in place to avoid churn. The one exception is Lesson 10's `X_tok(t) = E_pe(ids(t))` pattern, which silently broke under the 0.3.0 M(scalar) breaking change (the RHS `E_pe(ids(t))` returns a scalar, not a row); fixed to `X_tok(t, :) = E_pe(ids(t), :)` in 0.3.4.
+### Scalar-indexing pitfall: `length(scalar)` works, but `scalar(j)` does not
+**Symptom:** `x = 5; x(1)` errors with `undefined function 'x'` even though `length(5)` returns 1.
+**Rule:** Wrap a scalar in `[id]` (a 1×1 matrix) at any point where downstream code will index into the result with `value(j)`. Concretely, the capstone's `expand_token` returns `[id]` for the terminal base case so that `char_names(chars_i(j))` works in the caller.
+**Use the bare scalar** when the consumer is `length(.)`, arithmetic (`x + y`), or concatenation (`[x, y]`).
 
-### ✅ `parmap` with vector/matrix-returning lambdas — **landed in rustlab 0.3.3**
-**Was needed for:** Lesson 20 `## Sidebar: Parallel Evaluation with parmap` and the natural next applications across the curriculum.
-**Now works:** `parmap(f, 1:N)` where `f(i)` returns a $d$-vector produces an $N \times d$ matrix (row-stacked). The Lesson 20 sidebar's "where it fits" table has been updated to reflect the new capability — every row-/position-/head-parallel transformer pattern is now expressible as a single `parmap` call.
-**Status of existing scripts:** The pre-0.3.3 lessons used a mix of (a) explicit per-row `for` loops with row-write `M(i) = vec`, and (b) the matrix overloads of `softmax` / `layernorm` (where available). They remain correct and pedagogically explicit; `parmap` is now the canonical alternative for any new lesson that wants to express embarrassingly-parallel structure.
-**Examples that now work:**
+---
+
+## Landed ✅
+
+Resolved feature requests and fixed bugs, most-recent rustlab version first.
+
+### rustlab 0.3.4
+
+**`A(i, :) = vec` symmetric row-write.** `A(i, :) = vec` writes a row exactly symmetric to the `A(i, :)` row-read. The older `A(i) = vec` legacy form still works and produces identical results; new code should prefer the symmetric `A(i, :)` form. Existing scripts continue to use the legacy form — bit-identical, left in place to avoid churn. One latent correctness bug was uncovered along the way: Lesson 10's `X_tok(t) = E_pe(ids(t))` had silently broken under the 0.3.0 M(scalar) breaking change (the RHS returns a scalar, not a row); fixed to `X_tok(t, :) = E_pe(ids(t), :)` in 0.3.4.
+
+**`rand()` zero-arg form.** Returns a scalar in `[0, 1)`, matching MATLAB / Octave convention. The `rand(1)(1)` chain-index workaround is no longer needed. Migrated lessons 21 and 22 `sample_categorical` helpers.
+
+**`length(scalar)` returns 1.** A function that may return a scalar OR a vector composes cleanly with `[L, R]` concatenation and with downstream `length()` calls. **However, scalar indexing still errors** — see "Scalar-indexing pitfall" in the Required idioms section above.
+
+**Strided LHS assignment.** `v(1:2:6) = [1, 2, 3]` writes the strided slice in one assignment. The lessons did not previously rely on it (used element-by-element writes); it is now available for future scripts.
+
+### rustlab 0.3.3
+
+**`softmax(M)` row-wise matrix overload.** `softmax(M)` returns a matrix of the same shape with each row softmax-normalised (dim=2, ML convention). One call replaces the `for t = 1:T; A(t) = softmax(S(t, :)); end` idiom. Migrated lessons 21 (`kv_cache.rlab`) and 23 (`gqa.rlab`) — the two scripts written before 0.3.3 that still had the per-row loop. Earlier lessons 08, 13, 14, 15 already used the matrix overload (migrated on the original feature request).
+
+Example: `A = softmax(S_masked);` — per-row softmax on a T × T scores matrix.
+
+**`parmap` with vector/matrix-returning lambdas.** `parmap(f, 1:N)` where `f(i)` returns a $d$-vector produces an $N \times d$ matrix (row-stacked). Every row-/position-/head-parallel transformer pattern is now expressible as a single `parmap` call. The Lesson 20 sidebar's table was updated to reflect the new capability. Pre-existing per-row `for` loops remain pedagogically explicit and were not rewritten.
+
+Examples that now work:
 ```
-% Per-row softmax of a (T, T) attention-score matrix:
-A = parmap(@(t) softmax(S(t, :)), 1:T);     % returns T × T matrix
-
-% Per-position FFN:
-H_out = parmap(@(t) ffn(H(t, :), W1, b1, W2, b2), 1:T);   % returns T × d_model
+A = parmap(@(t) softmax(S(t, :)), 1:T);                   % per-row softmax → T × T
+H_out = parmap(@(t) ffn(H(t, :), W1, b1, W2, b2), 1:T);   % per-position FFN → T × d_model
 ```
 
-### ✅ `rand()` zero-arg form — **landed in rustlab 0.3.4**
-**Was needed for:** `sample_categorical` in lessons 21 and 22.
-**Now works:** `rand()` returns a scalar in `[0, 1)`, matching MATLAB / Octave convention. The `rand(1)(1)` chain-index workaround is no longer needed.
-**Migrated in 0.3.4:** lessons 21 and 22 `sample_categorical` helpers.
+### rustlab 0.3.2
 
-### ✅ `length(scalar)` — **landed in rustlab 0.3.4**
-**Was needed for:** capstone (`expand_token` recursion) and any code that needed a uniform "vector of length 1" base case.
-**Now works:** `length(5)` returns `1`. Scalar-vector concat (e.g. `[3, [1, 2]]`) also produces a flat row vector. The `[id]` wrapper (wrapping a scalar in a 1-element vector so downstream `length()` succeeds) is no longer needed.
-**Migrated in 0.3.4:** capstone `expand_token` no longer wraps the terminal base case.
+**Renderer math-escape regression fixed.** Rustlab 0.3.1's markdown renderer had doubled every backslash spacing command inside LaTeX math (`\;` → `\\;`, `\!` → `\\!`, `\,` → `\\,`, `\|` → `\\|`) and rewrote `^*` → `^{\ast}`. 0.3.2 restored single-backslash output. `make notebooks` now produces bit-identical output to the pre-0.3.1 renders for every unchanged source file. Lessons no longer need to avoid those constructs in math.
 
-### ✅ Strided LHS assignment `v(1:2:n) = ...` — **landed in rustlab 0.3.4**
-**Was needed for:** any interleave / scatter pattern. The lessons did not actually rely on it (they used element-by-element writes), but it is now available and may simplify future scripts.
-**Now works:** `v(1:2:6) = [1, 2, 3]` writes the strided slice in one assignment.
+### rustlab 0.3.0
+
+**Multi-output function definitions.** `function [dE, dW, L] = step_grad(...)` with `[dE, dW, L] = step_grad(curr, nxt, E, W)` at the call site. The struct-return workaround is no longer needed; lessons 18 and 20 have been migrated to the native multi-output form.
+
+**Logical `&&` and `||` short-circuit.** `if i < L && seq(i + 1) == val` evaluates LHS first and skips RHS when LHS is false, so the last-position OOB read no longer happens. Lesson 19 uses the canonical idiom; the nested-`if` workaround is gone.
+
+**`layernorm(M)` row-wise matrix overload.** Returns a matrix of the same shape with each row normalised to mean 0, std 1. Lessons 12, 13, 14 use the matrix overload, no per-row loop.
+
+Example: `H_normed = layernorm(H);` — shape (T, d_model), per-row mean=0 std=1.
+
+### rustlab 0.2.0
+
+**Vector + 1×N matrix arithmetic.** `vec + 1×N_matrix`, `vec .* 1×N_matrix`, etc. — implicit broadcasting promotes both sides. The `(W * x')'` returns-a-matrix path no longer breaks per-step updates like `x = x + alpha * f(x)`. Lessons still use the explicit `M(1)` row-extract and `x * W'` patterns in places because the workarounds make the type story pedagogically explicit.
+
+**`M([3, 1, 2], :)` row gather.** Returns a matrix of those rows. `M([3, 1, 2])` returns a column-major linear gather (introduced in 0.3.0). For ordered row gathers, prefer `M(rows, :)` for clarity.
+
+Example: `H_perm = H([3, 1, 2, 5, 4], :);` — gather rows in any order.
+
+### rustlab 0.1.x
+
+**`seed(n)`.** `seed(N)` sets the global RNG to a deterministic state; subsequent `rand` / `randn` / `randi` / `sprand` calls are bit-stable. `seed()` (no argument) re-randomises from system entropy. Lessons 04 and 05 originally used a sin/cos pseudo-random matrix and a hand-set `draws` vector with TODO markers; both have been updated to use `seed(N)` followed by `randn` / `rand`.
+
+Example: `seed(42); E = randn(8, 6) * 0.1;` — bit-identical across runs.
