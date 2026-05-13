@@ -265,12 +265,13 @@ function [left_parent, right_parent] = compute_merge_table(char_seq, n_base, n_m
   end
 end
 
-# Recursively expand one token id into its character-ID sequence
-# (always a row vector — even singletons stay as 1-element vectors so
-# downstream `length()` works).
+# Recursively expand one token id into its character-ID sequence.
+# rustlab 0.3.4+: length() accepts a scalar (returns 1) and [L, R] handles
+# scalar-vector concat transparently, so the terminal case can return the
+# bare id and the caller's `length(chars_i)` still works.
 function chars_out = expand_token(id, left_parent, right_parent)
   if left_parent(id) == 0
-    chars_out = [id];
+    chars_out = id;
   else
     L = expand_token(left_parent(id),  left_parent, right_parent);
     R = expand_token(right_parent(id), left_parent, right_parent);
@@ -306,7 +307,7 @@ end
 function tok = sample_categorical(p)
   # Inverse-CDF sampling: walk the cumulative distribution until we cross r.
   c = cumsum(p);
-  r = rand(1)(1);
+  r = rand();
   N = length(p);
   i = 1;
   while i < N && c(i) < r

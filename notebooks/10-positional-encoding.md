@@ -199,18 +199,18 @@ E_pe = randn(vocab_pe, d_model_pe) * 0.1;
 ids = [1, 2, 1, 2, 1, 2, 1, 2];
 X_tok = zeros(T_demo, d_model_pe);
 for t = 1:T_demo
-  X_tok(t) = E_pe(ids(t));      % assign whole row from the embedding lookup
+  X_tok(t, :) = E_pe(ids(t), :);      % assign whole row from the embedding lookup
 end
 
-% PE(1:T_demo) returns a sub-matrix; use a loop to add it row-by-row to X_tok.
+% PE(1:T_demo, :) returns a sub-matrix; use a loop to add it row-by-row to X_tok.
 X_pos = zeros(T_demo, d_model_pe);
 for t = 1:T_demo
-  X_pos(t) = X_tok(t) + PE(t);
+  X_pos(t, :) = X_tok(t, :) + PE(t, :);
 end
 
 % Two positions of the SAME token: are their representations actually distinct?
-diff_tok_only = max(abs(X_tok(1) - X_tok(3)));      % both rows are token 1, no PE → identical
-diff_with_pe  = max(abs(X_pos(1) - X_pos(3)));      % same token, different positions → differ
+diff_tok_only = max(abs(X_tok(1, :) - X_tok(3, :)));   % both rows are token 1, no PE → identical
+diff_with_pe  = max(abs(X_pos(1, :) - X_pos(3, :)));   % same token, different positions → differ
 print("max |row1 - row3| (token only):", diff_tok_only);
 print("max |row1 - row3| (token + PE):", diff_with_pe);
 ```

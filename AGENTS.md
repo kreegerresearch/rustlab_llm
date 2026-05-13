@@ -369,11 +369,10 @@ tok = i;
 
 All currently-committed scripts and notebooks use the `while` form; new lessons should follow suit.
 
-### `A(i, :) = vec` row-write not supported; use `A(i) = vec` instead
-**Hit during Phase 8** (Lesson 21 — the same row-write pattern that lesson 19's BPE merge uses).
-**Symptom:** `A(i, :) = softmax(S(i, :))` errors with `expected scalar, got all-index` even though the RHS is a $1 \times N$ vector that fits the destination row exactly.
-**Workaround in use:** `A(i) = vec` is the row-write form per the M(scalar) breaking-change note above. This is documented but easy to forget when reaching for the symmetric `A(i, :)` form.
-**Wanted:** Accept `A(i, :) = vec` as an alias for the row write; the asymmetric "row read uses `:`, row write doesn't" is a frequent source of confusion.
+### ✅ `A(i, :) = vec` symmetric row-write — **landed in rustlab 0.3.4**
+**Was needed for:** Lesson 21 and many earlier scripts that fell back to `A(i) = vec` (the linear-index legacy form) because `A(i, :) = vec` errored.
+**Now works:** `A(i, :) = vec` writes a row exactly symmetric to the `A(i, :)` row-read. The older `A(i) = vec` legacy form still works and produces identical results; **new code should prefer the symmetric `A(i, :)` form**.
+**Status:** existing scripts continue to use the legacy `M(t) = vec` row-write — verified bit-identical to the symmetric form and left in place to avoid churn. The one exception is Lesson 10's `X_tok(t) = E_pe(ids(t))` pattern, which silently broke under the 0.3.0 M(scalar) breaking change (the RHS `E_pe(ids(t))` returns a scalar, not a row); fixed to `X_tok(t, :) = E_pe(ids(t), :)` in 0.3.4.
 
 ### ✅ `parmap` with vector/matrix-returning lambdas — **landed in rustlab 0.3.3**
 **Was needed for:** Lesson 20 `## Sidebar: Parallel Evaluation with parmap` and the natural next applications across the curriculum.
@@ -388,8 +387,16 @@ A = parmap(@(t) softmax(S(t, :)), 1:T);     % returns T × T matrix
 H_out = parmap(@(t) ffn(H(t, :), W1, b1, W2, b2), 1:T);   % returns T × d_model
 ```
 
-### `rand()` requires at least 1 argument; no zero-arg form for a single scalar
-**Hit during Phase 8** (Lesson 21 — `sample_categorical` helper).
-**Symptom:** `r = rand();` errors with `wrong number of arguments for 'rand': expected 1..2, got 0`.
-**Workaround in use:** `r = rand(1)(1);` — request a $1 \times 1$ matrix and chain-index the scalar.
-**Wanted:** `rand()` returning a scalar in `[0, 1)`, matching MATLAB / Octave convention.
+### ✅ `rand()` zero-arg form — **landed in rustlab 0.3.4**
+**Was needed for:** `sample_categorical` in lessons 21 and 22.
+**Now works:** `rand()` returns a scalar in `[0, 1)`, matching MATLAB / Octave convention. The `rand(1)(1)` chain-index workaround is no longer needed.
+**Migrated in 0.3.4:** lessons 21 and 22 `sample_categorical` helpers.
+
+### ✅ `length(scalar)` — **landed in rustlab 0.3.4**
+**Was needed for:** capstone (`expand_token` recursion) and any code that needed a uniform "vector of length 1" base case.
+**Now works:** `length(5)` returns `1`. Scalar-vector concat (e.g. `[3, [1, 2]]`) also produces a flat row vector. The `[id]` wrapper (wrapping a scalar in a 1-element vector so downstream `length()` succeeds) is no longer needed.
+**Migrated in 0.3.4:** capstone `expand_token` no longer wraps the terminal base case.
+
+### ✅ Strided LHS assignment `v(1:2:n) = ...` — **landed in rustlab 0.3.4**
+**Was needed for:** any interleave / scatter pattern. The lessons did not actually rely on it (they used element-by-element writes), but it is now available and may simplify future scripts.
+**Now works:** `v(1:2:6) = [1, 2, 3]` writes the strided slice in one assignment.
