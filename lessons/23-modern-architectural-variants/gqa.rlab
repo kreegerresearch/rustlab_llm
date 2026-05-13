@@ -39,16 +39,14 @@ function head_out = attention_head(Q_h, K_g, V_g, d_head)
   T = size(Q_h)(1);
   scale = 1.0 / sqrt(d_head);
   S = (Q_h * K_g') * scale;                 % (T x T)
-  # Causal mask
+  # Causal mask: -1e9 above the diagonal.
   for i = 1:T
     for j = (i + 1):T
       S(i, j) = -1e9;
     end
   end
-  A = zeros(T, T);
-  for i = 1:T
-    A(i) = softmax(S(i, :));
-  end
+  # softmax(M) is per-row (rustlab 0.3.3+) — one call for the whole T×T block.
+  A = softmax(S);
   head_out = A * V_g;                       % (T x d_head)
 end
 

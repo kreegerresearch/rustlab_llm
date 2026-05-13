@@ -65,12 +65,9 @@ function [out_row, flops] = naive_step(tokens, t, E_tok, E_pos, Wq, Wk, Wv)
       S(i, j) = -1e9;
     end
   end
-  # Row-wise softmax — for this script we only need the last row, but compute
-  # the full matrix to match what a textbook forward pass would do.
-  A = zeros(t, t);
-  for i = 1:t
-    A(i) = softmax(S(i, :));
-  end
+  # softmax(M) does per-row softmax (rustlab 0.3.3+) — one call replaces
+  # the per-row loop and makes the textbook forward pass a 3-line block.
+  A = softmax(S);
   Out = A * V;                                   % (t x d)
   out_row = Out(t, :);
   # FLOP count (multiply-adds counted once): 3*t*d^2 for QKV projections,

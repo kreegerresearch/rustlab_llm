@@ -312,13 +312,13 @@ H_perm = H([3, 1, 2, 5, 4], :);   % gather those rows in any order
 H_normed = layernorm(H);                    % shape (T, d_model), per-row mean=0 std=1
 ```
 
-### `softmax(M[, dim])` row-wise matrix overload — **requested** (`../rustlab/dev/requests/softmax-matrix-rowwise.md`)
-**Hit while writing:** Lesson 08 (attention weights), Lesson 13 (transformer block), Lesson 14 (full GPT), Lesson 15 (backprop through attention).
-**Workaround in use:** A per-row loop, `for t = 1:T; A(t, :) = softmax(S(t, :)); end`. Correct, but writes the same loop four separate times across the lesson series and slightly misleads about the parallel nature of softmax (every row is independent).
-**Wanted:** `softmax(M)` / `softmax(M, dim)` mirroring `layernorm(M[, dim[, eps]])`, default `dim=2` (per-row, ML convention).
-**Example (target):**
+### ✅ `softmax(M)` row-wise matrix overload — **landed in rustlab 0.3.3**
+**Was hit while writing:** Lessons 08, 13, 14, 15 — the per-row softmax loop in attention.
+**Now works:** `softmax(M)` returns a matrix of the same shape with each row softmax-normalised (dim=2, ML convention). One call replaces the `for t = 1:T; A(t) = softmax(S(t, :)); end` idiom.
+**Migrated in 0.3.3:** Lessons 21 (`kv_cache.rlab`) and 23 (`gqa.rlab`) — the two scripts written before 0.3.3 that still had the per-row loop. Lessons 08, 13, 14 already used the matrix overload (migrated earlier on the back of the original feature request).
+**Example:**
 ```
-A = softmax(S_masked, 2);                   % per-row softmax on a T × T scores matrix
+A = softmax(S_masked);                      % per-row softmax on a T × T scores matrix
 ```
 
 ### ⚠️ BREAKING (rustlab 0.3.0): `M(scalar)` is now a linear-index element, not a row
@@ -359,27 +359,17 @@ Avoid the older `found = 0/1` flag pattern and avoid `return;` mid-`for`-loop �
 **Workaround in use:** `A(i) = vec` is the row-write form per the M(scalar) breaking-change note above. This is documented but easy to forget when reaching for the symmetric `A(i, :)` form.
 **Wanted:** Accept `A(i, :) = vec` as an alias for the row write; the asymmetric "row read uses `:`, row write doesn't" is a frequent source of confusion.
 
-### `parmap` should accept vector/matrix-returning lambdas
-**Hit while writing:** Lesson 20 `## Sidebar: Parallel Evaluation with parmap` — and the natural next applications across the curriculum.
-**Symptom:** `parmap(@(t) M(t, :) * W, 1:T)` errors with `parmap: lambda must return a scalar (got vector at index 1); vector/matrix return values are not yet supported`. Only scalar-returning lambdas work today.
-**Why it matters for this curriculum:** The most pedagogically valuable parallelism sites in a transformer are *vector-valued by construction* and currently locked out:
-- **Per-row attention softmax** (Lessons 08, 13, 14): each row of the $T \times T$ attention matrix is independent, but produces a $T$-vector. `softmax(M[, dim])` (already requested) would address this for the specific case of softmax, but parmap is the general form.
-- **Per-position FFN** (Lesson 11): the "per-position independence" demonstration is the structural reason the FFN is position-wise — `parmap(@(t) ffn(H(t, :), W1, b1, W2, b2), 1:T)` would express that directly. Currently a `for` loop with row-write.
-- **Multi-head attention** (Lesson 09): each head is *defined* as an independent attention computation. `parmap(@(h) head_forward(H, h, Wq, Wk, Wv), 1:H)` would map the architectural definition onto code; today each head's $T \times d_v$ matrix output blocks parmap.
-- **Batched autoregressive sampling** (Lesson 21): "generate $S$ diverse samples in parallel" is the diversity-evaluation idiom — each sample is an independent $T$-vector.
-**What works today:** Scalar reductions over independent indices — per-token loss / per-token PPL (Lessons 18, 20), pairwise cosine similarity (Lesson 04). Lesson 20 uses parmap in this form and `mean(parmap(...))` is bit-identical to the serial loop.
-**Wanted:** Accept any rustlab value as lambda return — scalar, vector, or matrix. Two natural output shapes for a `parmap(f, 1:N)` call where `f(i)` returns a row of length $d$: (a) an $N \times d$ matrix (stacked rows) or (b) a cell array of $N$ vectors. The matrix form is the natural fit for the four use cases above (sequence × features, head × sample, etc.) and matches how `softmax(M, 2)` already returns row-stacked output.
-**Example (target):**
+### ✅ `parmap` with vector/matrix-returning lambdas — **landed in rustlab 0.3.3**
+**Was needed for:** Lesson 20 `## Sidebar: Parallel Evaluation with parmap` and the natural next applications across the curriculum.
+**Now works:** `parmap(f, 1:N)` where `f(i)` returns a $d$-vector produces an $N \times d$ matrix (row-stacked). The Lesson 20 sidebar's "where it fits" table has been updated to reflect the new capability — every row-/position-/head-parallel transformer pattern is now expressible as a single `parmap` call.
+**Status of existing scripts:** The pre-0.3.3 lessons used a mix of (a) explicit per-row `for` loops with row-write `M(i) = vec`, and (b) the matrix overloads of `softmax` / `layernorm` (where available). They remain correct and pedagogically explicit; `parmap` is now the canonical alternative for any new lesson that wants to express embarrassingly-parallel structure.
+**Examples that now work:**
 ```
 % Per-row softmax of a (T, T) attention-score matrix:
 A = parmap(@(t) softmax(S(t, :)), 1:T);     % returns T × T matrix
 
 % Per-position FFN:
 H_out = parmap(@(t) ffn(H(t, :), W1, b1, W2, b2), 1:T);   % returns T × d_model
-
-% Per-head attention:
-heads = parmap(@(h) head_forward(H, h, Wq, Wk, Wv), 1:n_heads);
-% returns n_heads × T × d_v (3D), or a length-n_heads cell of T × d_v matrices
 ```
 
 ### `rand()` requires at least 1 argument; no zero-arg form for a single scalar

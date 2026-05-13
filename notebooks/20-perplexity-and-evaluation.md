@@ -204,21 +204,18 @@ Both forms produce **bit-identical** results — `parmap` is a control-flow rewr
 
 ### Where the pattern fits — and where it doesn't
 
-The constraint to keep in mind: rustlab 0.3.1's `parmap` requires the lambda to return a **scalar**. That maps naturally onto reductions:
+`parmap` in rustlab 0.3.3+ accepts any lambda return type — scalar, vector, or matrix. A `parmap(f, 1:N)` call where `f(i)` returns a $d$-vector produces an $N \times d$ matrix (row-stacked). This unlocks the row-/position-/head-parallel patterns that are common in transformers:
 
-| Site | parmap-friendly? | Why |
-|---|---|---|
-| Per-token loss / per-token PPL (this lesson) | ✓ | each $\ell_t$ is a scalar |
-| Pairwise embedding similarity ([[04-embeddings-and-similarity]]) | ✓ | each $\cos(\mathbf{e}_i, \mathbf{e}_j)$ is a scalar |
-| Mean validation loss ([[18-training-loop]]) | ✓ | per-pair loss is a scalar; the *gradient* accumulator is not |
-| Per-row attention softmax ([[08-scaled-dot-product-attention]]) | ✗ | each row is a vector |
-| Per-position FFN output ([[11-feed-forward-block]]) | ✗ | each position is a $d_{\text{model}}$-vector |
-| Multi-head attention output ([[09-multi-head-attention]]) | ✗ | each head returns a $T \times d_v$ matrix |
-| Autoregressive token sampling ([[21-sampling-and-generation]]) | ✗ — *and* fundamentally serial | each step depends on the previous emission, not just on the past prefix that already exists |
+| Site | parmap form |
+|---|---|
+| Per-token loss / per-token PPL (this lesson) | `parmap(@(t) loss_t(t), 1:T)` returns a scalar vector |
+| Pairwise embedding similarity ([[04-embeddings-and-similarity]]) | each $\cos(\mathbf{e}_i, \mathbf{e}_j)$ is a scalar |
+| Mean validation loss ([[18-training-loop]]) | per-pair loss is a scalar |
+| Per-row attention softmax ([[08-scaled-dot-product-attention]]) | `parmap(@(t) softmax(S(t,:)), 1:T)` returns the $T \times T$ attention matrix — though `softmax(M)` (also rustlab 0.3.3) is more direct |
+| Per-position FFN output ([[11-feed-forward-block]]) | `parmap(@(t) ffn(H(t,:)), 1:T)` returns $T \times d_{\text{model}}$ |
+| Multi-head attention output ([[09-multi-head-attention]]) | `parmap(@(h) head_h(H, h), 1:H)` returns each head's output |
 
-The first three are eligible today. The next three are eligible *in principle* — every row / position / head is independent — but blocked on parmap accepting vector or matrix returns (recorded as a feature request in [AGENTS.md](../AGENTS.md)).
-
-The last row is different: even with unlimited parmap support, the generation loop in [Lesson 21](21-sampling-and-generation.md) is sequential by definition — token $x_{t+1}$ can only be sampled after $x_t$ has been chosen and appended to the prefix. Evaluation has $T$ independent forward passes; generation has $T$ dependent ones. The KV cache is what makes that serial path fast, not parallelism.
+The one site where parmap **cannot** help is **autoregressive token sampling** ([[21-sampling-and-generation]]): the generation loop is sequential by definition — token $x_{t+1}$ can only be sampled after $x_t$ has been chosen and appended to the prefix. Evaluation has $T$ independent forward passes; generation has $T$ dependent ones. The KV cache is what makes that serial path fast, not parallelism.
 
 ### Example — `parmap` mean perplexity
 
