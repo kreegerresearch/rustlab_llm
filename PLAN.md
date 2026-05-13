@@ -323,8 +323,8 @@ These close the gaps surfaced by the nanoGPT / *Attention Is All You Need* cover
 
 **Handoff notes:**
 - Last completed lesson: 24-full-backprop-and-fine-tuning (notebook + 3 scripts: `full_backprop`, `sft`, `dpo`).
-- The full-transformer forward/backward library is duplicated across the 3 scripts (rustlab has no module system; AGENTS.md requires self-contained scripts). When/if rustlab gains imports, factor `forward_only`, `backward_from_dlogits`, `layernorm_fwd/bwd`, and `gelu_grad` into a shared file.
-- The Lesson 22 capstone could now optionally be rewritten to train the full architecture instead of the bigram surrogate — currently left as written since the pedagogical point (mode-collapse vs sampling) doesn't change.
+- The full-transformer forward/backward library is duplicated across all scripts using it (rustlab has no module system; AGENTS.md requires self-contained scripts). When/if rustlab gains imports, factor `forward`, `backward`, `layernorm_fwd/bwd`, and `gelu_grad` into a shared file.
+- **Lesson 22 capstone rewritten** to use the full-architecture training from this phase. Old bigram-surrogate version reached PPL = 1.51 with greedy collapsing to `"the cat the cat"`; the new full-transformer version reaches PPL = 1.00008 with greedy reproducing the corpus exactly (`"the cat sat on the mat the cat sat on the mat …"`).  Attention resolves the bigram ambiguity that the old capstone could not.
 
 ---
 

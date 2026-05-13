@@ -79,7 +79,7 @@ Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts
 | # | Title | Core Concept |
 |---|-------|-------------|
 | 21 | Sampling and Generation | Autoregressive loop; greedy / temperature / top-K / top-P; KV cache; repetition penalty |
-| 22 | Putting It All Together | End-to-end: char tokenize → BPE → train embedding+head → sample at checkpoints |
+| 22 | Putting It All Together | End-to-end: char tokenize → BPE → train **full transformer** with analytical backprop → sample at checkpoints (PPL → 1.00008, greedy reproduces corpus) |
 
 ### Phase 9 — Modern Architectural Variants (post-curriculum extension) `(Complete)`
 
