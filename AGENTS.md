@@ -338,10 +338,9 @@ A = softmax(S_masked);                      % per-row softmax on a T × T scores
 **Fix verified:** `make notebooks` under rustlab 0.3.2 produces output bit-identical to the pre-0.3.1 renders for every unchanged source file. Lessons 21 and 22 (authored to dodge the regression) still render unchanged. Lessons 03, 13, 14, 18, 20 (sidebar additions from May 2026) render their new content cleanly with single-backslash spacing.
 **Workaround removed:** lessons no longer need to avoid `\;` / `\!` / `\,` / `\|` / `^*` in math.
 
-### `break` keyword not supported in `for` / `while` loops
-**Hit during Phase 8** (Lesson 21 — top-P sampling, inverse-CDF sampling).
-**Symptom:** `break;` inside `for i = 1:K ... end` raises `error: ... undefined variable 'break'`. Same for `while` loops.
-**Workaround in use:** rewrite the loop as a `while` whose condition encodes "keep going until the hit", and rely on short-circuit `&&` (rustlab 0.3.0+) to guard the bound check. The exit is natural — no flag needed.
+### ⛔ `break` / `continue` — **declined upstream**; use `while ... && cond` instead
+**Status:** The rustlab project has declined to add `break` / `continue` keywords. The canonical idiom for early-exit in this curriculum is a `while` loop whose condition encodes "keep going until the hit", relying on short-circuit `&&` (rustlab 0.3.0+) to guard the bound check.
+**Required pattern** for "find the first index that satisfies a predicate":
 ```
 % Walk forward to the first index whose cumulative mass clears P.
 j = 1;
@@ -350,8 +349,25 @@ while j < K && c(j) < P
 end
 n_keep = j;
 ```
-Avoid the older `found = 0/1` flag pattern and avoid `return;` mid-`for`-loop — both work but the `while` form is the canonical idiom for this curriculum.
-**Wanted:** Standard `break` / `continue` keywords in `for` and `while`.
+**Required pattern** for inverse-CDF sampling (was `for ... return;`):
+```
+% Walk the cumulative distribution until we cross r.
+c = cumsum(p);
+r = rand(1)(1);
+N = length(p);
+i = 1;
+while i < N && c(i) < r
+  i = i + 1;
+end
+tok = i;
+```
+**Do not use** any of these older workarounds in new code:
+- `break;` (errors with `undefined variable 'break'`)
+- `continue;` (same)
+- The `found = 0/1` flag inside a `for` loop
+- `return;` from a `for` loop as a mid-loop exit
+
+All currently-committed scripts and notebooks use the `while` form; new lessons should follow suit.
 
 ### `A(i, :) = vec` row-write not supported; use `A(i) = vec` instead
 **Hit during Phase 8** (Lesson 21 — the same row-write pattern that lesson 19's BPE merge uses).
