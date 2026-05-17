@@ -21,10 +21,10 @@ help: ## Show this help
 all: notebooks html ## Regenerate the rendered book/ and the interactive HTML build
 
 notebooks: ## Render book/<slug>.md from notebooks/<slug>.md
-	rustlab notebook render notebooks --format markdown --output $(abspath $(BOOK))
+	rustlab-notebook render notebooks --format markdown --output $(abspath $(BOOK))
 
 html: ## Build interactive HTML at book/index.html (auto-generated entry page + per-notebook html)
-	rustlab notebook render notebooks --format html --output $(abspath $(BOOK)) --title "rustlab_llm"
+	rustlab-notebook render notebooks --format html --output $(abspath $(BOOK)) --title "rustlab_llm"
 
 notebooks-check: notebooks ## Fail if book/ drifted from sources
 	@if [ -n "$$(git status --porcelain -- $(BOOK)/)" ]; then \

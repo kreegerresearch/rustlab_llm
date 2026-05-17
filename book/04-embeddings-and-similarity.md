@@ -57,6 +57,7 @@ print("Embedding matrix E:");
 print(E);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Embedding matrix E:
 Matrix(8x6)
@@ -69,6 +70,8 @@ Matrix(8x6)
   [0.018009, -0.021512, -0.148168, -0.026601, 0.113074, 0.056558]
   [-0.013213, -0.177213, -0.147622, -0.041186, -0.002510, 0.080970]
 ```
+
+<!-- rustlab:output-end -->
 
 Shape: 8 $\times$ 6 — one row per token in a 6-dimensional embedding space.
 
@@ -84,10 +87,13 @@ print("Embedded representation h3:", h3);
 print("Row 3 of E:", E(3));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Embedded representation h3: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
 Row 3 of E: -0.04089876598481701
 ```
+
+<!-- rustlab:output-end -->
 
 The lookup matches the direct row access exactly — $\max|h_3 - E_3| = 5.85e-02$ (machine epsilon).
 
@@ -101,11 +107,14 @@ imagesc(E, "viridis")
 title("Embedding Matrix E  (8 tokens x 6 dims)  - random init")
 ```
 
+<!-- rustlab:output-start -->
 ```text
 8
 ```
 
-![plot 1](plots/04-embeddings-and-similarity/plot-1.svg)
+![plot 1](plots/04-embeddings-and-similarity/plot-1-5b180413.svg)
+
+<!-- rustlab:output-end -->
 
 ## Cosine Similarity
 
@@ -150,6 +159,7 @@ function s = cos_sim(a, b)
 end
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Embedding vectors (dim=4):
 king : [1×4]  1.000000  0.100000  0.800000  0.900000
@@ -157,6 +167,8 @@ queen: [1×4]  0.900000  0.900000  0.700000  0.800000
 man  : [1×4]  0.100000  0.100000  0.600000  0.400000
 woman: [1×4]  0.100000  0.900000  0.500000  0.300000
 ```
+
+<!-- rustlab:output-end -->
 
 ### Example — 4×4 cosine-similarity matrix
 
@@ -188,6 +200,7 @@ print(S);
 sym_err = max(reshape(abs(S - transpose(S)), 1, 16));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Cosine similarity matrix (king, queen, man, woman):
 Matrix(4x4)
@@ -196,6 +209,8 @@ Matrix(4x4)
   [0.824250, 0.754961, 1.000000, 0.657018]
   [0.509099, 0.834240, 0.657018, 1.000000]
 ```
+
+<!-- rustlab:output-end -->
 
 Key pairs: king/queen = $0.873$ (both royal), king/man = $0.824$ (same gender), queen/woman = $0.834$ (same gender). The matrix is symmetric: $\max|S - S^\top| = 0.00e+00$.
 
@@ -210,11 +225,14 @@ figure()
 heatmap(vocab, vocab, S, "Cosine Similarity: king, queen, man, woman", "viridis")
 ```
 
+<!-- rustlab:output-start -->
 ```text
 9
 ```
 
-![plot 2](plots/04-embeddings-and-similarity/plot-2.svg)
+![plot 2](plots/04-embeddings-and-similarity/plot-2-42d28de8.svg)
+
+<!-- rustlab:output-end -->
 
 ## Analogy Arithmetic
 
@@ -236,11 +254,56 @@ sim_to_man   = cos_sim(analogy, man);
 sim_to_woman = cos_sim(analogy, woman);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 king - man + woman: [1×4]  1.000000  0.900000  0.700000  0.800000
 ```
 
+<!-- rustlab:output-end -->
+
 Similarity of $\mathbf{E}_{\text{king}} - \mathbf{E}_{\text{man}} + \mathbf{E}_{\text{woman}}$ to each vocab item: king = $0.881$, **queen = 0.999**, man = $0.738$, woman = $0.812$. The closest token is **queen**, as predicted. This emergent structure is not programmed — it arises from training the model to predict next tokens accurately. Dense embeddings are a compressed summary of co-occurrence patterns in language.
+
+### Example — Visualising the parallelogram
+
+The algebra above says $\mathbf{E}_{\text{queen}} - \mathbf{E}_{\text{king}} \approx \mathbf{E}_{\text{woman}} - \mathbf{E}_{\text{man}}$. Geometrically that means the four points form a **parallelogram** in embedding space: the "femininity" displacement is the same whether you start at `king` or `man`, and equivalently the "royalty" displacement is the same whether you start at `man` or `woman`.
+
+The hand-crafted embeddings above use four explicit axes — $[\text{royalty}, \text{femininity}, \text{age}, \text{authority}]$ — so we can plot the first two dimensions directly and see the parallelogram literally:
+
+```rustlab
+% Royalty (dim 1) on x-axis, femininity (dim 2) on y-axis.
+xs = [king(1), queen(1), man(1), woman(1)];
+ys = [king(2), queen(2), man(2), woman(2)];
+
+figure()
+scatter(xs, ys)
+hold("on")
+% Draw the parallelogram's four sides: king -> queen, man -> woman
+% (both the "femininity" shift) and king -> man, queen -> woman
+% (both the "royalty" shift).  Two parallel arrows -> parallelogram.
+plot([king(1), queen(1)], [king(2), queen(2)], "color", "blue",  "label", "femininity")
+plot([man(1),  woman(1)], [man(2),  woman(2)], "color", "blue",  "label", "femininity")
+plot([king(1), man(1)],   [king(2), man(2)],   "color", "red",   "label", "royalty")
+plot([queen(1),woman(1)], [queen(2),woman(2)], "color", "red",   "label", "royalty")
+hold("off")
+title("Parallelogram in (royalty, femininity) space")
+xlabel("royalty")
+ylabel("femininity")
+xlim([-0.1, 1.1])
+ylim([-0.1, 1.1])
+```
+
+<!-- rustlab:output-start -->
+```text
+10
+```
+
+![plot 3](plots/04-embeddings-and-similarity/plot-3-b88cc086.svg)
+
+<!-- rustlab:output-end -->
+
+The two **blue** segments are parallel and equal-length (the "femininity" shift); the two **red** segments are likewise parallel (the "royalty" shift). The analogy `king − man + woman ≈ queen` is the algebraic statement of this geometric property: starting from `king`, subtract the "royalty" arrow to land at `man`, then add the "femininity" arrow to land at `woman`'s royalty-zero level — and you arrive at `queen`'s coordinates (modulo dimensions 3 and 4, which we projected away).
+
+In a *trained* embedding, you don't get to label axes like this — the model discovers the directions on its own from co-occurrence statistics. The fact that the parallelogram shape *emerges* across dozens of analogies (`Paris − France + Italy ≈ Rome`, `walking − walked + ran ≈ running`, etc.) is what tells you the model has organised its representation around interpretable directions, even though no human annotated them.
 
 ## Key Takeaways
 

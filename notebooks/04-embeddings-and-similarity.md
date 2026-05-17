@@ -189,6 +189,39 @@ sim_to_woman = cos_sim(analogy, woman);
 
 Similarity of $\mathbf{E}_{\text{king}} - \mathbf{E}_{\text{man}} + \mathbf{E}_{\text{woman}}$ to each vocab item: king = ${sim_to_king:%.3f}$, **queen = ${sim_to_queen:%.3f}**, man = ${sim_to_man:%.3f}$, woman = ${sim_to_woman:%.3f}$. The closest token is **queen**, as predicted. This emergent structure is not programmed — it arises from training the model to predict next tokens accurately. Dense embeddings are a compressed summary of co-occurrence patterns in language.
 
+### Example — Visualising the parallelogram
+
+The algebra above says $\mathbf{E}_{\text{queen}} - \mathbf{E}_{\text{king}} \approx \mathbf{E}_{\text{woman}} - \mathbf{E}_{\text{man}}$. Geometrically that means the four points form a **parallelogram** in embedding space: the "femininity" displacement is the same whether you start at `king` or `man`, and equivalently the "royalty" displacement is the same whether you start at `man` or `woman`.
+
+The hand-crafted embeddings above use four explicit axes — $[\text{royalty}, \text{femininity}, \text{age}, \text{authority}]$ — so we can plot the first two dimensions directly and see the parallelogram literally:
+
+```rustlab
+% Royalty (dim 1) on x-axis, femininity (dim 2) on y-axis.
+xs = [king(1), queen(1), man(1), woman(1)];
+ys = [king(2), queen(2), man(2), woman(2)];
+
+figure()
+scatter(xs, ys)
+hold("on")
+% Draw the parallelogram's four sides: king -> queen, man -> woman
+% (both the "femininity" shift) and king -> man, queen -> woman
+% (both the "royalty" shift).  Two parallel arrows -> parallelogram.
+plot([king(1), queen(1)], [king(2), queen(2)], "color", "blue",  "label", "femininity")
+plot([man(1),  woman(1)], [man(2),  woman(2)], "color", "blue",  "label", "femininity")
+plot([king(1), man(1)],   [king(2), man(2)],   "color", "red",   "label", "royalty")
+plot([queen(1),woman(1)], [queen(2),woman(2)], "color", "red",   "label", "royalty")
+hold("off")
+title("Parallelogram in (royalty, femininity) space")
+xlabel("royalty")
+ylabel("femininity")
+xlim([-0.1, 1.1])
+ylim([-0.1, 1.1])
+```
+
+The two **blue** segments are parallel and equal-length (the "femininity" shift); the two **red** segments are likewise parallel (the "royalty" shift). The analogy `king − man + woman ≈ queen` is the algebraic statement of this geometric property: starting from `king`, subtract the "royalty" arrow to land at `man`, then add the "femininity" arrow to land at `woman`'s royalty-zero level — and you arrive at `queen`'s coordinates (modulo dimensions 3 and 4, which we projected away).
+
+In a *trained* embedding, you don't get to label axes like this — the model discovers the directions on its own from co-occurrence statistics. The fact that the parallelogram shape *emerges* across dozens of analogies (`Paris − France + Italy ≈ Rome`, `walking − walked + ran ≈ running`, etc.) is what tells you the model has organised its representation around interpretable directions, even though no human annotated them.
+
 ## Key Takeaways
 
 - Embeddings are the first transformation inside every language model: one-hot $\to$ dense vector via the embedding matrix $\mathbf{E}$.

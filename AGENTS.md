@@ -72,7 +72,7 @@ make lesson-01          # run only lesson 01's .rlab scripts (pattern target: le
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
-The notebook render is directory-mode: `rustlab notebook render notebooks --format markdown --output book` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The hand-written `book/README.md` is preserved (the renderer skips files named `README.md` on input).
+The notebook render is directory-mode: `rustlab-notebook render notebooks --format markdown --output book` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The hand-written `book/README.md` is preserved (the renderer skips files named `README.md` on input). Note: as of rustlab 0.3.4 (May 2026) the renderer is a separate binary `rustlab-notebook` — the old `rustlab notebook ...` subcommand has been removed. `make notebooks` is updated accordingly.
 
 Single script:
 ```bash

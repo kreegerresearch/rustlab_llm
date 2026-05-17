@@ -67,6 +67,50 @@ $$\mathbf{S}_{\text{scaled}} = \frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}}.$$
 S = Q * K' * scale;
 ```
 
+### Example — Empirical variance grows with $d_k$, and softmax saturates without scaling
+
+The variance argument above is the central justification for the $1/\sqrt{d_k}$ factor in the original *Attention Is All You Need* paper. Verify it numerically: sample i.i.d. $\mathcal{N}(0, 1)$ vectors at three dimensions and measure $\mathrm{Var}(\mathbf{q}\cdot\mathbf{k})$. (Names ending in `_v` are local to this example so the global `T`, `Q`, `K` from earlier blocks stay intact for the sections below.)
+
+```rustlab
+seed(8);
+n_samples = 5000;
+dks = [4, 64, 512];
+for kk = 1:3
+  dk_v = dks(kk);
+  dots_v = zeros(n_samples);
+  for s = 1:n_samples
+    q_v = randn(1, dk_v);
+    k_v = randn(1, dk_v);
+    dots_v(s) = sum(q_v .* k_v);
+  end
+  var_v = mean(dots_v .^ 2);          % variance, since dots have mean ~0
+  ratio_v = var_v / dk_v;             % variance of (q.k)/sqrt(d_k) is ratio_v
+  print("d_k =", dk_v, "  Var(q.k) =", var_v, "  Var(q.k) / d_k =", ratio_v);
+end
+```
+
+The expected ratio is $\approx 1$ at every $d_k$ — the variance scales exactly linearly with $d_k$, which is why dividing by $\sqrt{d_k}$ restores unit-variance scores regardless of dimension. The downstream consequence is dramatic: examine the softmax output of one unscaled vs scaled row at $d_k = 512$.
+
+```rustlab
+seed(8);
+dk_v = 512;
+T_v  = 8;
+Q_v = randn(T_v, dk_v);
+K_v = randn(T_v, dk_v);
+S_unscaled_v = Q_v * K_v';                            % raw dot products, variance ~512
+S_scaled_v   = Q_v * K_v' * (1.0 / sqrt(dk_v));        % unit-variance after scaling
+
+% Inspect row 1 of the attention distribution under each.
+A_unscaled_v = softmax(S_unscaled_v(1, :));
+A_scaled_v   = softmax(S_scaled_v(1, :));
+print("max A_unscaled =", max(A_unscaled_v), "  (close to 1 -> softmax saturated, one-hot)");
+print("max A_scaled   =", max(A_scaled_v),   "  (closer to 1/T -> well-spread)");
+print("A_unscaled :", A_unscaled_v);
+print("A_scaled   :", A_scaled_v);
+```
+
+At $d_k = 512$ unscaled, the softmax assigns $\approx 1.0$ to the argmax row and $\approx 0$ to every other position — the **score gap** is so large after exponentiation that one entry wins absolutely. With $1/\sqrt{d_k}$ scaling, the row stays well-spread and the model can actually learn to *blend* values across positions. The same calculation through the backward pass shows that the unscaled gradient through the attention row is essentially zero on every non-argmax column — **gradients vanish almost everywhere**, training stalls, the model is effectively a hard selector. The √d_k factor is what makes attention differentiable in practice.
+
 ## The Causal Mask
 
 ### Theory
