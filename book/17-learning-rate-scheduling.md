@@ -79,11 +79,14 @@ xlabel("step")
 ylabel("eta")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-36
+37
 ```
 
-![plot 1](plots/17-learning-rate-scheduling/plot-1.svg)
+![plot 1](plots/17-learning-rate-scheduling/plot-1-8f4379b7.svg)
+
+<!-- rustlab:output-end -->
 
 Three regions are visible: a steep linear ramp to the peak in the first 500 steps, a gentle plateau near the peak, and a long cosine decay to the floor.
 
@@ -156,11 +159,14 @@ print("constant low  LR  final loss:", loss_low(n_train + 1));
 print("warmup+cosine     final loss:", loss_sched(n_train + 1));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 constant high LR  final loss: 1.023964497551713
 constant low  LR  final loss: 1.0006252375809246
 warmup+cosine     final loss: 1.0018362245113204
 ```
+
+<!-- rustlab:output-end -->
 
 ```rustlab
 figure()
@@ -176,11 +182,14 @@ ylabel("L")
 legend("high", "low", "warmup+cosine")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-37
+38
 ```
 
-![plot 2](plots/17-learning-rate-scheduling/plot-2.svg)
+![plot 2](plots/17-learning-rate-scheduling/plot-2-7d164a2b.svg)
+
+<!-- rustlab:output-end -->
 
 The high-LR run shows large fluctuations early (the optimiser overshoots before noise averages out); the low-LR run is smooth but slow; the schedule run starts gentle, accelerates as the warmup completes, and decays into a low-noise tail.
 

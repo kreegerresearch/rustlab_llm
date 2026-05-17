@@ -58,11 +58,14 @@ print("PPL peaked  =", entropy_to_ppl(p_peaked));
 print("PPL sharp   =", entropy_to_ppl(p_sharp));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 PPL uniform = 4   (should equal 4)
 PPL peaked  = 2.5611285178871386
 PPL sharp   = 1.1825824177485913
 ```
+
+<!-- rustlab:output-end -->
 
 A uniform distribution over 4 classes has entropy $\log 4 \approx 1.386$ nats and $\mathrm{PPL} = 4$. Peaked distributions have $\mathrm{PPL}$ between 1 and 4, with $\mathrm{PPL} \to 1$ as the distribution concentrates on a single class.
 
@@ -98,10 +101,13 @@ print("Bigram PPL on 'abcbabcb...' (Lesson 05): ", PPL_bigram);
 print("Vocab size 3 -> uniform PPL = 3.");
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Bigram PPL on 'abcbabcb...' (Lesson 05):  1.4148167253704287
 Vocab size 3 -> uniform PPL = 3.
 ```
+
+<!-- rustlab:output-end -->
 
 A trained bigram on the period-4 corpus reaches $\mathrm{PPL} \approx 1.414$ — the theoretical floor. A model that did *better* would have to be using more than the previous-token context (e.g. the trigram `(prev2, prev)` would push PPL all the way to 1, since the corpus is fully deterministic given two tokens).
 
@@ -172,9 +178,12 @@ L = L / n_pairs;
 print("serial loop loss:", L);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 serial loop loss: 1.0896852084995248
 ```
+
+<!-- rustlab:output-end -->
 
 Rustlab provides `parmap` for exactly this pattern. The map–then–reduce form makes the independence explicit:
 
@@ -200,11 +209,14 @@ print("serial mean loss:", L_serial);
 print("diff:            ", abs(L_parmap - L_serial));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 parmap mean loss: 1.0896852084995248
 serial mean loss: 1.0896852084995248
 diff:             0
 ```
+
+<!-- rustlab:output-end -->
 
 Both forms produce **bit-identical** results — `parmap` is a control-flow rewrite, not a numerical approximation. The advantage is twofold: (a) the parallel-over-positions structure is now expressed in code, and (b) on multi-core runtimes the wall-clock time scales sublinearly with $n_{\text{pairs}}$.
 
@@ -242,11 +254,14 @@ print("median PPL          :", median(ppls));
 print("geometric mean PPL  :", exp(mean(log(ppls))), " (matches exp(mean cross-entropy))");
 ```
 
+<!-- rustlab:output-start -->
 ```text
 arithmetic mean PPL : 2.9852957817912427
 median PPL          : 2.9073771754767415
 geometric mean PPL  : 2.973337943715371  (matches exp(mean cross-entropy))
 ```
+
+<!-- rustlab:output-end -->
 
 Two summary statistics matter:
 

@@ -61,9 +61,12 @@ perm_err = max(reshape(abs(O_perm - P * O), 1, T * d_model));
 print("max |attn(P*X) - P*attn(X)| =", perm_err);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 max |attn(P*X) - P*attn(X)| = 0.0000000000000004440892098500626
 ```
+
+<!-- rustlab:output-end -->
 
 The discrepancy $4.44e-16$ is at machine precision — attention is *exactly* equivariant under row permutation. Without a positional signal, "the cat sat" and any permutation of those three tokens produce indistinguishable hidden states.
 
@@ -109,11 +112,14 @@ print("PE(1, 1:6):", PE(1, 1:6));
 print("PE(64, 1:6):", PE(64, 1:6));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 PE shape: [1×2]  64.000000  32.000000
 PE(1, 1:6): [1×6]  0.841471  0.540302  0.533168  0.846009  0.310984  0.950415
 PE(64, 1:6): [1×6]  0.920026  0.391857  -0.990428  -0.138029  0.983524  0.180776
 ```
+
+<!-- rustlab:output-end -->
 
 Position 1 produces $[\sin(1), \cos(1), \sin(0.422), \cos(0.422), \dots]$; position 64 cycles much further around the fastest sinusoids while barely moving on the slowest ones.
 
@@ -134,9 +140,12 @@ max_diff = max(reshape(abs(PE - PE_vec), 1, T_seq * d_model_pe));
 print("Max |loop - vectorized| =", max_diff);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Max |loop - vectorized| = 0.000000000000007098488463697095
 ```
+
+<!-- rustlab:output-end -->
 
 The vectorized form reads top-to-bottom as the formula does: build the index grids, compute the angles, pick $\sin$ on even dimensions and $\cos$ on odd ones. The loop is easier to step through with a debugger; the vectorized form is easier to recognise as the equation in the paper.
 
@@ -150,11 +159,14 @@ xlabel("Embedding dimension")
 ylabel("Position t")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-24
+25
 ```
 
-![plot 1](plots/10-positional-encoding/plot-1.svg)
+![plot 1](plots/10-positional-encoding/plot-1-1c0ad272.svg)
+
+<!-- rustlab:output-end -->
 
 The horizontal bands on the right (high-$i$, slow sinusoids) barely change down the page. The left columns oscillate rapidly. Each row is a unique fingerprint, and the structure is smooth — nearby rows look similar, far-apart rows look different. That smoothness is what makes "relative position" a learnable feature.
 
@@ -189,9 +201,12 @@ drift = max(abs(sims_short - sims_far));
 print("max |sim_t=10(k) - sim_t=20(k)| over k=0..39 =", drift);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 max |sim_t=10(k) - sim_t=20(k)| over k=0..39 = 0.5439731609270116
 ```
+
+<!-- rustlab:output-end -->
 
 Drift across base position $t$: $5.44e-01$ — within a hair of zero. Whatever similarity we measure between two positions is a function of *only* their separation.
 
@@ -205,11 +220,14 @@ xlabel("Offset k (tokens)")
 ylabel("Dot product")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-25
+26
 ```
 
-![plot 2](plots/10-positional-encoding/plot-2.svg)
+![plot 2](plots/10-positional-encoding/plot-2-6882cb8f.svg)
+
+<!-- rustlab:output-end -->
 
 The curve peaks sharply at $k = 0$ (each PE has unit-ish self-similarity), decays through several oscillations, then settles. The decaying envelope is what lets attention treat "close" and "far" as different — without it, every position would look like every other.
 
@@ -247,10 +265,13 @@ print("max |row1 - row3| (token only):", diff_tok_only);
 print("max |row1 - row3| (token + PE):", diff_with_pe);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 max |row1 - row3| (token only): 0
 max |row1 - row3| (token + PE): 1.5302948024685852
 ```
+
+<!-- rustlab:output-end -->
 
 Without PE, the token-1 rows at positions 1 and 3 are bit-identical — the model literally cannot tell them apart. Adding PE injects $1.5303$ worth of separation per dimension, and any downstream attention head can now compute features sensitive to *which* token-1 it is looking at.
 

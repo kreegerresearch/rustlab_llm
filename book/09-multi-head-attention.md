@@ -139,11 +139,14 @@ subplot(2, 2, 4)
 heatmap(positions, positions, A4, "Head 4 — uniform", "viridis")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-22
+23
 ```
 
-![plot 1](plots/09-multi-head-attention/plot-1.svg)
+![plot 1](plots/09-multi-head-attention/plot-1-cd5aeffc.svg)
+
+<!-- rustlab:output-end -->
 
 All four are lower-triangular (same causal mask) with rows summing to 1 (softmax), yet they compute completely different mixings. Head 4 recovers exactly the uniform prefix average from [Lesson 07](07-context-and-naive-averaging.md) — attention is a strict generalisation.
 
@@ -238,11 +241,14 @@ subplot(1, 2, 2)
 heatmap(out_cols, positions2, O, "Final MHA output O = Concat * W_O", "viridis")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-23
+24
 ```
 
-![plot 2](plots/09-multi-head-attention/plot-2.svg)
+![plot 2](plots/09-multi-head-attention/plot-2-acbee986.svg)
+
+<!-- rustlab:output-end -->
 
 ## Parameter Count
 

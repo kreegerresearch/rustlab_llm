@@ -53,9 +53,12 @@ L_ab = forward_one(1, 2, E, W);
 print("Loss on bigram (a, b) at init:", L_ab);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Loss on bigram (a, b) at init: 1.055663278860206
 ```
+
+<!-- rustlab:output-end -->
 
 At random init the loss is roughly $\log_2 |\mathcal{V}| \approx \log 3 = 1.099$ nats — the uniform-prior baseline. The model has not learned anything yet.
 
@@ -105,11 +108,14 @@ fd = (Lp - Lm) / (2 * eps);
 print("FD vs analytic dL/dW(2,3):  fd =", fd, "  analytic =", dW_ab(2, 3));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 dL/dW shape: [1×2]  4.000000  3.000000
 dL/dE shape: [1×2]  3.000000  4.000000
 FD vs analytic dL/dW(2,3):  fd = -0.04358153784522755   analytic = -0.043581537850663696
 ```
+
+<!-- rustlab:output-end -->
 
 Finite-difference and analytical gradients match to roughly $10^{-9}$.
 

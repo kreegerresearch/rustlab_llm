@@ -91,11 +91,14 @@ print("P(. | b) =", softmax(E(2, :) * W));
 print("P(. | c) =", softmax(E(3, :) * W));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 P(. | a) = [1×3]  0.000000  1.000000  0.000000
 P(. | b) = [1×3]  0.500000  0.000000  0.500000
 P(. | c) = [1×3]  0.000000  1.000000  0.000000
 ```
+
+<!-- rustlab:output-end -->
 
 After training, the bigram structure is exact: `P(b|a) ≈ P(b|c) ≈ 1` and `P(a|b) ≈ P(c|b) ≈ 0.5`. Now generate 12 tokens with greedy:
 
@@ -121,10 +124,13 @@ print("greedy from 'a':", seq_to_str(greedy_generate(1, 12, E, W), names));
 print("greedy from 'b':", seq_to_str(greedy_generate(2, 12, E, W), names));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 greedy from 'a': ababababababa
 greedy from 'b': babababababab
 ```
+
+<!-- rustlab:output-end -->
 
 Greedy from `a` produces `ababababababa` — the model is correct that `b` follows `a` with probability 1, but **after `b` it has to pick between two equally-likely options and greedy always picks the same one**. The true corpus is `abcb abcb`, but greedy collapses to `abab…`. This is the canonical failure mode of greedy decoding: it cannot recover any structure that requires exploring more than one mode of the distribution.
 
@@ -176,10 +182,13 @@ print("p_base:", p_base);
 print("argmax:", argmax(logits), "  p_max:", p_base(argmax(logits)));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 p_base: [1×10]  0.396139  0.240270  0.145731  0.088390  0.053612  0.032517  0.019723  0.011962  ... (10 total)
 argmax: 1   p_max: 0.39613850050808724
 ```
+
+<!-- rustlab:output-end -->
 
 The base distribution has $p_{\max} \approx 0.40$ on token 1, $p \approx 0.24$ on token 2, etc. Now apply each transformation:
 
@@ -259,11 +268,14 @@ title("Top-P=0.9")
 xlabel("token"); ylabel("probability"); ylim([0, 1])
 ```
 
+<!-- rustlab:output-start -->
 ```text
-39
+40
 ```
 
-![plot 1](plots/21-sampling-and-generation/plot-1.svg)
+![plot 1](plots/21-sampling-and-generation/plot-1-2bb22086.svg)
+
+<!-- rustlab:output-end -->
 
 A useful summary number is the **entropy** of each transformed distribution: higher entropy = more diverse draws, lower = more deterministic.
 
@@ -285,6 +297,7 @@ print("H top-K=3  :", nat_entropy(q_k3));
 print("H top-P=0.9:", nat_entropy(q_p09));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 H greedy   : 0
 H T=0.5    : 1.040152431385941
@@ -293,6 +306,8 @@ H T=2.0    : 2.0796802571663133
 H top-K=3  : 1.0201913367268314
 H top-P=0.9: 1.3942849625089193
 ```
+
+<!-- rustlab:output-end -->
 
 The ordering is intuitive: greedy ($H=0$) → top-K=3 → T=0.5 → top-P=0.9 → T=1.0 → T=2.0. **Temperature, top-K, and top-P are not mutually exclusive** — production systems usually combine them: `softmax(z / T)` then top-P=0.9 then sample.
 
@@ -328,11 +343,14 @@ print("T=1.0:", seq_to_str(temperature_generate(1, 12, E, W, 1.0), names));
 print("T=2.0:", seq_to_str(temperature_generate(1, 12, E, W, 2.0), names));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 T=0.5: abcbababcbabc
 T=1.0: abababcbcbaba
 T=2.0: abababcbcbcba
 ```
+
+<!-- rustlab:output-end -->
 
 At $T=1.0$ the model alternates `a, b` and `c, b` with roughly the right frequencies — it recovers the period-4 structure. At $T=0.5$ the draws are sharper, closer to greedy. At $T=2.0$ the distribution is so flat the output looks nearly random over `{a, b, c}`.
 
@@ -372,10 +390,13 @@ print("raw P(. | b)            :", p_raw);
 print("penalty=2 on 'a' (x2)   :", p_pen);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 raw P(. | b)            : [1×3]  0.500000  0.000000  0.500000
 penalty=2 on 'a' (x2)   : [1×3]  0.001845  0.000000  0.998155
 ```
+
+<!-- rustlab:output-end -->
 
 Two recent emissions of `a` cause `a`'s logit to be divided twice. After softmax, the mass shifts from the split (0.5, 0, 0.5) toward (≈0.27, 0, ≈0.73). That bias is exactly enough to keep greedy from collapsing.
 
@@ -418,11 +439,14 @@ print("speedup ratio:", naive_flops_at_T / cached_flops_at_T);
 print("max | naive_out - cached_out | (per step) ~ 5e-17 — machine epsilon.");
 ```
 
+<!-- rustlab:output-start -->
 ```text
 cumulative FLOPs at T=8 — naive: 3564   cached: 708
 speedup ratio: 5.033898305084746
 max | naive_out - cached_out | (per step) ~ 5e-17 — machine epsilon.
 ```
+
+<!-- rustlab:output-end -->
 
 Two diagnostics matter:
 

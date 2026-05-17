@@ -60,6 +60,7 @@ print("Bigram count matrix C  (row=current, col=next):");
 print(C);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Bigram count matrix C  (row=current, col=next):
 Matrix(3x3)
@@ -67,6 +68,8 @@ Matrix(3x3)
   [2.000000, 0.000000, 2.000000]
   [0.000000, 2.000000, 0.000000]
 ```
+
+<!-- rustlab:output-end -->
 
 The corpus has 9 tokens, producing 8 bigrams. Total counts sum to 8 — matches $n_{\text{bigrams}}$.
 
@@ -89,6 +92,7 @@ row_sums = [sum(P(1)), sum(P(2)), sum(P(3))];
 print("Row sums (each should be 1):", row_sums);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Normalised probability matrix P:
 Matrix(3x3)
@@ -97,6 +101,8 @@ Matrix(3x3)
   [NaN, inf, NaN]
 Row sums (each should be 1): [1×3]  NaN  1.000000  NaN
 ```
+
+<!-- rustlab:output-end -->
 
 Token `a` always goes to `b`. Token `c` always goes to `b`. Token `b` goes to either `a` or `c` with equal probability.
 
@@ -126,6 +132,7 @@ print(P_smooth);
 min_smooth = min(reshape(P_smooth, 1, vocab_size * vocab_size));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Laplace-smoothed probability matrix P_smooth:
 Matrix(3x3)
@@ -133,6 +140,8 @@ Matrix(3x3)
   [1.000000, 0.333333, 1.000000]
   [1.000000, 3.000000, 1.000000]
 ```
+
+<!-- rustlab:output-end -->
 
 Every entry in $P^{\text{smooth}}$ is now $\geq 0.333$ — no more zero-probability bigrams.
 
@@ -164,22 +173,28 @@ figure()
 heatmap(tokens, tokens, C, "Bigram Count Matrix C (rows=current, cols=next)", "viridis")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-10
+11
 ```
 
-![plot 1](plots/05-bigram-language-model/plot-1.svg)
+![plot 1](plots/05-bigram-language-model/plot-1-9403ce51.svg)
+
+<!-- rustlab:output-end -->
 
 ```rustlab
 figure()
 heatmap(tokens, tokens, P, "Bigram Probability Matrix P (row-normalised)", "viridis")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-11
+12
 ```
 
-![plot 2](plots/05-bigram-language-model/plot-2.svg)
+![plot 2](plots/05-bigram-language-model/plot-2-5454053c.svg)
+
+<!-- rustlab:output-end -->
 
 ## Sampling from the Model
 
@@ -207,6 +222,7 @@ print("  u=0.3 -> sum(CDF < 0.3) + 1 =", sum(cdf_b < 0.3) + 1, "  (expect 1 = a)
 print("  u=0.7 -> sum(CDF < 0.7) + 1 =", sum(cdf_b < 0.7) + 1, "  (expect 3 = c)");
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Sampling mechanism demonstration:
   P(b)   = [1×3]  0.500000  0.000000  0.500000
@@ -214,6 +230,8 @@ Sampling mechanism demonstration:
   u=0.3 -> sum(CDF < 0.3) + 1 = 1   (expect 1 = a)
   u=0.7 -> sum(CDF < 0.7) + 1 = 3   (expect 3 = c)
 ```
+
+<!-- rustlab:output-end -->
 
 ### Example — Generating a 12-token sequence
 
@@ -235,10 +253,13 @@ print("Uniform draws:", draws);
 print("Generated sequence (indices):", generated);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Uniform draws: [1×11]  0.030317  0.307086  0.142642  0.542517  0.272497  0.951131  0.175462  0.256766  ... (11 total)
 Generated sequence (indices): [1×12]  1.000000  2.000000  1.000000  2.000000  3.000000  2.000000  3.000000  2.000000  ... (12 total)
 ```
+
+<!-- rustlab:output-end -->
 
 Notice the structure: `b` appears at every even position, because both `a` and `c` transition deterministically to `b`.
 
@@ -283,11 +304,14 @@ ylabel("Probability")
 ylim([0, 1])
 ```
 
+<!-- rustlab:output-start -->
 ```text
-12
+13
 ```
 
-![plot 3](plots/05-bigram-language-model/plot-3.svg)
+![plot 3](plots/05-bigram-language-model/plot-3-5b44ed93.svg)
+
+<!-- rustlab:output-end -->
 
 ## Connection to Information Theory
 

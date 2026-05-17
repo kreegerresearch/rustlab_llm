@@ -55,9 +55,12 @@ The output is a `merge_list` — an ordered table that any future text can be en
 
 Corpus: `"abracadabra abracadabra abracadabra"`. Initial vocab: `{a:1, b:2, c:3, d:4, r:5, ' ':6}`. The first merge step counts every adjacent pair; the most common one wins.
 
+<!-- rustlab:output-start -->
 ```text
 Initial seq length: 35   vocab size: 6
 ```
+
+<!-- rustlab:output-end -->
 
 ```rustlab
 % --- Merge step (factored as a function so we can call it 3 times) ---
@@ -109,11 +112,14 @@ for m = 1:3
 end
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Merge 1 :  pair ( 5 , 1 )  count = 6   new_id = 7   new len = 29
 Merge 2 :  pair ( 1 , 2 )  count = 6   new_id = 8   new len = 23
 Merge 3 :  pair ( 8 , 7 )  count = 6   new_id = 9   new len = 17
 ```
+
+<!-- rustlab:output-end -->
 
 The first merge picks the most frequent pair `(r, a)` (it appears in every `"abra"`); subsequent merges build up `(a, b) → (a, b, ra) → (ab, ra)`, fusing the full `"abra"`. After three merges the sequence shortens noticeably and the vocabulary grows from 6 to 9.
 
@@ -147,11 +153,14 @@ xlabel("tokens per word")
 ylabel("count")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-38
+39
 ```
 
-![plot 1](plots/19-byte-pair-encoding/plot-1.svg)
+![plot 1](plots/19-byte-pair-encoding/plot-1-2116b89c.svg)
+
+<!-- rustlab:output-end -->
 
 The exponential-decay shape is universal — large corpora across English, code, and multiple languages all show it once a BPE tokeniser is trained on them.
 

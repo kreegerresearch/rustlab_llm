@@ -61,11 +61,14 @@ print("Relative frequencies:", freqs);
 print("Sum of frequencies (should be 1.0):", sum(freqs));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Character counts (space, b, e, n, o, r, t): [1×7]  5.000000  2.000000  2.000000  1.000000  4.000000  1.000000  3.000000
 Relative frequencies: [1×7]  0.277778  0.111111  0.111111  0.055556  0.222222  0.055556  0.166667
 Sum of frequencies (should be 1.0): 1
 ```
+
+<!-- rustlab:output-end -->
 
 The corpus has **18** characters across a vocabulary of size **7**. The highest-frequency character is the space at 0.278 $\approx 5/18$ — exactly five spaces in `"to be or not to be"`.
 
@@ -76,11 +79,14 @@ figure()
 bar(chars, freqs, "Character Frequencies: 'to be or not to be'")
 ```
 
+<!-- rustlab:output-start -->
 ```text
 2
 ```
 
-![plot 1](plots/01-tokens-and-encoding/plot-1.svg)
+![plot 1](plots/01-tokens-and-encoding/plot-1-9809d9b4.svg)
+
+<!-- rustlab:output-end -->
 
 The bar heights sum to 1.0 — this is a valid probability distribution over the vocabulary.
 
@@ -123,6 +129,7 @@ print("One-hot matrix X for 'hello'  (5 tokens x 4 vocab):");
 print(X);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 One-hot matrix X for 'hello'  (5 tokens x 4 vocab):
 Matrix(5x4)
@@ -132,6 +139,8 @@ Matrix(5x4)
   [0.000000, 0.000000, 1.000000, 0.000000]
   [0.000000, 0.000000, 0.000000, 1.000000]
 ```
+
+<!-- rustlab:output-end -->
 
 The matrix is 5 $\times$ 4 — one row per token, one column per vocabulary slot. Each row has exactly one non-zero entry. Rows 3 and 4 (both `l`) are identical — the model sees them as the same token.
 
@@ -150,6 +159,7 @@ dot_l_l = sum(oh_l .* oh_l);
 print("Dot product h . e:", dot_h_e, "  l . l:", dot_l_l);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Row sums (each must equal 1): Matrix(5x1)
   [1.000000]
@@ -159,6 +169,8 @@ Row sums (each must equal 1): Matrix(5x1)
   [1.000000]
 Dot product h . e: 0   l . l: 1
 ```
+
+<!-- rustlab:output-end -->
 
 Orthogonality confirmed: $\mathbf{e}_h \cdot \mathbf{e}_e = 0$ and $\mathbf{e}_l \cdot \mathbf{e}_l = 1$ — exactly $\delta_{ij}$.
 
@@ -172,11 +184,14 @@ figure()
 heatmap(vocab, sequence, X, "One-Hot Matrix: 'hello' (5 tokens x 4 vocab)", "viridis")
 ```
 
+<!-- rustlab:output-start -->
 ```text
 3
 ```
 
-![plot 2](plots/01-tokens-and-encoding/plot-2.svg)
+![plot 2](plots/01-tokens-and-encoding/plot-2-9e1ec641.svg)
+
+<!-- rustlab:output-end -->
 
 With the rows labelled by the actual character at each position and the columns labelled by vocabulary slot, the bright cell on each row sits exactly under the column for that character — the picture *is* the encoding.
 

@@ -66,11 +66,14 @@ legend()
 hold("off")
 ```
 
+<!-- rustlab:output-start -->
 ```text
 6
 ```
 
-![plot 1](plots/03-cross-entropy-loss/plot-1.svg)
+![plot 1](plots/03-cross-entropy-loss/plot-1-8d6022f8.svg)
+
+<!-- rustlab:output-end -->
 
 At $\hat{p}_c = 1/|\mathcal{V}|$ (uniform prediction — the model knows nothing), the loss equals $\log |\mathcal{V}|$. This is the **baseline loss** at the start of training.
 
@@ -130,11 +133,14 @@ xlabel("z1 (correct)")
 ylabel("z2 (distractor)")
 ```
 
+<!-- rustlab:output-start -->
 ```text
 7
 ```
 
-![plot 2](plots/03-cross-entropy-loss/plot-2.svg)
+![plot 2](plots/03-cross-entropy-loss/plot-2-a62afeb5.svg)
+
+<!-- rustlab:output-end -->
 
 Two features of this surface make the training dynamics legible:
 

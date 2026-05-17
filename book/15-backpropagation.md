@@ -88,12 +88,15 @@ print("dL/dW1 shape:", size(dL_dW1));
 print("dL/dx shape :", size(dL_dx));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 L = 1.165503017658974
 dL/dW2 shape: [1×2]  3.000000  1.000000
 dL/dW1 shape: [1×2]  4.000000  3.000000
 dL/dx shape : [1×2]  1.000000  4.000000
 ```
+
+<!-- rustlab:output-end -->
 
 ### Example — Finite-difference check
 
@@ -277,12 +280,15 @@ print("dL/dW_V shape:", size(dL_dWV));
 print("dL/dX shape  :", size(dL_dX));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 dL/dW_Q shape: [1×2]  4.000000  3.000000
 dL/dW_K shape: [1×2]  4.000000  3.000000
 dL/dW_V shape: [1×2]  4.000000  3.000000
 dL/dX shape  : [1×2]  4.000000  4.000000
 ```
+
+<!-- rustlab:output-end -->
 
 The shared-input accumulation $\bar{\mathbf{X}} = \bar{\mathbf{X}}_Q + \bar{\mathbf{X}}_K + \bar{\mathbf{X}}_V$ is the multivariate analogue of the chain rule's product over branches — every place the same variable feeds the graph, gradients add.
 
@@ -328,11 +334,14 @@ figure()
 heatmap(layers, regimes, log10(G_norms + 1e-12), "log10(||grad||) per layer (rows: regime, cols: depth)", "viridis")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-34
+35
 ```
 
-![plot 1](plots/15-backpropagation/plot-1.svg)
+![plot 1](plots/15-backpropagation/plot-1-e907b777.svg)
+
+<!-- rustlab:output-end -->
 
 Bottom row glows brightest at L12 and dims toward L1 — the gradient vanishes by the time it reaches the input. The top row is uniformly dim. The middle row stays roughly constant across depth: the recipe transformer training actually uses.
 

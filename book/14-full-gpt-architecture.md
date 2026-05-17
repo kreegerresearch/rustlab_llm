@@ -87,9 +87,12 @@ ids = [7, 13, 7, 21, 13, 5, 9, 7];
 print("ids:", ids);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 ids: [1×8]  7.000000  13.000000  7.000000  21.000000  13.000000  5.000000  9.000000  7.000000
 ```
+
+<!-- rustlab:output-end -->
 
 The corpus could be anything; what matters is that `ids(t)` is an integer index into the vocabulary, between 1 and `vocab`.
 
@@ -105,10 +108,13 @@ print("H^{(0)} shape:", size(H));
 print("H^{(0)} first row (first 6 values):", H(1, 1), H(1, 2), H(1, 3), H(1, 4), H(1, 5), H(1, 6));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 H^{(0)} shape: [1×2]  8.000000  64.000000
 H^{(0)} first row (first 6 values): 0.8519901832549279 0.6242199078970485 0.7649510639370869 0.6189960087826963 0.7635573731520712 0.869233432828126
 ```
+
+<!-- rustlab:output-end -->
 
 The lookup `E_tok(ids(t))` returns row `ids(t)` of the embedding matrix — a $d_{\text{model}}$-vector. Add the positional encoding for slot $t$ and you have the residual stream's initial value $\mathbf{H}^{(0)}$.
 
@@ -133,10 +139,13 @@ print("H^{(N)} shape after", N_blocks, "blocks:", size(H));
 print("|H^{(N)}|:", norm(H));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 H^{(N)} shape after 4 blocks: [1×2]  8.000000  64.000000
 |H^{(N)}|: 70.10999244799362
 ```
+
+<!-- rustlab:output-end -->
 
 The shape stays $(T, d_{\text{model}}) = (8, 64)$ across all $N$ blocks — that is the entire reason the architecture is stackable.
 
@@ -161,11 +170,14 @@ print("sum(probs_last):", sum(probs_last));
 print("argmax next token:", argmax(probs_last));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 logits shape: [1×2]  8.000000  50.000000
 sum(probs_last): 0.9999999999999999
 argmax next token: 17
 ```
+
+<!-- rustlab:output-end -->
 
 `logits` has shape $(T, |\mathcal{V}|) = (8, 50)$ — one logit vector per position, one entry per vocabulary token. At inference time we softmax the *last* row to get $P(X_{T+1} \mid X_{1..T})$ ([Lesson 02](02-probability-and-softmax.md)), then sample from it ([Lesson 21](21-sampling-strategies.md), Phase 8). At training time we softmax *every* row and compare to the true next-token labels via cross-entropy ([Lesson 03](03-cross-entropy-loss.md), Phase 6 wires this into a loop).
 
@@ -181,11 +193,14 @@ xlabel("vocab id")
 ylabel("position t")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-32
+33
 ```
 
-![plot 1](plots/14-full-gpt-architecture/plot-1.svg)
+![plot 1](plots/14-full-gpt-architecture/plot-1-85152564.svg)
+
+<!-- rustlab:output-end -->
 
 Each row is a per-position logit vector; the brighter cells are tokens the random-init model "prefers" at that position. With trained weights this heatmap would show meaningful structure — e.g. row $t$ concentrating mass on tokens that grammatically follow `ids(t)`. With random weights it is essentially noise, but the *shape* and the per-row softmax-able structure is exactly what training will sculpt.
 
@@ -231,6 +246,7 @@ print("-------------------------+--------");
 print("TOTAL                    ", n_total);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Component                | Params
 -------------------------+--------
@@ -243,6 +259,8 @@ LM head                   3200
 -------------------------+--------
 TOTAL                     205440
 ```
+
+<!-- rustlab:output-end -->
 
 A few thousand parameters per block, ~200K total — small enough to fit in a 1 MB serialised file but architecturally identical to a 100M-parameter model.
 
@@ -257,11 +275,14 @@ title("Parameter count by component (toy GPT)")
 ylabel("parameters")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-33
+34
 ```
 
-![plot 2](plots/14-full-gpt-architecture/plot-2.svg)
+![plot 2](plots/14-full-gpt-architecture/plot-2-e0eacf22.svg)
+
+<!-- rustlab:output-end -->
 
 For this small config the **blocks dominate** — they hold ~96 % of all weights. At small $|\mathcal{V}|$ and modest $N$, the embedding is a footnote. At a real-vocab config (next example) the picture inverts at small depth and tilts back toward blocks at large depth.
 
@@ -287,11 +308,14 @@ print("Reference (Radford et al., 2019):                                124,439,
 print("Discrepancy:                                                    ", 124439808 - n_total_tied);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 GPT-2 small  (|V|=50257, d=768, N=12, learned PE, weight-tied): 124402944
 Reference (Radford et al., 2019):                                124,439,808
 Discrepancy:                                                     36864
 ```
+
+<!-- rustlab:output-end -->
 
 The weight-tied total reproduces GPT-2 small to within ~37 K parameters (≈ 0.03 %) — the residual gap is bias-term accounting. **The same formula scales from a few-hundred-parameter toy all the way to the largest open transformer published.**
 

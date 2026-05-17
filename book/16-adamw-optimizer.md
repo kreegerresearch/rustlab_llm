@@ -66,10 +66,13 @@ print("SGD final loss:", loss(theta_sgd));
 print("SGD final theta:", theta_sgd);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 SGD final loss: 0.00009728759888484672
 SGD final theta: [1×2]  -0.000003  0.013949
 ```
+
+<!-- rustlab:output-end -->
 
 After 60 steps SGD loss is $0.0001$ — we are barely off the start in $\theta_2$ because $\eta = 0.09$ shrinks $\theta_2$ by only 9 % per step.
 
@@ -127,9 +130,12 @@ end
 print("Adam final loss:", loss(theta_adam));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Adam final loss: 0.02318514321637464
 ```
+
+<!-- rustlab:output-end -->
 
 Adam's per-coordinate rescaling makes both directions advance at similar speeds — final loss is now $2.3185e-02$, several orders below SGD.
 
@@ -195,10 +201,13 @@ print("Coupled (Adam+L2) final theta:", theta_c);
 print("Decoupled (AdamW)  final theta:", theta_d);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Coupled (Adam+L2) final theta: [1×2]  0.909107  2.499989
 Decoupled (AdamW)  final theta: [1×2]  0.967226  4.740061
 ```
+
+<!-- rustlab:output-end -->
 
 The coupled and decoupled variants converge to different points: the L2-coupled version effectively penalises high-curvature parameters less than low-curvature ones; AdamW applies the same fractional shrinkage to every parameter as the textbook L2 says it should.
 
@@ -243,11 +252,14 @@ ylabel("θ₂  (flat direction)")
 legend("SGD", "Adam", "AdamW")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-35
+36
 ```
 
-![plot 1](plots/16-adamw-optimizer/plot-1.svg)
+![plot 1](plots/16-adamw-optimizer/plot-1-6dd19569.svg)
+
+<!-- rustlab:output-end -->
 
 SGD's path looks like a saw blade: large $\theta_1$ overshoots cause oscillation. Adam and AdamW both glide smoothly down the floor of the ravine. AdamW lands slightly inside the origin because of the constant pull from weight decay.
 

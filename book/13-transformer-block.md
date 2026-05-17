@@ -73,12 +73,15 @@ print("W_ff1 shape (d_model -> d_ff):   ", size(W_ff1));
 print("W_ff2 shape (d_ff -> d_model):   ", size(W_ff2));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 H_in shape:                       [1×2]  4.000000  8.000000
 W_{Q,K,V,O} shape (each):         [1×2]  8.000000  8.000000
 W_ff1 shape (d_model -> d_ff):    [1×2]  8.000000  32.000000
 W_ff2 shape (d_ff -> d_model):    [1×2]  32.000000  8.000000
 ```
+
+<!-- rustlab:output-end -->
 
 LayerNorm in this notebook uses $\boldsymbol{\gamma} = \mathbf{1}, \boldsymbol{\beta} = \mathbf{0}$ — pure standardisation, no learned affine. Real implementations carry $(\boldsymbol{\gamma}, \boldsymbol{\beta})$ as small parameter vectors; we add them to the parameter count later but skip them in the forward pass for clarity.
 
@@ -153,10 +156,13 @@ print("LN1(H_in) shape:                 ", size(H_norm1));
 print("MHA output shape:                ", size(A_out));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 LN1(H_in) shape:                  [1×2]  4.000000  8.000000
 MHA output shape:                 [1×2]  4.000000  8.000000
 ```
+
+<!-- rustlab:output-end -->
 
 Both LN1 and the MHA output are $(T, d_{\text{model}}) = (4, 8)$ — same as the input. The per-head $(T, d_k)$ matrices live only inside the loop.
 
@@ -168,10 +174,13 @@ print("H_mid shape (after first residual):", size(H_mid));
 print("H_mid row 1 (first 4 values):     ", H_mid(1, 1), H_mid(1, 2), H_mid(1, 3), H_mid(1, 4));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 H_mid shape (after first residual): [1×2]  4.000000  8.000000
 H_mid row 1 (first 4 values):      1.114650853792557 -1.3444806749068605 1.0992947175874568 0.2117387088439008
 ```
+
+<!-- rustlab:output-end -->
 
 The residual restores the original $\mathbf{H}_{\text{in}}$ signal that LN1 had standardised away. Future blocks will read $\mathbf{H}_{\text{mid}}$ — the *unnormalised* residual stream — and apply LN to it again from scratch.
 
@@ -205,12 +214,15 @@ print("FFN output  shape (T, d_model):  ", size(F_out));
 print("Block output H_out shape:        ", size(H_out));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 LN2(H_mid) shape:                 [1×2]  4.000000  8.000000
 FFN hidden  shape (T, d_ff):      [1×2]  4.000000  32.000000
 FFN output  shape (T, d_model):   [1×2]  4.000000  8.000000
 Block output H_out shape:         [1×2]  4.000000  8.000000
 ```
+
+<!-- rustlab:output-end -->
 
 The FFN hidden temporarily widens to $(T, d_{\text{ff}}) = (4, 32)$, then contracts back to $(T, d_{\text{model}}) = (4, 8)$. **The block's input and output have identical shape**, $(4, 8)$. Stacking blocks just means feeding `H_out` as the next block's `H_in`.
 
@@ -224,6 +236,7 @@ print("|MHA contribution|  / |H_in|  =", norm(A_out) / norm(H_in));
 print("|FFN contribution|  / |H_mid| =", norm(F_out) / norm(H_mid));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 |H_in|  = 6.069769106017517
 |H_mid| = 9.195808939486904
@@ -231,6 +244,8 @@ print("|FFN contribution|  / |H_mid| =", norm(F_out) / norm(H_mid));
 |MHA contribution|  / |H_in|  = 0.9873622796827375
 |FFN contribution|  / |H_mid| = 0.5208642158653086
 ```
+
+<!-- rustlab:output-end -->
 
 At random initialisation each sublayer adds a small perturbation to the residual stream — ratios are typically well below 1, which is why a deep stack does not blow up at init. The training process scales these contributions up where they help and down where they don't.
 
@@ -251,11 +266,14 @@ imagesc(H_out, "viridis")
 title("H_out (after FFN + residual)")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-31
+32
 ```
 
-![plot 1](plots/13-transformer-block/plot-1.svg)
+![plot 1](plots/13-transformer-block/plot-1-aeffd97c.svg)
+
+<!-- rustlab:output-end -->
 
 Each row of each panel is one token's representation; each column is one feature dimension. The structure barely changes between panels — that is the residual stream doing its job. Zoom in and you can see the FFN and MHA each nudge specific cells, but the dominant pattern carried by $\mathbf{H}_{\text{in}}$ persists.
 
@@ -327,11 +345,14 @@ print("After block 2 |H| =", norm(H_out2));
 print("After block 2 shape:", size(H_out2));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 After block 1 |H| = 10.544696449259169
 After block 2 |H| = 14.85162630563989
 After block 2 shape: [1×2]  4.000000  8.000000
 ```
+
+<!-- rustlab:output-end -->
 
 After two blocks the residual stream's magnitude is the same order as the input — residuals + identity-dominant init keep the stack stable. Real transformers go to $N = 12$ (GPT-2 small), $N = 96$ (GPT-3) or beyond using the same recipe.
 
@@ -369,6 +390,7 @@ print("Total per block:", n_block);
 print("FFN / attention:", n_ffn / n_attn);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 d_model:         8
 d_ff:            32
@@ -378,6 +400,8 @@ FFN biases:      40
 Total per block: 808
 FFN / attention: 2
 ```
+
+<!-- rustlab:output-end -->
 
 For our toy $d_{\text{model}} = 8$ the block has 808 parameters total. Scale to $d_{\text{model}} = 384$ (nanoGPT-small) and the block has ~1.77M parameters — multiplied by $N$ blocks in [Lesson 14](14-full-gpt-architecture.md).
 

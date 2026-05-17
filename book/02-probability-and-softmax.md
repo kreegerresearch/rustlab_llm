@@ -74,11 +74,14 @@ print("T=1.0 (neutral):", p_neutral);
 print("T=2.0 (warm)   :", p_warm);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 T=0.5 (cold)   : [1×4]  0.839025  0.113550  0.041773  0.005653
 T=1.0 (neutral): [1×4]  0.597695  0.219880  0.133364  0.049062
 T=2.0 (warm)   : [1×4]  0.422761  0.256418  0.199698  0.121123
 ```
+
+<!-- rustlab:output-end -->
 
 Each row sums to 1.000 — a valid distribution. At $T = 0.5$ token 1 gets $0.839$ of the mass; at $T = 2.0$ it gets only $0.423$ — the distribution flattens as temperature rises.
 
@@ -106,11 +109,14 @@ xlabel("Token index")
 ylim([0, 1])
 ```
 
+<!-- rustlab:output-start -->
 ```text
 4
 ```
 
-![plot 1](plots/02-probability-and-softmax/plot-1.svg)
+![plot 1](plots/02-probability-and-softmax/plot-1-654de164.svg)
+
+<!-- rustlab:output-end -->
 
 ## Shannon Entropy
 
@@ -169,11 +175,14 @@ hline(log2(vocab_size), "red", "max = log2(4)")
 hold("off")
 ```
 
+<!-- rustlab:output-start -->
 ```text
 5
 ```
 
-![plot 2](plots/02-probability-and-softmax/plot-2.svg)
+![plot 2](plots/02-probability-and-softmax/plot-2-4aaa1e92.svg)
+
+<!-- rustlab:output-end -->
 
 Entropy increases monotonically with temperature — the model becomes harder to predict from.
 

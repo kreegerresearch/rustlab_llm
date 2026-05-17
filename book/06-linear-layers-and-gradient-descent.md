@@ -89,11 +89,14 @@ imagesc(L_matrix, "viridis")
 title("MSE Loss L(w,b): y=2x  minimum at (w=2, b=0)")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-13
+14
 ```
 
-![plot 1](plots/06-linear-layers-and-gradient-descent/plot-1.svg)
+![plot 1](plots/06-linear-layers-and-gradient-descent/plot-1-3d9e1a4c.svg)
+
+<!-- rustlab:output-end -->
 
 The dark region (minimum loss) is centred at $(w, b) \approx (2, 0)$. The elliptical contours show the loss is more sensitive to $w$ than $b$.
 
@@ -111,11 +114,14 @@ xlabel("w")
 ylabel("b")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-14
+15
 ```
 
-![plot 2](plots/06-linear-layers-and-gradient-descent/plot-2.svg)
+![plot 2](plots/06-linear-layers-and-gradient-descent/plot-2-1f74b306.svg)
+
+<!-- rustlab:output-end -->
 
 The surface is a **convex paraboloid**: one global minimum, no local minima, no plateaus. Anisotropy is visible as elongation along the $b$ axis — the bowl is steeper in $w$ than in $b$, which is why the gradient-descent trajectory curves rather than heading straight for $(2, 0)$.
 
@@ -180,11 +186,14 @@ legend()
 hold("off")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-15
+16
 ```
 
-![plot 3](plots/06-linear-layers-and-gradient-descent/plot-3.svg)
+![plot 3](plots/06-linear-layers-and-gradient-descent/plot-3-33b02aca.svg)
+
+<!-- rustlab:output-end -->
 
 ### Example — Trajectory in (w, b) space
 
@@ -195,11 +204,14 @@ figure()
 scatter(w_path, b_path, "Gradient Descent Path in (w,b) Space - converges to (2, 0)")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-16
+17
 ```
 
-![plot 4](plots/06-linear-layers-and-gradient-descent/plot-4.svg)
+![plot 4](plots/06-linear-layers-and-gradient-descent/plot-4-74fc3d86.svg)
+
+<!-- rustlab:output-end -->
 
 ## Learning Rate Sensitivity
 

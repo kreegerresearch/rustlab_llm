@@ -70,9 +70,12 @@ print("theta_k :", theta);
 % high-k pairs rotate slowly — same frequency-spread idea as sinusoidal PE.
 ```
 
+<!-- rustlab:output-start -->
 ```text
 theta_k : [1×2]  1.000000  0.010000
 ```
+
+<!-- rustlab:output-end -->
 
 The rotation itself, per vector:
 
@@ -119,11 +122,14 @@ print("<RoPE(q, 4), RoPE(k, 7)> =", q4 * k7');
 print("(Both have relative offset 3; should match.)");
 ```
 
+<!-- rustlab:output-start -->
 ```text
 <RoPE(q, 2), RoPE(k, 5)> = 1.0441401800823829
 <RoPE(q, 4), RoPE(k, 7)> = 1.044140180082383
 (Both have relative offset 3; should match.)
 ```
+
+<!-- rustlab:output-end -->
 
 The dot products are equal to ~15 decimal places — the rotation algebra is exact, only floating-point round-off remains.
 
@@ -204,11 +210,14 @@ print("shifted row 1 RMSNorm: ", rmsnorm_naive(H_shifted, gamma, eps)(1, :));
 print("shifted row 1 LayerNorm:", layernorm_naive(H_shifted, gamma, beta, eps)(1, :));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 zero-mean inputs: max | RMSNorm - LayerNorm | = 0.00000000000000011102230246251565
 shifted row 1 RMSNorm:  [1×8]  0.663821  1.287935  0.655428  1.657353  0.984120  1.138673  0.077692  0.673080
 shifted row 1 LayerNorm: [1×8]  -0.505944  0.876319  -0.524532  1.694489  0.203441  0.545740  -1.804077  -0.485436
 ```
+
+<!-- rustlab:output-end -->
 
 The first comparison gives diff = $1.1 \times 10^{-16}$ — bit-identical to floating-point round-off. The shifted comparison shows LayerNorm reproducing the unshifted output (DC removed) while RMSNorm gives a different result (DC preserved).
 
@@ -272,11 +281,14 @@ print("SwiGLU   FFN params:", n_swig);
 print("output shapes:", size(H_std), "vs", size(H_swig));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 standard FFN params: 552
 SwiGLU   FFN params: 504
 output shapes: [1×2]  3.000000  8.000000 vs [1×2]  3.000000  8.000000
 ```
+
+<!-- rustlab:output-end -->
 
 Both shapes are $(T \times d_{\text{model}})$ — SwiGLU is a drop-in replacement at the same parameter budget.
 

@@ -78,6 +78,7 @@ shuffle_err = max(reshape(abs(out_perm - P_perm * out), 1, T * d_model));
 print("max | FFN(P*H) - P*FFN(H) | =", shuffle_err);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 input H shape:         [1×2]  5.000000  4.000000
 hidden pre  (T, d_ff): [1×2]  5.000000  16.000000
@@ -85,6 +86,8 @@ hidden post (T, d_ff): [1×2]  5.000000  16.000000
 output      (T, d):    [1×2]  5.000000  4.000000
 max | FFN(P*H) - P*FFN(H) | = 0
 ```
+
+<!-- rustlab:output-end -->
 
 Reshuffling the rows of $\mathbf{H}$ via a permutation matrix and re-applying FFN produces exactly the same rows in the same shuffled order — confirmed numerically with $\max\Delta = 0.00e+00$. FFN is row-independent; only attention mixes across positions.
 
@@ -118,11 +121,14 @@ legend()
 hold("off")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-26
+27
 ```
 
-![plot 1](plots/11-feed-forward-block/plot-1.svg)
+![plot 1](plots/11-feed-forward-block/plot-1-0b36caec.svg)
+
+<!-- rustlab:output-end -->
 
 For $x \gg 0$ both curves merge into the line $y = x$. For $x \ll 0$ both vanish. The action is in the strip $x \in [-2, 2]$, where GELU bows smoothly while ReLU has its kink.
 
@@ -149,10 +155,13 @@ print("d/dx ReLU(x=-0.5) =", dRelu(i_neg));
 print("d/dx GELU(x=-0.5) =", dGelu(i_neg));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 d/dx ReLU(x=-0.5) = 0
 d/dx GELU(x=-0.5) = 0.13263009756736555
 ```
+
+<!-- rustlab:output-end -->
 
 At $x = -0.5$, ReLU's derivative is exactly $0$ — a neuron stuck there receives **no learning signal**. GELU's derivative is $0.1326$ — small but non-zero (it equals $\Phi(-0.5) + (-0.5)\,\phi(-0.5) \approx 0.309 - 0.176 = 0.133$ analytically), enough for gradient descent to correct the neuron's bias. This is the "no dead neurons" benefit, and the entire reason GELU has displaced ReLU in modern transformers.
 
@@ -175,14 +184,17 @@ xlabel("hidden_pre value")
 ylabel("count")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-27
+28
 Matrix(2x10)
   [-2.600594, -2.014954, -1.429314, -0.843673, -0.258033, 0.327608, 0.913248, 1.498889, ...]
   [6.000000, 6.000000, 6.000000, 7.000000, 11.000000, 17.000000, 8.000000, 8.000000, ...]
 ```
 
-![plot 2](plots/11-feed-forward-block/plot-2.svg)
+![plot 2](plots/11-feed-forward-block/plot-2-6a84b3cc.svg)
+
+<!-- rustlab:output-end -->
 
 The pre-activation is roughly symmetric around zero — the He-initialised projection mixes signed inputs into both positive and negative half-spaces.
 
@@ -198,14 +210,17 @@ xlabel("hidden_post value")
 ylabel("count")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-28
+29
 Matrix(2x10)
   [-0.013319, 0.299546, 0.612411, 0.925277, 1.238142, 1.551007, 1.863873, 2.176738, ...]
   [40.000000, 13.000000, 4.000000, 5.000000, 5.000000, 2.000000, 4.000000, 3.000000, ...]
 ```
 
-![plot 3](plots/11-feed-forward-block/plot-3.svg)
+![plot 3](plots/11-feed-forward-block/plot-3-717df361.svg)
+
+<!-- rustlab:output-end -->
 
 After GELU the negative half-space is heavily attenuated but not erased — there is a thin left tail near zero rather than a delta at zero (which is what ReLU would produce). The right half is essentially unchanged: GELU leaves the positive identity nearly intact.
 
@@ -234,6 +249,7 @@ print("FFN params:          ", n_ffn);
 print("FFN / Attention:     ", n_ffn / n_attn);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 d_model:              384
 d_ff = 4 * d_model:   1536
@@ -241,6 +257,8 @@ Attention params:     589824
 FFN params:           1179648
 FFN / Attention:      2
 ```
+
+<!-- rustlab:output-end -->
 
 For $d_{\text{model}} = 384$ the FFN is $2\times$ the attention block — most of every transformer block's weight budget lives in the feed-forward sublayer. Recent variants (Mistral, LLaMA) use $d_{\text{ff}} \approx 8/3 \cdot d_{\text{model}}$ to balance the parameter count of "gated" FFN variants (SwiGLU) at the same effective capacity.
 

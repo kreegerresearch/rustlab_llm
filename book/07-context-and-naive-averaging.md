@@ -69,11 +69,14 @@ ylabel("Probability")
 ylim([0, 1])
 ```
 
+<!-- rustlab:output-start -->
 ```text
-17
+18
 ```
 
-![plot 1](plots/07-context-and-naive-averaging/plot-1.svg)
+![plot 1](plots/07-context-and-naive-averaging/plot-1-047217b9.svg)
+
+<!-- rustlab:output-end -->
 
 This is a structural failure, not a data failure.
 
@@ -137,9 +140,12 @@ diff_W    = max(reshape(abs(W - W_vec), 1, T * T));
 print("max|W_loop - W_vec| =", diff_W);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 max|W_loop - W_vec| = 0
 ```
+
+<!-- rustlab:output-end -->
 
 The vectorized form mirrors the math $W_{t, i} = \frac{1}{t} \cdot [i \le t]$ exactly — a lower-triangular mask divided element-wise by the row index. `cumsum(eye(T), 1)` is a compact way to build the mask: the identity has a 1 on each diagonal cell, and cumulating downward in each column extends each 1 down to the bottom of the matrix. The loop form is easier to single-step; the vectorized form generalises immediately to other masked weighting schemes (swap `lower_tri` for any other mask, or `1 ./ I_col` for any other per-row weighting).
 
@@ -151,11 +157,14 @@ imagesc(W, "viridis")
 title("Causal Averaging Matrix W — row t = 1/t, zero above diagonal")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-18
+19
 ```
 
-![plot 2](plots/07-context-and-naive-averaging/plot-2.svg)
+![plot 2](plots/07-context-and-naive-averaging/plot-2-1659d7e6.svg)
+
+<!-- rustlab:output-end -->
 
 Row $t$ has $t$ non-zero entries each equal to $1/t$, so every row sums to 1.
 
@@ -178,11 +187,14 @@ imagesc(X_bar_mm, "viridis")
 title("Prefix Averages X̄ = W*X (each row mixes all earlier tokens)")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-19
+20
 ```
 
-![plot 3](plots/07-context-and-naive-averaging/plot-3.svg)
+![plot 3](plots/07-context-and-naive-averaging/plot-3-19d668b3.svg)
+
+<!-- rustlab:output-end -->
 
 $\bar{\mathbf{X}}$ is smoother than $\mathbf{X}$. Row $t$ of $\bar{\mathbf{X}}$ is a blend of the first $t$ rows of $\mathbf{X}$ — position $t$ now carries information from every earlier token.
 

@@ -47,6 +47,7 @@ print("layernorm builtin: ", ln_v_call);
 print("max diff:          ", max(abs(ln_v_manual - ln_v_call)));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 v:                  [1×5]  1.000000  2.000000  3.000000  4.000000  5.000000
 mean(v):            3
@@ -55,6 +56,8 @@ layernorm manual:   [1×5]  -1.414214  -0.707107  0.000000  0.707107  1.414214
 layernorm builtin:  [1×5]  -1.414210  -0.707105  0.000000  0.707105  1.414210
 max diff:           0.000003535519647490659
 ```
+
+<!-- rustlab:output-end -->
 
 Built-in `layernorm` matches the by-hand computation up to the regularisation $\epsilon$ — they agree to $3.54e-06$. Output mean is exactly 0; (population) std is exactly 1.
 
@@ -88,12 +91,15 @@ print("Per-row std  before LN:", stds_pre);
 print("Per-row std  after  LN:", stds_post);
 ```
 
+<!-- rustlab:output-start -->
 ```text
 Per-row mean before LN: [1×4]  3.094142  1.693534  0.838429  0.358285
 Per-row mean after  LN: [1×4]  -0.000000  -0.000000  -0.000000  0.000000
 Per-row std  before LN: [1×4]  4.138909  2.198121  3.128124  2.108934
 Per-row std  after  LN: [1×4]  1.000000  0.999999  0.999999  0.999999
 ```
+
+<!-- rustlab:output-end -->
 
 Every post-LN row has mean ≈ 0 and (population) std ≈ 1 — independently of how the pre-LN row was distributed. **LN is a normalisation that activates per token**, not per batch.
 
@@ -116,8 +122,9 @@ xlabel("activation value")
 ylabel("count")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-29
+30
 Matrix(2x10)
   [-3.252958, -1.959612, -0.666267, 0.627079, 1.920424, 3.213770, 4.507115, 5.800461, ...]
   [3.000000, 3.000000, 1.000000, 5.000000, 3.000000, 3.000000, 3.000000, 1.000000, ...]
@@ -126,7 +133,9 @@ Matrix(2x10)
   [2.000000, 2.000000, 5.000000, 1.000000, 3.000000, 2.000000, 1.000000, 3.000000, ...]
 ```
 
-![plot 1](plots/12-layer-norm-and-residuals/plot-1.svg)
+![plot 1](plots/12-layer-norm-and-residuals/plot-1-6001dfdb.svg)
+
+<!-- rustlab:output-end -->
 
 The pre-LN histogram is wide and shifted; the post-LN histogram is centred and tight. Whatever scale the previous sublayer's output had, LN pulls it back into a known range before the next sublayer sees it. That predictability is what keeps subsequent activations from drifting toward saturation as depth grows.
 
@@ -196,11 +205,14 @@ print("layer 24   magnitude no-res:", mag_no_res(n_layers + 1));
 print("layer 24   magnitude w/ res:", mag_res(n_layers + 1));
 ```
 
+<!-- rustlab:output-start -->
 ```text
 layer 0    magnitude (both): 6.008513697733318
 layer 24   magnitude no-res: 0.00000024014545567911705
 layer 24   magnitude w/ res: 8.080321313398333
 ```
+
+<!-- rustlab:output-end -->
 
 Without residuals the magnitude collapses by orders of magnitude across 24 sublayers (GELU clips half the signal at every layer; the survivors get further attenuated by the random projection). With residuals — each step adds a small correction to a preserved running state — the magnitude stays $O(1)$. **Forward signal preservation is a proxy for backward gradient preservation**: the same identity path that keeps $\mathbf{x}$ alive keeps $\partial L / \partial \mathbf{x}$ alive.
 
@@ -218,11 +230,14 @@ legend()
 hold("off")
 ```
 
+<!-- rustlab:output-start -->
 ```text
-30
+31
 ```
 
-![plot 2](plots/12-layer-norm-and-residuals/plot-2.svg)
+![plot 2](plots/12-layer-norm-and-residuals/plot-2-57572ca7.svg)
+
+<!-- rustlab:output-end -->
 
 The red curve drops fast; the blue curve plateaus. This forward-pass demonstration is the entire reason ResNets, transformers, and every other "very deep" architecture uses residual connections.
 
