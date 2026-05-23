@@ -11,7 +11,7 @@
 BOOK := book
 
 .DEFAULT_GOAL := help
-.PHONY: help all notebooks notebooks-check html clean
+.PHONY: help all notebooks notebooks-check html validate clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
@@ -31,6 +31,9 @@ notebooks-check: notebooks ## Fail if book/ drifted from sources
 		echo "book/ drifted from sources. Run 'make notebooks' and commit." >&2; \
 		git status --short -- $(BOOK)/ >&2; exit 1; \
 	fi
+
+validate: ## Lint rendered notebooks against markdownlint-cli2 (install: npm i -g markdownlint-cli2)
+	rustlab-notebook validate -f markdown notebooks
 
 lesson-%:
 	@for f in lessons/$*-*/*.rlab; do echo "=== $$f ==="; rustlab run "$$f" || true; done
