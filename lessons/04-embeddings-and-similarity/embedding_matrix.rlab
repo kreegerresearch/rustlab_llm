@@ -30,11 +30,11 @@ print(e3);
 print("Embedded representation of token 3  (= row 3 of E):");
 print(h3);
 print("Row 3 of E directly:");
-print(E(3));
+print(E(3, :));
 
 # === Verify: lookup result equals the row ===
 # Max absolute difference should be 0 (or machine epsilon ~1e-16)
-diff = max(abs(h3 - E(3)));
+diff = max(abs(h3 - E(3, :)));
 print("Max difference between lookup and direct row access (should be ~0):", diff);
 
 # === Heatmap of Embedding Matrix ===

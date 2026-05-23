@@ -235,4 +235,3 @@ Run with `make lesson-03` (or `rustlab run lessons/03-cross-entropy-loss/cross_e
 ## What's next
 
 Lesson 04 replaces the orthogonal one-hot vectors of Lesson 01 with **dense embedding vectors** that carry geometric meaning. The loss function from this lesson stays — the only change is *what* the model sees as input. Cosine similarity becomes the natural way to ask "how close are two tokens?" and the answer drives every later lesson on attention.
-

@@ -410,4 +410,3 @@ Natural extensions beyond Lesson 23:
 - **Long-context.** Sliding-window attention (Mistral), attention sinks, position interpolation, the RoPE-base-frequency tricks for context extension.
 
 None of these change the math you have already built — they extend it.
-

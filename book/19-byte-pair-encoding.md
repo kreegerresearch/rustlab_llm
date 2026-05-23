@@ -223,4 +223,3 @@ Run all with `make lesson-19` (or `rustlab run lessons/19-byte-pair-encoding/<na
 ## What's next
 
 Lesson 20 introduces **perplexity**, the standard metric for evaluating language models across architectures and corpora. Perplexity is just $e^{\mathcal{L}}$ — the same cross-entropy from [Lesson 03](03-cross-entropy-loss.md), expressed as an "effective branching factor" instead of bits. Once you can compute perplexity on a held-out test set you can compare *any* two language models on equal footing, which is the precondition for the closing capstone in [Lesson 22](22-putting-it-all-together.md).
-

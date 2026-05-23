@@ -2,7 +2,7 @@
 # System:  Sinusoidal positional encoding — relative-position structure
 # Concept: Verify that PE_t . PE_{t+k} depends only on the offset k, not on t
 # Equations:
-#   sim(t, k) = sum(PE(t) .* PE(t+k))
+#   sim(t, k) = sum(PE(t, :) .* PE(t+k, :))
 #   Translation property:  R_k(d) is a fixed rotation per (2k, 2k+1) pair
 # Units:   integer positions, dimensionless similarity
 
@@ -29,8 +29,8 @@ n_offsets = 40;
 sims_short = zeros(n_offsets);
 sims_far   = zeros(n_offsets);
 for k = 0:(n_offsets - 1)
-  sims_short(k + 1) = sum(PE(10) .* PE(10 + k));
-  sims_far(k + 1)   = sum(PE(20) .* PE(20 + k));
+  sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));
+  sims_far(k + 1)   = sum(PE(20, :) .* PE(20 + k, :));
 end
 
 drift = max(abs(sims_short - sims_far));

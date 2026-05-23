@@ -64,9 +64,9 @@ Shape: ${size(E, 1)} $\times$ ${size(E, 2)} — one row per token in a ${d_embed
 e3 = [0, 0, 1, 0, 0, 0, 0, 0];
 h3 = e3 * E;
 
-diff = max(abs(h3 - E(3)));
+diff = max(abs(h3 - E(3, :)));
 print("Embedded representation h3:", h3);
-print("Row 3 of E:", E(3));
+print("Row 3 of E:", E(3, :));
 ```
 
 The lookup matches the direct row access exactly — $\max|h_3 - E_3| = ${diff:%.2e}$ (machine epsilon).

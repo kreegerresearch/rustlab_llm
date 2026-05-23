@@ -191,10 +191,10 @@ sims_short = zeros(40);                        % similarity for offsets k=0..39 
 sims_far   = zeros(40);                        % same offsets starting at t=20
 
 for k = 0:39
-  sims_short(k + 1) = sum(PE(10) .* PE(10 + k));
+  sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));
 end
 for k = 0:39
-  sims_far(k + 1) = sum(PE(20) .* PE(20 + k));
+  sims_far(k + 1) = sum(PE(20, :) .* PE(20 + k, :));
 end
 
 drift = max(abs(sims_short - sims_far));
@@ -203,12 +203,12 @@ print("max |sim_t=10(k) - sim_t=20(k)| over k=0..39 =", drift);
 
 <!-- rustlab:output-start -->
 ```text
-max |sim_t=10(k) - sim_t=20(k)| over k=0..39 = 0.5439731609270116
+max |sim_t=10(k) - sim_t=20(k)| over k=0..39 = 0.000000000000005329070518200751
 ```
 
 <!-- rustlab:output-end -->
 
-Drift across base position $t$: $5.44e-01$ — within a hair of zero. Whatever similarity we measure between two positions is a function of *only* their separation.
+Drift across base position $t$: $5.33e-15$ — within a hair of zero. Whatever similarity we measure between two positions is a function of *only* their separation.
 
 ### Example — Plot the similarity-vs-distance curve
 
@@ -225,7 +225,7 @@ ylabel("Dot product")
 26
 ```
 
-![plot 2](plots/10-positional-encoding/plot-2-6882cb8f.svg)
+![plot 2](plots/10-positional-encoding/plot-2-ad3f2375.svg)
 
 <!-- rustlab:output-end -->
 
@@ -341,4 +341,3 @@ Run all with `make lesson-10` (or `rustlab run lessons/10-positional-encoding/<n
 ## What's next
 
 Lesson 11 introduces the second sublayer of every transformer block: the **position-wise feed-forward network**. Each token's representation passes through the same two-layer MLP independently — a per-position non-linearity that gives the model the expressive power a stack of pure linear projections lacks. The non-linearity is **GELU**, a smooth cousin of ReLU, and we'll see why the smoothness matters for gradient flow.
-

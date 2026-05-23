@@ -244,4 +244,3 @@ Run all with `make lesson-02` (or `rustlab run lessons/02-probability-and-softma
 ## What's next
 
 Lesson 03 introduces **cross-entropy loss** — the standard training objective for a language model. Cross-entropy measures the gap between the predicted distribution $\mathbf{p}$ from this lesson and the target one-hot distribution from Lesson 01, and reduces (under MLE) to maximizing the log-probability of the correct token at each position.
-

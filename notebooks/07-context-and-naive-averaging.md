@@ -39,7 +39,7 @@ C(2, 5) = 1;   % bank  -> safe
 
 P = zeros(vocab_size, vocab_size);
 for i = 1:vocab_size
-  row_sum = sum(C(i));
+  row_sum = sum(C(i, :));
   if row_sum > 0
     for j = 1:vocab_size
       P(i, j) = C(i, j) / row_sum;
@@ -150,7 +150,7 @@ The matrix multiply produces the same result as an explicit running-sum loop:
 X_bar_loop = zeros(T, d);
 running = zeros(d);
 for t = 1:T
-  running = running + X(t);
+  running = running + X(t, :);
   for k = 1:d
     X_bar_loop(t, k) = running(k) / t;
   end

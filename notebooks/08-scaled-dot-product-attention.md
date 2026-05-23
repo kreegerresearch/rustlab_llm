@@ -156,7 +156,7 @@ A = softmax(S_masked);
 ```rustlab
 row_sums = zeros(T);
 for t = 1:T
-  row_sums(t) = sum(A(t));
+  row_sums(t) = sum(A(t, :));
 end
 A_1_1 = A(1, 1);
 

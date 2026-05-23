@@ -63,20 +63,15 @@ print("hidden post (T, d_ff):", size(hidden_post));
 print("output      (T, d):   ", size(out));
 
 % Per-position independence: rows do not mix.
-% Use a permutation matrix to reorder rows — vector indexing M([3,1,2,5,4]) is not
-% yet available in rustlab (see AGENTS.md Rustlab Recommendations).
-P_perm = [0, 0, 1, 0, 0;
-          1, 0, 0, 0, 0;
-          0, 1, 0, 0, 0;
-          0, 0, 0, 0, 1;
-          0, 0, 0, 1, 0];
-H_perm = P_perm * H;
+% Gather rows in a different order and verify FFN(H_perm) == FFN(H) reordered.
+perm = [3, 1, 2, 5, 4];
+H_perm = H(perm, :);
 out_perm = gelu(H_perm * W1 + outer(ones_T, b1)) * W2 + outer(ones_T, b2);
-shuffle_err = max(reshape(abs(out_perm - P_perm * out), 1, T * d_model));
+shuffle_err = max(reshape(abs(out_perm - out(perm, :)), 1, T * d_model));
 print("max | FFN(P*H) - P*FFN(H) | =", shuffle_err);
 ```
 
-Reshuffling the rows of $\mathbf{H}$ via a permutation matrix and re-applying FFN produces exactly the same rows in the same shuffled order — confirmed numerically with $\max\Delta = ${shuffle_err:%.2e}$. FFN is row-independent; only attention mixes across positions.
+Reshuffling the rows of $\mathbf{H}$ via row gather and re-applying FFN produces exactly the same rows in the same shuffled order — confirmed numerically with $\max\Delta = ${shuffle_err:%.2e}$. FFN is row-independent; only attention mixes across positions.
 
 ## ReLU vs GELU
 

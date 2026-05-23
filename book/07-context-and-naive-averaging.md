@@ -41,7 +41,7 @@ C(2, 5) = 1;   % bank  -> safe
 
 P = zeros(vocab_size, vocab_size);
 for i = 1:vocab_size
-  row_sum = sum(C(i));
+  row_sum = sum(C(i, :));
   if row_sum > 0
     for j = 1:vocab_size
       P(i, j) = C(i, j) / row_sum;
@@ -56,7 +56,7 @@ The bigram's continuation distribution after `bank` is
 
 $$P(\text{next} \mid \text{bank}) = [0, 0, 0.5, 0, 0.5].$$
 
-P(water | bank) = $0.00$, P(safe | bank) = $0.00$ — whether the history was `river bank` or `money bank`. The model has no mechanism to tell them apart.
+P(water | bank) = $0.50$, P(safe | bank) = $0.50$ — whether the history was `river bank` or `money bank`. The model has no mechanism to tell them apart.
 
 ### Example — Bar of P(next | bank)
 
@@ -74,7 +74,7 @@ ylim([0, 1])
 18
 ```
 
-![plot 1](plots/07-context-and-naive-averaging/plot-1-047217b9.svg)
+![plot 1](plots/07-context-and-naive-averaging/plot-1-19beeace.svg)
 
 <!-- rustlab:output-end -->
 
@@ -172,7 +172,7 @@ Row $t$ has $t$ non-zero entries each equal to $1/t$, so every row sums to 1.
 
 The matrix multiply produces the same result as an explicit running-sum loop:
 
-Max absolute difference between loop and matrix multiply: $1.00e+00$ — identical to machine precision.
+Max absolute difference between loop and matrix multiply: $0.00e+00$ — identical to machine precision.
 
 ### Example — X vs. X̄ side by side
 
@@ -249,4 +249,3 @@ Run all with `make lesson-07` (or `rustlab run lessons/07-context-and-naive-aver
 ## What's next
 
 Lesson 08 replaces the fixed $1/t$ weights with **learned, content-dependent** ones derived from query and key projections of the embeddings. The matrix shape and the causal mask stay; only the entries change — and that change is the entire mechanism behind modern transformer attention.
-

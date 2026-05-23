@@ -307,4 +307,3 @@ Run all with `make lesson-12` (or `rustlab run lessons/12-layer-norm-and-residua
 ## What's next
 
 Phase 4 is now complete — you have all four sublayers a transformer needs: token embedding ([04](04-embeddings-and-similarity.md)), positional encoding ([10](10-positional-encoding.md)), self-attention ([08](08-scaled-dot-product-attention.md)) / multi-head ([09](09-multi-head-attention.md)), feed-forward ([11](11-feed-forward-block.md)), LayerNorm and residuals (this lesson). Phase 5 wires them together. **Lesson 13** assembles a single transformer block — Pre-LN → MHA → residual → Pre-LN → FFN → residual — and traces the data dimensions all the way through. **Lesson 14** stacks $N$ blocks plus an embedding layer and an LM head into the full GPT architecture and counts every parameter.
-

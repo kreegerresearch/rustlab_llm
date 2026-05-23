@@ -157,10 +157,10 @@ sims_short = zeros(40);                        % similarity for offsets k=0..39 
 sims_far   = zeros(40);                        % same offsets starting at t=20
 
 for k = 0:39
-  sims_short(k + 1) = sum(PE(10) .* PE(10 + k));
+  sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));
 end
 for k = 0:39
-  sims_far(k + 1) = sum(PE(20) .* PE(20 + k));
+  sims_far(k + 1) = sum(PE(20, :) .* PE(20 + k, :));
 end
 
 drift = max(abs(sims_short - sims_far));

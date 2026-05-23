@@ -310,4 +310,3 @@ Run all with `make lesson-09` (or `rustlab run lessons/09-multi-head-attention/<
 ## What's next
 
 This completes the **attention mechanism**. Phase 4 (Lessons 10–12) builds the three supporting pieces that surround attention in a transformer block: **positional encoding** (so the model knows where each token sits — attention itself is order-blind), the **MLP feed-forward sublayer** (per-position non-linearity), and **LayerNorm with residual connections** (the stabilisers that let many blocks stack deep without exploding or vanishing).
-

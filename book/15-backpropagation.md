@@ -399,4 +399,3 @@ Run all with `make lesson-15` (or `rustlab run lessons/15-backpropagation/<name>
 ## What's next
 
 Lesson 16 takes those gradients and uses them to update parameters. Vanilla SGD ($\theta \leftarrow \theta - \eta \nabla_\theta L$) works on the convex paraboloid of [Lesson 06](06-linear-layers-and-gradient-descent.md), but transformer loss surfaces are noisy, anisotropic, and far from convex — you need momentum and per-parameter adaptive learning rates. **AdamW** combines both, plus *decoupled weight decay*, and is the default optimiser for every modern LLM.
-

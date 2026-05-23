@@ -82,20 +82,20 @@ Shape: 8 $\times$ 6 — one row per token in a 6-dimensional embedding space.
 e3 = [0, 0, 1, 0, 0, 0, 0, 0];
 h3 = e3 * E;
 
-diff = max(abs(h3 - E(3)));
+diff = max(abs(h3 - E(3, :)));
 print("Embedded representation h3:", h3);
-print("Row 3 of E:", E(3));
+print("Row 3 of E:", E(3, :));
 ```
 
 <!-- rustlab:output-start -->
 ```text
 Embedded representation h3: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
-Row 3 of E: -0.04089876598481701
+Row 3 of E: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
 ```
 
 <!-- rustlab:output-end -->
 
-The lookup matches the direct row access exactly — $\max|h_3 - E_3| = 5.85e-02$ (machine epsilon).
+The lookup matches the direct row access exactly — $\max|h_3 - E_3| = 0.00e+00$ (machine epsilon).
 
 ### Example — Embedding matrix heatmap
 
@@ -345,4 +345,3 @@ Run all with `make lesson-04` (or `rustlab run lessons/04-embeddings-and-similar
 ## What's next
 
 Lesson 05 builds the first **language model** of the series: a count-based bigram model that learns next-token probabilities from a corpus and samples text from them. The embedding-style lookup table from this lesson reappears, this time storing transition probabilities rather than learned vectors.
-

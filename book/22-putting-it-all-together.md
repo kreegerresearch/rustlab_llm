@@ -212,4 +212,3 @@ The natural next steps:
 - **Read [nanoGPT](https://github.com/karpathy/nanoGPT).** The 300 lines of Python in `nanoGPT/model.py` are exactly the architecture in [14-full-gpt-architecture](14-full-gpt-architecture.md), written in PyTorch. You now know what every line means.
 
 The math you built here is the math every modern language model runs on — the rest is engineering.
-
