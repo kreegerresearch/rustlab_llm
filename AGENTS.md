@@ -68,11 +68,14 @@ make all                # render committed book/<slug>.md + interactive book/*.h
 make notebooks          # render book/<slug>.md from notebooks/<slug>.md (markdown)
 make html               # render book/index.html + per-notebook html (gitignored)
 make notebooks-check    # CI drift guard: fails if book/ is out of sync with sources
+make validate           # lint rendered markdown via `rustlab-notebook validate` (markdownlint-cli2)
 make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–24)
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
 The notebook render is directory-mode: `rustlab-notebook render notebooks --format markdown --output book` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The hand-written `book/README.md` is preserved (the renderer skips files named `README.md` on input). Note: as of rustlab 0.3.4 (May 2026) the renderer is a separate binary `rustlab-notebook` — the old `rustlab notebook ...` subcommand has been removed. `make notebooks` is updated accordingly.
+
+`make validate` shells out to `rustlab-notebook validate -f markdown notebooks`, which re-renders every notebook to a temp dir and pipes it through `markdownlint-cli2` using the project-root `.markdownlint-cli2.jsonc` (mirrors rustlab's own noise floor plus `MD024: { siblings_only: true }` so the curriculum's repeated `### Theory` H3s under distinct H2 parents pass). Install the linter with `npm i -g markdownlint-cli2`; without it, validate reports SKIPPED rather than failing. HTML / LaTeX / PDF validation are opt-in via `-f html|latex|pdf` and require additional linters (`vnu` + JRE, `chktex`, `qpdf`/`pdfinfo`).
 
 Single script:
 ```bash
