@@ -417,4 +417,3 @@ Run all with `make lesson-14` (or `rustlab run lessons/14-full-gpt-architecture/
 ## What's next
 
 Phase 5 is now complete: you have the full GPT decoder defined, you can run it forward, and you can count its parameters from hyperparameters alone. **Phase 6** builds the missing piece: how to *train* it. **Lesson 15** derives backpropagation through one transformer block by hand (chain rule through softmax, attention, FFN, and LN). **Lesson 16** introduces the AdamW optimiser, **Lesson 17** the warmup-then-cosine learning-rate schedule, and **Lesson 18** the complete training loop with overfitting diagnosis. After Phase 6 the architecture you assembled here will actually learn from data.
-

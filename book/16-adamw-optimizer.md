@@ -323,4 +323,3 @@ Run all with `make lesson-16` (or `rustlab run lessons/16-adamw-optimizer/<name>
 ## What's next
 
 Lesson 17 covers the **learning-rate schedule** that wraps every step of the optimiser. Real LLM training uses a short linear *warmup* (so the model sees small gradients while the moment estimates initialise) followed by a long **cosine decay** (so the optimiser slows down as it nears the minimum). Picking $\eta$ alone is not enough; *how $\eta$ moves over the course of training* is its own design problem.
-

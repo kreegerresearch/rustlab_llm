@@ -345,4 +345,3 @@ Run all with `make lesson-04` (or `rustlab run lessons/04-embeddings-and-similar
 ## What's next
 
 Lesson 05 builds the first **language model** of the series: a count-based bigram model that learns next-token probabilities from a corpus and samples text from them. The embedding-style lookup table from this lesson reappears, this time storing transition probabilities rather than learned vectors.
-

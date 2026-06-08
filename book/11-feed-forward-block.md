@@ -313,4 +313,3 @@ Run all with `make lesson-11` (or `rustlab run lessons/11-feed-forward-block/<na
 ## What's next
 
 Lesson 12 introduces the third sublayer of every transformer block: **LayerNorm**, plus the **residual connections** that wire the sublayers together. LayerNorm rescales each token vector to zero-mean unit-variance before it enters attention or FFN; residuals add the sublayer's output back to its input rather than replacing it. Together these are what allows transformers to be *deep* — without them, gradient propagation collapses past a handful of layers.
-

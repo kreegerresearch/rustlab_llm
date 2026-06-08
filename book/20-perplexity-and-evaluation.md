@@ -318,4 +318,3 @@ Run all with `make lesson-20` (or `rustlab run lessons/20-perplexity-and-evaluat
 ## What's next
 
 Phase 7 closes here. With BPE in hand for tokenisation and PPL as the evaluation metric, every measurement an LLM publication uses is now derivable from first principles. Phase 8 (Lessons 21–22) covers **generation strategies** — greedy, temperature, top-K, top-P sampling — and the **capstone**: a single end-to-end script that trains a small GPT and generates text at every checkpoint. After that, you have seen every component of GPT built up from scratch.
-

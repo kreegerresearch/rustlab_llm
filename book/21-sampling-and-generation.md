@@ -531,4 +531,3 @@ Run all with `make lesson-21` (or `rustlab run lessons/21-sampling-and-generatio
 ## What's next
 
 Lesson 22 is the **capstone**: a single end-to-end script that trains a small GPT (combining tokenisation from [19-byte-pair-encoding](19-byte-pair-encoding.md), training from [18-training-loop](18-training-loop.md), the architecture from [14-full-gpt-architecture](14-full-gpt-architecture.md)) and generates sample text at every checkpoint using the strategies and KV cache from this lesson. After lesson 22 you have built every component of a GPT-style language model from scratch.
-

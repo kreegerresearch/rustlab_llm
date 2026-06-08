@@ -252,4 +252,3 @@ Run both with `make lesson-01` from the repo root (or `rustlab run lessons/01-to
 ## What's next
 
 Lesson 02 turns the raw counts above into a proper probability distribution over the vocabulary using the **softmax** function, and introduces the **temperature** parameter that controls how sharp or diffuse the resulting distribution is. The character frequencies $f_i$ from this lesson reappear there as a baseline distribution for comparison.
-

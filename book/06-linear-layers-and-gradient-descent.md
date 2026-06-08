@@ -273,4 +273,3 @@ Run all with `make lesson-06` (or `rustlab run lessons/06-linear-layers-and-grad
 ## What's next
 
 Lesson 07 returns to the language-modelling thread: it gives the bigram model **more context** by averaging the embedding vectors of all tokens seen so far — the simplest form of attention. This sets up Lesson 08, which replaces the uniform average with **learned attention weights** computed from queries, keys, and values.
-

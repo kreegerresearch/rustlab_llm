@@ -341,4 +341,3 @@ Run all with `make lesson-10` (or `rustlab run lessons/10-positional-encoding/<n
 ## What's next
 
 Lesson 11 introduces the second sublayer of every transformer block: the **position-wise feed-forward network**. Each token's representation passes through the same two-layer MLP independently — a per-position non-linearity that gives the model the expressive power a stack of pure linear projections lacks. The non-linearity is **GELU**, a smooth cousin of ReLU, and we'll see why the smoothness matters for gradient flow.
-

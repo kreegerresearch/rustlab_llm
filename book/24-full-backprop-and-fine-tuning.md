@@ -255,4 +255,3 @@ The natural next directions outside this curriculum:
 - **RLHF (PPO).** The most-cited alternative to DPO. Requires a separate reward model and the PPO machinery (advantage estimation, clipping). DPO's appeal is that it skips all of that.
 
 Every one of those builds on what you have already derived from first principles. Welcome to the field.
-

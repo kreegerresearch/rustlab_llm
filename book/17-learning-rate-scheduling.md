@@ -263,4 +263,3 @@ Run all with `make lesson-17` (or `rustlab run lessons/17-learning-rate-scheduli
 ## What's next
 
 Lesson 18 stitches together everything in Phase 6: backprop (Lesson 15) computes the gradient, AdamW (Lesson 16) consumes it, and the schedule (this lesson) modulates the step size. The result is the full **training loop** — minibatch sample, forward pass, backward pass, optimiser step, log loss, repeat — with the diagnostic curves (train vs validation loss, gradient norm) that tell you whether the run is healthy.
-

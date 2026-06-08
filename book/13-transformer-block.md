@@ -497,4 +497,3 @@ Run all with `make lesson-13` (or `rustlab run lessons/13-transformer-block/<nam
 ## What's next
 
 Lesson 14 wraps the block into the **full GPT decoder**: a token embedding ([Lesson 04](04-embeddings-and-similarity.md)), positional encoding ([Lesson 10](10-positional-encoding.md)), $N$ stacked transformer blocks (this lesson), a final LayerNorm, and a language-modelling head that projects the residual stream to vocabulary logits. The lesson prints the parameter count of every component for a small GPT config and confirms the breakdown matches a known reference. After Lesson 14 you have every piece needed to *train* the architecture — Phases 6 onward fill in the training loop, optimizer, and evaluation.
-

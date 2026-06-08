@@ -350,4 +350,3 @@ Run all with `make lesson-08` (or `rustlab run lessons/08-scaled-dot-product-att
 ## What's next
 
 Lesson 09 runs **multiple attention heads in parallel**, each with its own $\mathbf{W}_Q^{(h)}, \mathbf{W}_K^{(h)}, \mathbf{W}_V^{(h)}$, then concatenates their outputs and projects them back to $d_{\text{model}}$. Different heads learn to specialise — one might track syntax, another long-range references — without any explicit supervision telling them which is which.
-

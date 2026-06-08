@@ -377,4 +377,3 @@ Run all with `make lesson-05` (or `rustlab run lessons/05-bigram-language-model/
 ## What's next
 
 Lesson 06 replaces the count table with a **learned linear layer** $y = Wx + b$ and shows how **gradient descent** drives the parameters toward the same optimum the count-based estimator finds analytically. The transition from "look up" to "learn" is the conceptual jump from a classical n-gram model to a neural one — every subsequent lesson uses gradient descent.
-

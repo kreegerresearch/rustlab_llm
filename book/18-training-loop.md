@@ -265,4 +265,3 @@ Run all with `make lesson-18` (or `rustlab run lessons/18-training-loop/<name>.r
 ## What's next
 
 Phase 6 closes here. With backprop, AdamW, the schedule, and the loop in hand, the only thing left to build a real LLM is the data pipeline (Phase 7) and the inference path (Phase 8). [Lesson 19](19-byte-pair-encoding.md) replaces the character-level vocabulary with **byte-pair encoding (BPE)**, the production-grade tokenizer; [Lesson 20](20-perplexity-and-evaluation.md) introduces **perplexity** as the standard metric for comparing language models across corpora and architectures.
-

@@ -249,4 +249,3 @@ Run all with `make lesson-07` (or `rustlab run lessons/07-context-and-naive-aver
 ## What's next
 
 Lesson 08 replaces the fixed $1/t$ weights with **learned, content-dependent** ones derived from query and key projections of the embeddings. The matrix shape and the causal mask stay; only the entries change — and that change is the entire mechanism behind modern transformer attention.
-
