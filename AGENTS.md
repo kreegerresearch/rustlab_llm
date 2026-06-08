@@ -276,17 +276,20 @@ When a needed function is missing from rustlab, record it here with the format:
 
 ## Open feature requests
 
-### CLI should announce itself as the `.rlab` handler
-**Needed for:** language identity. Lessons in this repo use the `.rlab` extension, but `rustlab run foo.rlab` produces output indistinguishable from running a `.r` or unsuffixed file — there is no banner or log line that identifies rustlab as the handler.
-**Why it matters:** rustlab is a distinct DSP-modelling language; while we currently borrow MATLAB syntax highlighting as a temporary proxy (see `.gitattributes` and the README "Environment & Tooling" section), the CLI is the most authoritative place to reinforce that `.rlab` is *rustlab*, not MATLAB. A one-line banner at startup ("rustlab 0.1.x — running foo.rlab") gives every shell-pasteable command a clear provenance.
-**Wanted:** an opt-in `--banner` flag, or an unconditional one-line stderr log on `rustlab run`, identifying the version + the file being executed. Optionally a stricter mode that warns when the input doesn't carry the `.rlab` extension.
-**Example (target):**
-```
-$ rustlab run lessons/01-tokens-and-encoding/char_frequencies.rlab
-rustlab 0.1.12 — running char_frequencies.rlab
-Corpus: to be or not to be
-...
-```
+### Automatic differentiation — `grad(f, x)` or a reverse-mode tape
+**Needed for:** Lessons 15, 22, 24 — backpropagation, the capstone training loop, and full-backprop fine-tuning (SFT/DPO).
+**Purpose:** Compute gradients of a scalar loss w.r.t. parameter matrices without hand-deriving and hand-coding every backward op. Today the curriculum derives the chain rule analytically and codes each backward pass by hand (`backward`, `layernorm_bwd`, `gelu_grad`, …). This is pedagogically valuable once (Lesson 15/24) but forces every training script to carry a bespoke, error-prone backward path.
+**Current state (0.3.6):** Only numeric grid gradients exist — `gradient` (2-D scalar field) and `gradient3` (3-D). There is no autodiff over the expression graph.
+**Example (target):** `[dW, db] = grad(@() loss(W, b, batch), {W, b});`
+
+### Module / import system — share code across `.rlab` scripts
+**Needed for:** Lessons 22 and 24, where the full-transformer forward/backward library (`forward`, `backward`, `layernorm_fwd/bwd`, `gelu_grad`) is **duplicated verbatim** across `full_backprop.rlab`, `sft.rlab`, and `dpo.rlab` because rustlab has no way to include shared definitions and AGENTS.md requires self-contained scripts.
+**Purpose:** Let a script pull common functions from a shared file so the transformer library lives in one place.
+**Current state (0.3.6):** No `import` / `include` / `require`; each script must be self-contained.
+**Example (target):** `import "lib/transformer.rlab"` (or similar) at the top of a lesson script.
+
+### ~~CLI should announce itself as the `.rlab` handler~~ — ✅ landed in 0.3.6
+Resolved: `rustlab run` now prints a one-line stderr banner identifying the version and file. See the Landed ✅ → rustlab 0.3.6 section below.
 
 ---
 
@@ -345,6 +348,18 @@ All currently-committed scripts and notebooks use the `while` form; new lessons 
 ## Landed ✅
 
 Resolved feature requests and fixed bugs, most-recent rustlab version first.
+
+### rustlab 0.3.6
+
+**`rustlab run` self-identifying banner.** Resolves the long-standing "CLI should announce itself as the `.rlab` handler" feature request. `rustlab run foo.rlab` now emits a one-line stderr banner before execution, e.g. `rustlab 0.3.6 — interpreting foo.rlab (.rlab)`, giving every shell-pasteable command clear provenance (rustlab, not MATLAB). No script or notebook changes needed.
+
+**`imagesc` y-axis orientation now matches MATLAB/Octave.** `imagesc` previously rendered matrix row 1 at the top (image convention) but labelled the y-axis bottom-to-top (physics convention) — the two silently disagreed. 0.3.6 aligns both to MATLAB/Octave exactly: image-convention render **and** reversed y-axis labels (row 0 at the top), default `axis("ij")`. New panel controls `axis("xy")` (row 0 at bottom, for physics/meshgrid plots), `axis("ij")` (default), and process-wide `set_default_axis(...)`. **Impact on this curriculum: none** — a full `make notebooks` re-render under 0.3.6 produced byte-identical plot SVGs (the change affects the interactive/plotters path, not the notebook SVG-export backend). All heatmaps (`imagesc(M, "viridis")` in lessons 05–16) are unaffected. Use `axis("xy")` only if a future lesson needs physics-up orientation.
+
+**Markdown renderer strips trailing blank lines.** `rustlab-notebook render --format markdown` now collapses blank-line runs and strips trailing blanks. A 0.3.6 re-render removed exactly one trailing blank line from each `book/*.md` file; no other content changed.
+
+**`rustlab notebook` subcommand removed → standalone `rustlab-notebook`.** Notebook rendering now lives entirely in the separate `rustlab-notebook` binary (`rustlab-notebook render notebooks --format markdown ...`). The `Makefile` already invokes `rustlab-notebook` directly, so the `notebooks` / `html` targets are unaffected.
+
+**Persistent function-result cache (`rustlab cache`).** New `rustlab cache status|list|clear|prune` subcommand inspecting an on-disk cache of function results. Optional performance feature; the curriculum does not rely on it.
 
 ### rustlab 0.3.4
 

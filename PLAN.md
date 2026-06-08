@@ -326,6 +326,8 @@ These close the gaps surfaced by the nanoGPT / *Attention Is All You Need* cover
 - The full-transformer forward/backward library is duplicated across all scripts using it (rustlab has no module system; AGENTS.md requires self-contained scripts). When/if rustlab gains imports, factor `forward`, `backward`, `layernorm_fwd/bwd`, and `gelu_grad` into a shared file.
 - **Lesson 22 capstone rewritten** to use the full-architecture training from this phase. Old bigram-surrogate version reached PPL = 1.51 with greedy collapsing to `"the cat the cat"`; the new full-transformer version reaches PPL = 1.00008 with greedy reproducing the corpus exactly (`"the cat sat on the mat the cat sat on the mat …"`).  Attention resolves the bigram ambiguity that the old capstone could not.
 
+**rustlab 0.3.4 → 0.3.6 maintenance pass (2026-06-07).** Verified the curriculum against rustlab 0.3.6: all 54 `.rlab` scripts execute without error and a full `make notebooks` re-render produces byte-identical plot SVGs (the 0.3.6 `imagesc` y-axis orientation fix affects the interactive/plotters path, not the notebook SVG-export backend — no heatmaps changed). The only book diff was one trailing blank line stripped per `book/*.md` by the 0.3.6 markdown renderer. AGENTS.md updated: the CLI-banner request is now landed (0.3.6 `rustlab run` banner), and the imagesc/axis change, `rustlab cache`, and `rustlab notebook` → `rustlab-notebook` removal are recorded in the Landed section. **Still upstream-blocked:** no autodiff (`grad`) and no module/import system — so the duplicated transformer-library refactor (above) and any autodiff-based capstone rewrite remain deferred; both are now logged as Open feature requests in AGENTS.md.
+
 ---
 
 ## Cross-Phase Rules
