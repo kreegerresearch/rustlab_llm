@@ -17,7 +17,7 @@ This file guides AI coding tools working in this repository.
 
 Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts and integrated notebooks that produce visualisations. The series builds from raw probability and linear algebra to a complete GPT-style decoder — nothing is a black box.
 
-**Curriculum status:** 24 lessons across 10 phases, all complete. Phases 1–8 (Lessons 01–22) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end. Phase 9 (Lesson 23) covers post-2020 architectural variants — RoPE, RMSNorm, SwiGLU, GQA — as drop-in swaps. Phase 10 (Lesson 24) wires the full analytical backward pass through the Lesson 13 transformer block and uses it for SFT and DPO. The Lesson 22 capstone trains the full architecture end-to-end (PPL → 1.00008 on a context-2 corpus where bigram floors at 1.5).
+**Curriculum status:** 24 lessons across 10 phases, all complete. Phases 1–8 (Lessons 01–22) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end. Phase 9 (Lesson 23) covers post-2020 architectural variants — RoPE, RMSNorm, SwiGLU, GQA — as drop-in swaps. Phase 10 (Lesson 24) wires the full analytical backward pass through the Lesson 13 transformer block and uses it for SFT and DPO. The Lesson 22 capstone trains the full architecture end-to-end (PPL → 1.00008 on a corpus whose optimal-bigram floor is ≈ 1.47).
 
 **Learning goal:** Derive every core LLM algorithm — tokenisation, attention, transformer blocks, training, fine-tuning, and inference — with working code and plots at each step. Follows the architecture of [nanoGPT](https://github.com/karpathy/nanoGPT) through Phase 8 and extends it through Phases 9–10.
 
@@ -106,7 +106,7 @@ Use GitHub-flavored Markdown with LaTeX math: `$inline$` and `$$block$$`. Each n
 
 - Variables persist across ` ```rustlab ` blocks within a notebook — define `[X, Y]`, `vocab_size`, etc. once, reuse below.
 - The renderer captures the active figure automatically. **Don't** call `savefig()` inside notebook code blocks.
-- Use `figure()` (not `clf;`) at the start of each plot block. `figure()` creates a fresh figure and avoids state leaking across notebooks in directory-mode rendering.
+- Use `figure();` (not `clf;`) at the start of each plot block — **with the semicolon**: an unsuppressed `figure()` echoes its integer handle into the captured output, and the handle increments across the whole directory render, so one bare `figure()` puts a meaningless (and render-order-dependent) number in the book. Same rule for `histogram(...);`, which otherwise echoes its 2×n bin matrix.
 - If a plot block uses `hold("on")`, close it with `hold("off")` at the end. Lingering `hold("on")` state leaks into the next notebook in directory mode and inflates the captured-plot count.
 - Use `<!-- hide -->` before setup-only code blocks the reader doesn't need to see.
 - Use template interpolation `${expr}` to embed computed values in prose (e.g. `${mean(v):%.3f}`).
@@ -237,24 +237,28 @@ legend("s1", "s2")
 clf                                          — clear current figure
 ```
 
-**Canonical save pattern.** The shorthand `savebar`, `savescatter`, `saveimagesc`, and `savehist` wrappers are deprecated — use the `plot/bar/scatter/imagesc` call followed by `savefig(file)`:
+**Canonical save pattern.** The shorthand `savebar`, `savescatter`, `saveimagesc`, and `savehist` wrappers are deprecated — use the `plot/bar/scatter/imagesc` call followed by `savefig(file)`. Note the semicolon on `figure();` (see the authoring rules — bare `figure()` echoes its handle):
 
 ```
-figure()
+figure();
 bar(y, "title")                    % or: scatter(x, y, "title")
 savefig("outputs/chart.svg")
 
-figure()
+figure();
 imagesc(M, "viridis")
 title("Heatmap")
 savefig("outputs/heatmap.svg")
 ```
 
+**Subplot limitation (0.3.6):** `subplot` + `heatmap`/`imagesc` SVG export renders **only the first panel** — panels 2..n are silently dropped (line plots and histograms are fine). Until fixed upstream, give each heatmap its own figure (see lesson 09's split figures and their TODO markers).
+
+**⚠️ Signed-data limitation (0.3.6):** `heatmap`/`imagesc` color-map by **absolute value** — negative cells render with the color of their magnitude (−2 and +2 identical; a large negative renders *hot*). Never pass signed data directly: shift it non-negative first (`log10(G / g_min)`, `(PE + 1) / 2`) with a comment, or plot explicitly-labeled magnitudes. Repro + details: `docs/rustlab-issues-2026-07-12.md` §6.
+
 ---
 
 ## Rustlab Recommendations
 
-This section is the running record of rustlab feature requests, breaking changes, and idiomatic patterns the curriculum has had to adapt to. Three groups, ordered for triage:
+This section is the running record of rustlab feature requests, breaking changes, and idiomatic patterns the curriculum has had to adapt to. A standalone, upstream-facing bug report from the 2026-07-12 full-curriculum audit (repros, impact, suggested fixes) lives at `docs/rustlab-issues-2026-07-12.md`. Three groups, ordered for triage:
 
 1. **Open feature requests** — wanted but not yet landed.
 2. **Required idioms / breaking changes** — current rules new code MUST follow.
@@ -279,6 +283,22 @@ When a needed function is missing from rustlab, record it here with the format:
 **Current state (0.3.6):** Only numeric grid gradients exist — `gradient` (2-D scalar field) and `gradient3` (3-D). There is no autodiff over the expression graph.
 **Example (target):** `[dW, db] = grad(@() loss(W, b, batch), {W, b});`
 
+### Struct-field indexing — `s.M(t, :)`
+**Needed for:** Lessons 22, 24 — every backward-pass function.
+**Purpose:** Index a matrix stored in a struct field directly. Today `acts.M(t, :)` parses as a call to a function `M(...)`, so each backward function unpacks ~18 cache fields into locals (~20 boilerplate lines × 5 scripts).
+**Current state (0.3.6):** Not supported; unpack-to-local workaround in place.
+**Example (target):** `Q_row = acts.Q(t, :);`
+
+### Lint for scalar linear-indexing of matrices — `M(i)` where a row was meant
+**Needed for:** the whole curriculum. The 2026-07-12 audit found **eight** latent instances of the pre-0.3.0 row idiom (lessons 04, 05 ×3, 07 ×2 + script, 08, 10, 15), several published with visibly-broken output (NaN probability matrices, a backward pass failing its own finite-difference check). This is the single most damaging bug class the curriculum has hit.
+**Purpose:** `rustlab run --lint` (or a default stderr note) flagging scalar linear reads of true matrices, especially `sum(M(i))` / `p = P(i)` patterns inside loops over rows.
+
+### Warning on non-finite / degenerate plot data
+**Needed for:** Lessons 05, 07 — regressions shipped silently. `heatmap`/`imagesc` accept NaN/inf (NaN now renders gray) and `bar` renders all-zero charts, all without a diagnostic; also `hline` silently ignores unrecognized colors (`"gray"`, or a style string passed in the color slot). One stderr warning each would have caught three published broken figures at render time.
+
+### MATLAB-convention single-output `svd` and integer `size()` display
+**Purpose:** `s = svd(W)` currently binds `U` (first tuple element), not the singular values — silent MATLAB divergence. `print(size(X))` renders `[1×2] 8.000000 64.000000` for what is conceptually `[8, 64]`.
+
 ### Module / import system — share code across `.rlab` scripts
 **Needed for:** Lessons 22 and 24, where the full-transformer forward/backward library (`forward`, `backward`, `layernorm_fwd/bwd`, `gelu_grad`) is **duplicated verbatim** across `full_backprop.rlab`, `sft.rlab`, and `dpo.rlab` because rustlab has no way to include shared definitions and AGENTS.md requires self-contained scripts.
 **Purpose:** Let a script pull common functions from a shared file so the transformer library lives in one place.
@@ -292,9 +312,15 @@ Resolved: `rustlab run` now prints a one-line stderr banner identifying the vers
 
 ## Required idioms (breaking changes and rules)
 
+### ⚠️ BREAKING (rustlab 0.3.6, 2026-07-11 rebuild): `cache` is a reserved word — do not use it as an identifier
+The `cache` *statement* (`cache enable`, `cache off`, …) reserves lowercase `cache` in the grammar. `cache = 5;` → `parse error: cache: unexpected token Eq`; `function [y, cache] = f(x)` → `expected identifier in function output list, got Cache` (the token's debug name is capitalized — the reserved word is lowercase). Uppercase `Cache` still parses but don't rely on it. This broke four previously-working scripts (lessons 22/24); the forward-pass cache variable is now named `acts` with `# TODO` markers to revert if upstream makes the keyword context-sensitive. Full repro + suggested upstream fix: `docs/rustlab-issues-2026-07-12.md` §1.
+
+### ⚠️ Same-version behaviour drift: the 2026-07-11 binary still reports 0.3.6
+The July rebuild changed observable behaviour without a version bump: the `cache` reservation above, floating-point last-digit changes in reductions, and heatmap NaN handling (NaN cells now gray, colorbar excludes non-finite). `make notebooks-check` diffs against books rendered by the June build will show those deltas. When the drift guard fires with no source change, suspect a binary update — check the binary's mtime — and re-render. Details: `docs/rustlab-issues-2026-07-12.md` §5.
+
 ### ⚠️ BREAKING (rustlab 0.3.0): `M(scalar)` is now a linear-index element, not a row
 **Hit during the 0.3.0 audit.** Previously `M(2)` returned the second *row* of a matrix; in 0.3.0 it returns the second column-major *linear element* (matches `find(M)`'s 1-based linear indices and is consistent with vector indexing).
-**Migration recipe:** anywhere a script meant "row `t` of M", rewrite as `M(t, :)`. The notebooks and scripts in this repo were swept after the 0.3.0 release; the canonical idioms are:
+**Migration recipe:** anywhere a script meant "row `t` of M", rewrite as `M(t, :)`. The notebooks and scripts in this repo were swept after the 0.3.0 release — but the sweep was incomplete: the 2026-07-12 audit found and fixed eight more latent instances (lessons 04, 05, 07, 08, 10, 15), several of which had shipped visibly-broken rendered output. Treat any remaining `sum(M(i))` / `p = P(i)` inside a row loop as a bug until proven otherwise. The canonical idioms are:
 - Row read: `S(t, :)`, `E(curr, :)`, `H(t, :)`, etc.
 - Element read: `M(t)` returns a scalar.
 - Row write: rustlab 0.3.4 added the symmetric `M(t, :) = vec` form; new code should prefer it. The legacy `M(t) = vec` (assign linear-index starting at `t * nrows`, which lines up with row `t` when the RHS is a row vector) still works and is bit-identical, so existing scripts have been left as-is to avoid churn.
@@ -350,7 +376,7 @@ Resolved feature requests and fixed bugs, most-recent rustlab version first.
 
 **`rustlab run` self-identifying banner.** Resolves the long-standing "CLI should announce itself as the `.rlab` handler" feature request. `rustlab run foo.rlab` now emits a one-line stderr banner before execution, e.g. `rustlab 0.3.6 — interpreting foo.rlab (.rlab)`, giving every shell-pasteable command clear provenance (rustlab, not MATLAB). No script or notebook changes needed.
 
-**`imagesc` y-axis orientation now matches MATLAB/Octave.** `imagesc` previously rendered matrix row 1 at the top (image convention) but labelled the y-axis bottom-to-top (physics convention) — the two silently disagreed. 0.3.6 aligns both to MATLAB/Octave exactly: image-convention render **and** reversed y-axis labels (row 0 at the top), default `axis("ij")`. New panel controls `axis("xy")` (row 0 at bottom, for physics/meshgrid plots), `axis("ij")` (default), and process-wide `set_default_axis(...)`. **Impact on this curriculum: none** — a full `make notebooks` re-render under 0.3.6 produced byte-identical plot SVGs (the change affects the interactive/plotters path, not the notebook SVG-export backend). All heatmaps (`imagesc(M, "viridis")` in lessons 05–16) are unaffected. Use `axis("xy")` only if a future lesson needs physics-up orientation.
+**`imagesc` y-axis orientation now matches MATLAB/Octave.** `imagesc` previously rendered matrix row 1 at the top (image convention) but labelled the y-axis bottom-to-top (physics convention) — the two silently disagreed. 0.3.6 aligns both to MATLAB/Octave exactly: image-convention render **and** reversed y-axis labels (row 0 at the top), default `axis("ij")`. New panel controls `axis("xy")` (row 0 at bottom, for physics/meshgrid plots), `axis("ij")` (default), and process-wide `set_default_axis(...)`. **Impact on this curriculum: none** — a full `make notebooks` re-render under 0.3.6 produced byte-identical plot SVGs (the change affects the interactive/plotters path, not the notebook SVG-export backend). All heatmaps (`imagesc(M, "viridis")` in lessons 05–16) are unaffected. Use `axis("xy")` only if a future lesson needs physics-up orientation. *(Caveat added 2026-07-12: the "byte-identical" claim held for the June 0.3.6 build; the 2026-07-11 rebuild — still reporting 0.3.6 — changed heatmap NaN rendering and reduction FP digits. See the "Same-version behaviour drift" idiom above.)*
 
 **Markdown renderer strips trailing blank lines.** `rustlab-notebook render --format markdown` now collapses blank-line runs and strips trailing blanks. A 0.3.6 re-render removed exactly one trailing blank line from each `book/*.md` file; no other content changed.
 
