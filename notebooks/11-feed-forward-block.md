@@ -46,9 +46,6 @@ d_ff = 4 * d_model;
 
 H = randn(T, d_model);
 
-% Note the shape: W1 here is d_model × d_ff — the *transpose* of the theory's
-% W₁ ∈ R^{d_ff × d_model}. Storing it this way lets us write H * W1 with rows
-% still tokens, which is exactly the H·W₁ᵀ of the position-wise equation above.
 W1 = randn(d_model, d_ff) * sqrt(2.0 / d_model);   % He init for the GELU layer
 b1 = zeros(d_ff);
 W2 = randn(d_ff, d_model) * sqrt(2.0 / d_ff);
@@ -66,21 +63,15 @@ print("hidden post (T, d_ff):", size(hidden_post));
 print("output      (T, d):   ", size(out));
 
 % Per-position independence: rows do not mix.
-% We reorder rows with an explicit permutation matrix P (perm = [3,1,2,5,4]) so
-% the check reads as linear algebra: FFN(P*H) should equal P*FFN(H). Row gather
-% H([3,1,2,5,4], :) would do the same reordering directly and more cheaply.
-P_perm = [0, 0, 1, 0, 0;
-          1, 0, 0, 0, 0;
-          0, 1, 0, 0, 0;
-          0, 0, 0, 0, 1;
-          0, 0, 0, 1, 0];
-H_perm = P_perm * H;
+% Gather rows in a different order and verify FFN(H_perm) == FFN(H) reordered.
+perm = [3, 1, 2, 5, 4];
+H_perm = H(perm, :);
 out_perm = gelu(H_perm * W1 + outer(ones_T, b1)) * W2 + outer(ones_T, b2);
-shuffle_err = max(reshape(abs(out_perm - P_perm * out), 1, T * d_model));
+shuffle_err = max(reshape(abs(out_perm - out(perm, :)), 1, T * d_model));
 print("max | FFN(P*H) - P*FFN(H) | =", shuffle_err);
 ```
 
-Reshuffling the rows of $\mathbf{H}$ via a permutation matrix and re-applying FFN produces exactly the same rows in the same shuffled order — confirmed numerically with $\max\Delta = ${shuffle_err:%.2e}$. FFN is row-independent; only attention mixes across positions.
+Reshuffling the rows of $\mathbf{H}$ via row gather and re-applying FFN produces exactly the same rows in the same shuffled order — confirmed numerically with $\max\Delta = ${shuffle_err:%.2e}$. FFN is row-independent; only attention mixes across positions.
 
 ## ReLU vs GELU
 
@@ -89,9 +80,9 @@ Reshuffling the rows of $\mathbf{H}$ via a permutation matrix and re-applying FF
 The two activations share a "small inputs cause small outputs, large positive inputs pass through" character but disagree near zero.
 
 - **ReLU**: $\mathrm{ReLU}(x) = \max(0, x)$. Hard cutoff at zero. Gradient is $1$ for $x > 0$ and $0$ for $x < 0$ — discontinuous at the kink. A neuron that drifts negative gets zero gradient and is effectively "dead" until a future update kicks it back.
-- **GELU** (Gaussian Error Linear Unit): $\mathrm{GELU}(x) = x \cdot \Phi(x)$, where $\Phi$ is the standard normal CDF. Smooth everywhere, with a non-zero gradient on both sides of zero. Slightly negative inputs produce slightly negative outputs (small but real signal); large negatives still vanish. (rustlab's `gelu()`, like GPT-2, actually evaluates the Hendrycks–Gimpel *tanh approximation* $0.5x\left(1 + \tanh\!\left[\sqrt{2/\pi}\,(x + 0.044715 x^3)\right]\right)$, which matches the exact $x\cdot\Phi(x)$ to about $10^{-3}$ — so the printed values below are the tanh form, e.g. `gelu(-2)` $= -0.0454$ vs the exact $-0.0455$.)
+- **GELU** (Gaussian Error Linear Unit): $\mathrm{GELU}(x) = x \cdot \Phi(x)$, where $\Phi$ is the standard normal CDF. Smooth everywhere, with a non-zero gradient on both sides of zero. Slightly negative inputs produce slightly negative outputs (small but real signal); large negatives still vanish.
 
-GELU was the default activation of the GPT-2/3 and BERT era. Most post-2022 decoders (LLaMA, Mistral, PaLM) instead use SiLU/SwiGLU gated variants — GELU's spiritual successor — but the smooth-activation idea is the same. The empirical justification for smoothing the kink is "trains faster, slightly better final loss", and the commonly-cited mechanism is the smoother gradient near zero, which keeps more neurons producing useful gradient signal during training.
+GELU is the default in GPT-2/3, BERT, and almost every recent decoder transformer. The empirical justification is "trains faster, slightly better final loss" — and the mechanism is the smoother gradient near zero, which keeps more neurons producing useful gradient signal during training.
 
 ### Example — Plot both activations on the same axes
 
@@ -100,7 +91,7 @@ xs = linspace(-3.0, 3.0, 200);
 y_relu = relu(xs);
 y_gelu = gelu(xs);
 
-figure();
+figure()
 hold("on")
 plot(xs, y_relu, "color", "blue", "label", "ReLU(x)")
 plot(xs, y_gelu, "color", "red",  "label", "GELU(x)")
@@ -137,7 +128,7 @@ print("d/dx ReLU(x=-0.5) =", dRelu(i_neg));
 print("d/dx GELU(x=-0.5) =", dGelu(i_neg));
 ```
 
-At $x = -0.5$, ReLU's derivative is exactly $0$ — a neuron stuck there receives **no learning signal**. GELU's derivative is ${dGelu(i_neg):%.4f}$ — small but non-zero (it equals $\Phi(-0.5) + (-0.5)\,\phi(-0.5) \approx 0.309 - 0.176 = 0.133$ analytically), enough for gradient descent to correct the neuron's bias. This is the "no dead neurons" benefit, and one commonly-cited reason smooth activations like GELU displaced plain ReLU in transformer FFNs.
+At $x = -0.5$, ReLU's derivative is exactly $0$ — a neuron stuck there receives **no learning signal**. GELU's derivative is ${dGelu(i_neg):%.4f}$ — small but non-zero (it equals $\Phi(-0.5) + (-0.5)\,\phi(-0.5) \approx 0.309 - 0.176 = 0.133$ analytically), enough for gradient descent to correct the neuron's bias. This is the "no dead neurons" benefit, and the entire reason GELU has displaced ReLU in modern transformers.
 
 ## Pre- vs Post-Activation Distributions
 
@@ -151,8 +142,8 @@ A useful diagnostic: histogram the values of the hidden vector before and after 
 % Reuse the small FFN's hidden_pre from earlier — flatten T x d_ff to a single vector
 pre_flat = reshape(hidden_pre, 1, T * d_ff);
 
-figure();
-histogram(pre_flat);
+figure()
+histogram(pre_flat)
 title("Pre-Activation Distribution (T x d_ff = 5 x 16 = 80 values)")
 xlabel("hidden_pre value")
 ylabel("count")
@@ -165,8 +156,8 @@ The pre-activation is roughly symmetric around zero — the He-initialised proje
 ```rustlab
 post_flat = reshape(hidden_post, 1, T * d_ff);
 
-figure();
-histogram(post_flat);
+figure()
+histogram(post_flat)
 title("Post-Activation Distribution (GELU, same 80 values)")
 xlabel("hidden_post value")
 ylabel("count")
@@ -205,11 +196,11 @@ For $d_{\text{model}} = 384$ the FFN is $2\times$ the attention block — most o
 
 The FFN is a **per-token, lossy non-linear transform**. Two information-theoretic angles are useful:
 
-**ReLU destroys information; GELU attenuates it.** Any ReLU neuron with input $x < 0$ outputs exactly $0$, mapping all negative inputs to a single value. By the data processing inequality, the post-ReLU vector cannot retain any information that distinguishes between two negative inputs — that information is gone forever. GELU compresses but does not fully collapse the negative half: most negative inputs map to distinct (small, negative) outputs. It is not perfectly invertible either — GELU is non-monotonic near the origin, dipping to a minimum around $x \approx -0.75$, so it is 2-to-1 across part of the negative axis — but its strict-monotonic-almost-everywhere shape preserves more input distinctions than ReLU's hard zero-clamp. The smoother gradient is the consequence.
+**ReLU destroys information; GELU attenuates it.** Any ReLU neuron with input $x < 0$ outputs exactly $0$, mapping all negative inputs to a single value. By the data processing inequality, the post-ReLU vector cannot retain any information that distinguishes between two negative inputs — that information is gone forever. GELU compresses but does not collapse the negative half: $-0.5$ and $-1.5$ produce different (small, negative) outputs, so $I(\text{post}; \text{pre})$ is strictly larger for GELU than for ReLU at the same neuron. The smoother gradient is the consequence.
 
 **The 4× widening is an information bottleneck the wrong way around.** The FFN expands to $4 d_{\text{model}}$, applies non-linearity, then projects back. Viewed as a channel, the bottleneck is at the input and output (width $d_{\text{model}}$); the wide hidden layer has plenty of capacity to represent intermediate non-linear features. This is structurally similar to the *information bottleneck* framework — except the FFN is *not* a learned compressor of inputs; it's a learned non-linear *re-mapping* of a fixed-width vector. The hidden layer's role is geometric (room to bend the manifold), not informational (compress to sufficient statistic).
 
-The FFN cannot *increase* the information $I(X_{t+1}; X_{1..t})$ that attention extracted — by the data-processing inequality a deterministic per-token map can only preserve or destroy it, and a lossy non-linearity like GELU generally sheds some. What the FFN does is *re-shape* the surviving information into a more useful geometry; the next attention layer is what extracts more.
+The FFN does not change the information $I(X_{t+1}; X_{1..t})$ that attention extracted — it only re-shapes it. The next attention layer is what extracts more.
 
 ## Key Takeaways
 

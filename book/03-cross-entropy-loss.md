@@ -75,7 +75,7 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/03-cross-entropy-loss/plot-1-8d6022f8.svg)
+![plot 1](plots/03-cross-entropy-loss/plot-1-62fc03f6.svg)
 
 <!-- rustlab:output-end -->
 
