@@ -23,7 +23,7 @@ Consider two sentences sharing an ambiguous token:
 - `river bank water`
 - `money bank safe`
 
-`bank` is the same token in both, but its continuation depends on the history. A bigram sees only the previous token, so both histories collapse to the same row of $P$. This section's H2s pair `### Theory` with `### Example — <descriptor>`.
+`bank` is the same token in both, but its continuation depends on the history. A bigram sees only the previous token, so both histories collapse to the same row of $P$.
 
 ### Example — P(next | bank) collapses to a 50/50
 
@@ -59,7 +59,7 @@ P(water | bank) = ${p_after_bank(3):%.2f}$, P(safe | bank) = ${p_after_bank(5):%
 ### Example — Bar of P(next | bank)
 
 ```rustlab
-figure()
+figure();
 labels = {"river", "bank", "water", "money", "safe"};
 bar(labels, p_after_bank)
 title("P(next | bank) — identical regardless of prior context")
@@ -119,7 +119,7 @@ For $T = ${T}$, $\mathbf{W}$ is shown below.
 
 ### Example — Vectorized W construction
 
-The nested loop reads the definition cell by cell. The same matrix is also a one-liner if we materialise the row- and column-index grids and let the comparison `j \le t` build the lower-triangular mask, divided element-wise by the row index. Both must agree exactly.
+The nested loop reads the definition cell by cell. The same matrix is also a one-liner: cumulating the identity down each column with `cumsum(eye(T), 1)` builds the lower-triangular ones-mask, and dividing element-wise by the row-index matrix turns each row's ones into $1/t$. Both must agree exactly.
 
 ```rustlab
 lower_tri = cumsum(eye(T), 1);                   % 1 on / below diagonal, 0 above
@@ -134,7 +134,7 @@ The vectorized form mirrors the math $W_{t, i} = \frac{1}{t} \cdot [i \le t]$ ex
 ### Example — Causal averaging matrix W heatmap
 
 ```rustlab
-figure()
+figure();
 imagesc(W, "viridis")
 title("Causal Averaging Matrix W — row t = 1/t, zero above diagonal")
 ```
@@ -145,7 +145,6 @@ Row $t$ has $t$ non-zero entries each equal to $1/t$, so every row sums to 1.
 
 The matrix multiply produces the same result as an explicit running-sum loop:
 
-<!-- hide -->
 ```rustlab
 X_bar_loop = zeros(T, d);
 running = zeros(d);
@@ -165,12 +164,14 @@ Max absolute difference between loop and matrix multiply: ${diff:%.2e}$ — iden
 ### Example — X vs. X̄ side by side
 
 ```rustlab
-figure()
-subplot(2, 1, 1)
+% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
+figure();
 imagesc(X, "viridis")
 title("Input Embeddings X (distinct per token)")
+```
 
-subplot(2, 1, 2)
+```rustlab
+figure();
 imagesc(X_bar_mm, "viridis")
 title("Prefix Averages X̄ = W*X (each row mixes all earlier tokens)")
 ```
@@ -214,7 +215,7 @@ Run all with `make lesson-07` (or `rustlab run lessons/07-context-and-naive-aver
 | `W(2, 1)`, `W(2, 2)` | `0.5` each |
 | `W(t, i)` for $i \le t$ | `1/t` |
 | `W(t, i)` for $i > t$ | `0` |
-| `sum(W(t))` (each row) | `1.0` |
+| `sum(W(t, :))` (each row) | `1.0` |
 | `diff` (loop vs matmul) | ≈ `0` (machine epsilon) |
 
 ## Exercises

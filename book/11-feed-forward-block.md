@@ -117,11 +117,7 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-```text
-27
-```
-
-![plot 1](plots/11-feed-forward-block/plot-1-0b36caec.svg)
+![plot 1](plots/11-feed-forward-block/plot-1-96dd1d8e.svg)
 
 <!-- rustlab:output-end -->
 
@@ -180,13 +176,6 @@ ylabel("count")
 ```
 
 <!-- rustlab:output-start -->
-```text
-28
-Matrix(2x10)
-  [-2.600594, -2.014954, -1.429314, -0.843673, -0.258033, 0.327608, 0.913248, 1.498889, ...]
-  [6.000000, 6.000000, 6.000000, 7.000000, 11.000000, 17.000000, 8.000000, 8.000000, ...]
-```
-
 ![plot 2](plots/11-feed-forward-block/plot-2-6a84b3cc.svg)
 
 <!-- rustlab:output-end -->
@@ -206,13 +195,6 @@ ylabel("count")
 ```
 
 <!-- rustlab:output-start -->
-```text
-29
-Matrix(2x10)
-  [-0.013319, 0.299546, 0.612411, 0.925277, 1.238142, 1.551007, 1.863873, 2.176738, ...]
-  [40.000000, 13.000000, 4.000000, 5.000000, 5.000000, 2.000000, 4.000000, 3.000000, ...]
-```
-
 ![plot 3](plots/11-feed-forward-block/plot-3-717df361.svg)
 
 <!-- rustlab:output-end -->

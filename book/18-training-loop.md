@@ -60,7 +60,7 @@ Loss on bigram (a, b) at init: 1.055663278860206
 
 <!-- rustlab:output-end -->
 
-At random init the loss is roughly $\log_2 |\mathcal{V}| \approx \log 3 = 1.099$ nats — the uniform-prior baseline. The model has not learned anything yet.
+At random init the loss is roughly $\log |\mathcal{V}| = \log 3 = 1.099$ nats — the uniform-prior baseline. The model has not learned anything yet.
 
 ## Backward Pass
 
@@ -95,8 +95,8 @@ function [dE, dW, L] = backward_one(x_curr, x_next, E, W, vocab, d_emb)
 end
 
 [dE_ab, dW_ab, L_ab] = backward_one(1, 2, E, W, vocab, d_emb);
-print("dL/dW shape:", size(dW_ab));
-print("dL/dE shape:", size(dE_ab));
+print(sprintf("dL/dW shape: %dx%d (d_emb x vocab)", size(dW_ab, 1), size(dW_ab, 2)));
+print(sprintf("dL/dE shape: %dx%d (vocab x d_emb)", size(dE_ab, 1), size(dE_ab, 2)));
 
 % Finite-difference check on W(2, 3)
 eps = 1e-5;
@@ -110,8 +110,8 @@ print("FD vs analytic dL/dW(2,3):  fd =", fd, "  analytic =", dW_ab(2, 3));
 
 <!-- rustlab:output-start -->
 ```text
-dL/dW shape: [1×2]  4.000000  3.000000
-dL/dE shape: [1×2]  3.000000  4.000000
+dL/dW shape: 4x3 (d_emb x vocab)
+dL/dE shape: 3x4 (vocab x d_emb)
 FD vs analytic dL/dW(2,3):  fd = -0.04358153784522755   analytic = -0.043581537850663696
 ```
 
@@ -133,7 +133,7 @@ One pass through the loop is the same five lines for any neural network:
 5. Log: train loss; every K steps, validation loss and gradient norm.
 ```
 
-For this lesson, the corpus is a 60-character periodic sequence over $\{a, b, c\}$. The training set covers the first 50 characters; the held-out validation set is the remaining 10 (kept disjoint, not seen during gradient updates). Repeating the same finite training data forever is *exactly* the regime where overfitting becomes visible: train loss drops to a number reflecting the ground-truth bigram entropy, while val loss bottoms out at the same number if the data is i.i.d., or higher if the train/val distributions differ.
+For this lesson, the corpus is a 60-character periodic sequence over $\{a, b, c\}$. Training uses the 49 consecutive bigram pairs among the first 50 characters; validation uses the 9 pairs spanning characters 50–59 (the 60th character is unused). Repeating the same finite training data forever is the regime where a train/val gap becomes visible: train loss drops to a number reflecting the empirical bigram conditional entropy, while val loss bottoms out at the same number when train and val see the same transition statistics, or higher when their finite samples differ.
 
 ### Example — End-to-end training
 
@@ -141,11 +141,11 @@ The full training run (corpus, model, AdamW, schedule, diagnostics) is fairly lo
 
 The expected diagnostics for a healthy run:
 
-- **Train and val loss both fall** from ≈1.1 nats (uniform prior) to ≈0.7 nats (the bigram entropy of the corpus).
-- **Validation loss tracks train loss** — there is no overfitting because the model has too few parameters (24) and the corpus is bigram-perfect.
+- **Train and val loss both fall** from ≈1.1 nats (uniform prior) toward the corpus's bigram conditional entropy ≈0.347 nats. The run lands at train ≈0.34 and val ≈0.39. Both sit *near* the 0.347 floor; the small train/val gap is a finite-sample artefact — 5 of the 9 validation pairs start from the ambiguous state `b` (which costs $\ln 2 \approx 0.69$ each), versus 24 of the 49 training pairs, so the two averages weight the uncertain branch slightly differently.
+- **Validation loss tracks train loss** — no overfitting, because a token→distribution model of rank $\lvert\mathcal{V}\rvert$ can only ever reproduce the empirical bigram table; extra embedding width adds nothing to the fit.
 - **Gradient norm** starts large, then decays smoothly as the optimiser approaches the minimum, with brief upticks when the LR ramp from warmup amplifies updates.
 
-If the model were larger relative to the corpus (e.g. 2400 parameters on a 60-character corpus), the val loss would *bottom out and rise* while train loss kept falling — the canonical overfitting signature.
+Width alone cannot make this model overfit: any embedding dimension $d \ge \lvert\mathcal{V}\rvert$ converges to the *same* bigram distribution, so when train and val share transition statistics the val loss plateaus at the train floor rather than rising. Overfitting-by-capacity needs features that can *separate* train contexts from val contexts — a longer context window or more layers — not just more parameters at rank $\lvert\mathcal{V}\rvert$.
 
 ## Reading the Diagnostics
 
@@ -157,14 +157,124 @@ Three plots are produced by `train_loop.rlab`:
 
 | Pattern | Diagnosis |
 |---|---|
-| Both flat near $\log_2 \lvert\mathcal{V}\rvert$ | underfitting — increase model size or LR |
+| Both flat near $\log \lvert\mathcal{V}\rvert$ | underfitting — increase model size or LR |
 | Both falling, val tracks train | healthy — keep training |
 | Train falling, val rising | overfitting — add regularisation, more data, or stop earlier |
 | Loss spikes mid-training | LR too high, exploding gradients, or numerical instability |
 
-**2. `grad_norm.svg` — $\|\nabla L\|_2$ per logged step (log scale).** A healthy curve declines roughly two-three orders of magnitude over training. A flat-and-large grad norm suggests the LR is too small to make progress; a flat-and-tiny grad norm at high loss suggests vanishing gradients (not relevant here at depth 1, but central in deep transformers — Lesson 15).
+**2. `grad_norm.svg` — $\|\nabla L\|_2$ per logged step (log scale, from step 1).** A healthy curve declines several orders of magnitude over training — this run drops from ≈$1.8\times10^{-1}$ at step 1 to ≈$9\times10^{-8}$ at the end (~6 orders). A flat-and-large grad norm suggests the LR is too small to make progress; a flat-and-tiny grad norm at high loss suggests vanishing gradients (not relevant here at depth 1, but central in deep transformers — Lesson 15).
 
 **3. `lr_curve.svg` — the schedule from Lesson 17.** Annotated with the same step axis so you can correlate any loss-curve oddity with where in the schedule it happened (e.g. divergence right at the warmup peak suggests the peak LR is too high).
+
+### Example — In-notebook diagnostic run
+
+The three plots above come from the full 600-step `train_loop.rlab`. Here is a compact 180-step mirror, run inline so the diagnostics render right here. It reuses `forward_one` and `backward_one` from the blocks above, trains the same 24-parameter model on the period-4 corpus with AdamW + warmup/cosine, and records train loss, val loss, and gradient norm at every step.
+
+```rustlab
+seed(18);
+E = randn(vocab, d_emb) * 0.3;
+W = randn(d_emb, vocab) * 0.3;
+
+pat = [1, 2, 3, 2];                 % a, b, c, b — period 4
+corpus = zeros(60);
+for i = 1:60
+  corpus(i) = pat(mod(i - 1, 4) + 1);
+end
+n_tr = 49;                          % train pairs among chars 1..50
+n_va = 9;                           % val pairs among chars 50..59
+
+% Mean loss over a contiguous run of pairs, reusing forward_one.
+function L = range_loss(start_idx, n_pairs, corpus, E, W)
+  L = 0.0;
+  for k = 0:(n_pairs - 1)
+    L = L + forward_one(corpus(start_idx + k), corpus(start_idx + k + 1), E, W);
+  end
+  L = L / n_pairs;
+end
+
+n_steps = 180;
+b1 = 0.9; b2 = 0.999; a_eps = 1e-8;
+eta_max = 0.15; eta_min = 0.015; T_w = 30;
+mE = zeros(vocab, d_emb); vE = zeros(vocab, d_emb);
+mW = zeros(d_emb, vocab); vW = zeros(d_emb, vocab);
+Ltr = zeros(n_steps + 1); Lva = zeros(n_steps + 1); gnc = zeros(n_steps + 1);
+Ltr(1) = range_loss(1,  n_tr, corpus, E, W);
+Lva(1) = range_loss(50, n_va, corpus, E, W);
+for t = 1:n_steps
+  if t <= T_w
+    eta_t = eta_max * (t / T_w);
+  else
+    prog = (t - T_w) / (n_steps - T_w);
+    eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * prog));
+  end
+  dE_sum = zeros(vocab, d_emb); dW_sum = zeros(d_emb, vocab);
+  for k = 0:(n_tr - 1)
+    [dEk, dWk, Lk] = backward_one(corpus(1 + k), corpus(2 + k), E, W, vocab, d_emb);
+    dE_sum = dE_sum + dEk; dW_sum = dW_sum + dWk;
+  end
+  dE_avg = dE_sum / n_tr; dW_avg = dW_sum / n_tr;
+  gnc(t + 1) = sqrt(sum(reshape(dE_avg .^ 2, 1, vocab * d_emb)) + sum(reshape(dW_avg .^ 2, 1, d_emb * vocab)));
+  mE = b1 * mE + (1 - b1) * dE_avg;  vE = b2 * vE + (1 - b2) * (dE_avg .^ 2);
+  E = E - eta_t * (mE / (1 - b1 ^ t)) ./ (sqrt(vE / (1 - b2 ^ t)) + a_eps);
+  mW = b1 * mW + (1 - b1) * dW_avg;  vW = b2 * vW + (1 - b2) * (dW_avg .^ 2);
+  W = W - eta_t * (mW / (1 - b1 ^ t)) ./ (sqrt(vW / (1 - b2 ^ t)) + a_eps);
+  Ltr(t + 1) = range_loss(1,  n_tr, corpus, E, W);
+  Lva(t + 1) = range_loss(50, n_va, corpus, E, W);
+end
+floor_emp = 24 * log(2) / 49;
+final_tr = Ltr(n_steps + 1);
+final_va = Lva(n_steps + 1);
+print("final train loss:", final_tr);
+print("final val   loss:", final_va);
+print("empirical floor 24*ln2/49:", floor_emp);
+```
+
+<!-- rustlab:output-start -->
+```text
+final train loss: 0.33950065992134676
+final val   loss: 0.38508017927181015
+empirical floor 24*ln2/49: 0.3395006598660956
+```
+
+<!-- rustlab:output-end -->
+
+After 180 steps the train loss reaches $0.3395$ and the val loss $0.3851$ — essentially the floor, since a 24-parameter bigram model converges fast. Both hug the empirical floor $24\ln 2/49 = 0.3395$; the small train/val gap is the finite-sample weighting discussed below, not overfitting.
+
+```rustlab
+figure();
+steps = 0:n_steps;
+plot(steps, Ltr, "color", "red",  "label", "train")
+hold("on")
+plot(steps, Lva, "color", "blue", "label", "val")
+hline(floor_emp, "green", "empirical floor 0.3395")
+hold("off")
+title("Train vs val loss (180-step mirror of train_loop.rlab)")
+xlabel("step")
+ylabel("L (nats)")
+legend("train", "val")
+```
+
+<!-- rustlab:output-start -->
+![plot 1](plots/18-training-loop/plot-1-e1174ab0.svg)
+
+<!-- rustlab:output-end -->
+
+Both curves fall from the ≈1.1-nat uniform prior and flatten at the green empirical-floor line within the first ~60 steps.
+
+```rustlab
+figure();
+plot(1:n_steps, log10(gnc(2:(n_steps + 1))), "color", "green", "label", "log10 ||grad||")
+title("Gradient norm vs step (log10, from step 1)")
+xlabel("step")
+ylabel("log10 ||grad||")
+```
+
+<!-- rustlab:output-start -->
+![plot 2](plots/18-training-loop/plot-2-a83792a2.svg)
+
+<!-- rustlab:output-end -->
+
+The gradient norm collapses from ≈$10^{-0.7}$ at step 1 toward ≈$10^{-5}$ — the log-scale signature of an optimiser settling into a minimum.
 
 ## Information-Theoretic Sanity Check
 
@@ -173,7 +283,7 @@ Three plots are produced by `train_loop.rlab`:
 Two reference points to verify the run hit:
 
 - **Initial loss.** A randomly-initialised softmax over $|\mathcal{V}|$ classes has expected cross-entropy $\log |\mathcal{V}|$ nats. For $|\mathcal{V}| = 3$ that is $1.0986$ nats. Any random model should start there ± a small amount of noise from the random init.
-- **Optimal loss.** A trained bigram model on the corpus `"abcbabcba…"` reaches the *conditional entropy* $H(X_{t+1} \mid X_t)$ derived in [Lesson 05](05-bigram-language-model.md). For the periodic `abc` corpus that is roughly 0.347 nats (perplexity ≈ 1.414). The training run should converge near that floor — and *cannot* go below it, because no Markov-1 model can.
+- **Optimal loss.** A trained bigram model on the period-4 corpus `"abcbabcb…"` reaches the *conditional entropy* $H(X_{t+1} \mid X_t)$ derived in [Lesson 05](05-bigram-language-model.md). For this corpus that is $H = P(b)\,\ln 2 \approx 0.347$ nats (perplexity ≈ 1.414) — the population floor no Markov-1 model can beat. The run's terminal train loss is $0.3395$, which sits *slightly below* $0.347$: the loss is measured on the finite training sample, and among the 49 training pairs only 24 start from the uncertain state `b` (a fraction $24/49 = 0.490$, below the true $0.5$), so the *empirical* floor is $24\cdot\ln 2 / 49 = 0.3395$ nats — matched to four decimals. The same finite-sample effect resurfaces in [Lesson 20](20-perplexity-and-evaluation.md) as a train PPL of $1.404$ just below the $1.4148$ bigram floor.
 
 Comparing the run's terminal train loss to the analytical bigram entropy is the cleanest "is my training healthy?" test you can run on a tiny problem.
 
@@ -186,7 +296,7 @@ Every component is a closer look at something already in the series:
 - **The forward pass** is a stripped-down Lesson 14 with no attention and no residuals — pure embedding + LM head.
 - **The cross-entropy loss** is the Lesson 03 derivation, evaluated per pair instead of per sample.
 - **The gradient computation** is the Lesson 15 chain rule, applied to a 2-layer network.
-- **The optimiser** is the Lesson 16 AdamW, no modifications.
+- **The optimiser** is the Lesson 16 AdamW run with weight decay $\lambda = 0$ — i.e. plain Adam for this tiny model (decoupled decay off; Exercise 3 turns it on).
 - **The schedule** is the Lesson 17 warmup+cosine, no modifications.
 
 A real GPT training run replaces the embedding+head with the full architecture from Lesson 14 — but the loop, the gradient flow, and the diagnostic recipes are identical. Scaling up changes which numbers fly past, not how the loop is structured.
@@ -238,7 +348,7 @@ The training loops in this series do *not* clip — the toy models do not produc
 | Script | What it computes |
 |---|---|
 | `train_loop.rlab` | end-to-end training of the embedding+head bigram model on `"abcbabcba…"` with AdamW + warmup+cosine schedule; saves `train_val_loss.svg`, `grad_norm.svg`, `lr_curve.svg` |
-| `overfit_demo.rlab` | same model trained on a 6-character corpus to force overfitting; the train/val gap appears clearly |
+| `overfit_demo.rlab` | same model on a tiny corpus whose validation set contains a transition (1→3) never seen in training; the held-out loss climbs as the model grows confident on the training transitions (train↘, val↗) |
 
 Run all with `make lesson-18` (or `rustlab run lessons/18-training-loop/<name>.rlab`).
 
@@ -246,21 +356,21 @@ Run all with `make lesson-18` (or `rustlab run lessons/18-training-loop/<name>.r
 
 | Variable | Expected Value |
 |---|---|
-| Initial train loss | ≈ `log(3) = 1.099` nats |
-| Final train loss (`train_loop.rlab`) | ≈ `0.35–0.45` nats (close to bigram entropy) |
-| Final val loss (`train_loop.rlab`) | ≈ same as train loss (no overfit, model is too small) |
-| Initial gradient norm | $O(1)$ |
-| Final gradient norm | several orders of magnitude smaller |
-| `overfit_demo.rlab` train loss | falls to near 0 (memorised) |
-| `overfit_demo.rlab` val loss | rises after a few hundred steps (textbook overfit) |
+| Initial train loss | ≈ `1.12` nats (≈ `log 3 = 1.099` ± random-init noise) |
+| Final train loss (`train_loop.rlab`) | ≈ `0.34` (`0.3395` = empirical floor $24\ln 2/49$) |
+| Final val loss (`train_loop.rlab`) | ≈ `0.39` (`0.3851`; slightly above train — finite-sample weighting) |
+| Initial gradient norm (step 1) | ≈ `0.18` |
+| Final gradient norm | ≈ `9e-8` (~6 orders smaller) |
+| `overfit_demo.rlab` train loss | falls to ≈ `0.277` (`2\ln 2/5` — the empirical floor, not 0) |
+| `overfit_demo.rlab` val loss | rises to ≈ `6.2` (the unseen (1→3) transition) |
 
 ## Exercises
 
 1. **Sanity-check the initial loss.** Re-seed the model with `seed(N)` for several $N$. Does the initial training loss stay near $\log 3 \approx 1.099$? What does it mean if it doesn't?
 2. **Effect of LR.** Modify `train_loop.rlab` to use a constant LR equal to $\eta_{\max}$ (no warmup, no decay). Does training still converge? Where do the diagnostic curves differ from the scheduled run?
-3. **Effect of weight decay.** Set $\lambda = 0$ in AdamW. The model is so tiny that overfitting is not the issue — but does removing decay change the final loss? Why or why not?
+3. **Effect of weight decay.** `train_loop.rlab` runs with $\lambda = 0$ (plain Adam). Set $\lambda = 0.1$ and re-run. The model is so tiny that overfitting is not the issue — does *adding* decay change the final loss? Why or why not? (Hint: decoupled decay pulls every weight toward 0 each step, competing with the gradient's pull toward the bigram solution.)
 4. **Read the grad-norm plot.** At which step does the gradient norm peak? Correlate it with the LR schedule's peak in `lr_curve.svg`. Why is the alignment expected?
-5. **Build the overfit case.** In `overfit_demo.rlab`, increase the embedding dimension to $d = 32$ and the corpus length to 6 characters. Re-run and inspect `train_val_loss.svg` — at what step does the val loss start rising?
+5. **Build the overfit case.** In `overfit_demo.rlab`, increase the embedding dimension to $d = 32$ and grow the training corpus to 12 characters. Re-run and inspect `overfit_demo.svg` — does widening $d$ change the val-loss curve at all? (It shouldn't — rank is capped at $\lvert\mathcal{V}\rvert$.) What *does* move the curve is which transitions the val set holds that the train set never shows.
 
 ## What's next
 

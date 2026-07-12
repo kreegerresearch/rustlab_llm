@@ -109,7 +109,7 @@ print("H top-K=3:", nat_entropy(q_k3));
 print("H top-P=0.9:", nat_entropy(q_p09));
 
 # === Plot: four strategies side by side ===
-figure()
+figure();
 subplot(2, 2, 1)
 bar(q_t05)
 title("Temperature T=0.5 (sharpened)")

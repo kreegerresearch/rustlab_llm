@@ -116,7 +116,7 @@ H^{(0)} first row (first 6 values): 0.8519901832549279 0.6242199078970485 0.7649
 
 <!-- rustlab:output-end -->
 
-The lookup `E_tok(ids(t))` returns row `ids(t)` of the embedding matrix — a $d_{\text{model}}$-vector. Add the positional encoding for slot $t$ and you have the residual stream's initial value $\mathbf{H}^{(0)}$.
+The lookup `E_tok(ids(t), :)` returns row `ids(t)` of the embedding matrix — a $d_{\text{model}}$-vector (the trailing `:` selects the whole row). Add the positional encoding for slot $t$ and you have the residual stream's initial value $\mathbf{H}^{(0)}$.
 
 ### Example — Stack of N transformer blocks
 
@@ -179,26 +179,24 @@ argmax next token: 17
 
 <!-- rustlab:output-end -->
 
-`logits` has shape $(T, |\mathcal{V}|) = (8, 50)$ — one logit vector per position, one entry per vocabulary token. At inference time we softmax the *last* row to get $P(X_{T+1} \mid X_{1..T})$ ([Lesson 02](02-probability-and-softmax.md)), then sample from it ([Lesson 21](21-sampling-strategies.md), Phase 8). At training time we softmax *every* row and compare to the true next-token labels via cross-entropy ([Lesson 03](03-cross-entropy-loss.md), Phase 6 wires this into a loop).
+`logits` has shape $(T, |\mathcal{V}|) = (8, 50)$ — one logit vector per position, one entry per vocabulary token. At inference time we softmax the *last* row to get $P(X_{T+1} \mid X_{1..T})$ ([Lesson 02](02-probability-and-softmax.md)), then sample from it ([Lesson 21](21-sampling-and-generation.md), Phase 8). At training time we softmax *every* row and compare to the true next-token labels via cross-entropy ([Lesson 03](03-cross-entropy-loss.md), Phase 6 wires this into a loop).
 
 The full pipeline `ids → embed → +PE → N blocks → LN_f → W_U → softmax` is a complete GPT.
 
 ### Example — Logit heatmap across positions
 
 ```rustlab
-figure()
-imagesc(logits, "viridis")
-title("Logits (T=8 positions × |V|=50 vocab)")
+% rustlab 0.3.6 colormaps by |value|; shift so min = 0 so the render is faithful
+% (see docs/rustlab-issues-2026-07-12.md §6)
+figure();
+imagesc(logits - min(min(logits)), "viridis")
+title("Logits - min (T=8 positions × |V|=50 vocab)")
 xlabel("vocab id")
 ylabel("position t")
 ```
 
 <!-- rustlab:output-start -->
-```text
-33
-```
-
-![plot 1](plots/14-full-gpt-architecture/plot-1-85152564.svg)
+![plot 1](plots/14-full-gpt-architecture/plot-1-b7aa1253.svg)
 
 <!-- rustlab:output-end -->
 
@@ -262,24 +260,20 @@ TOTAL                     205440
 
 <!-- rustlab:output-end -->
 
-A few thousand parameters per block, ~200K total — small enough to fit in a 1 MB serialised file but architecturally identical to a 100M-parameter model.
+~50 K parameters in this toy block and ~205 K total — small enough to fit in a 1 MB serialised file but architecturally identical to a 100M-parameter model.
 
 ### Example — Bar chart of parameter distribution
 
 ```rustlab
 labels = {"embed", "blocks", "LN_f", "LM head"};
 counts = [n_embed, n_blocks_total, n_final_ln, n_lm_head];
-figure()
+figure();
 bar(labels, counts)
 title("Parameter count by component (toy GPT)")
 ylabel("parameters")
 ```
 
 <!-- rustlab:output-start -->
-```text
-34
-```
-
 ![plot 2](plots/14-full-gpt-architecture/plot-2-e0eacf22.svg)
 
 <!-- rustlab:output-end -->
@@ -317,7 +311,7 @@ Discrepancy:                                                     36864
 
 <!-- rustlab:output-end -->
 
-The weight-tied total reproduces GPT-2 small to within ~37 K parameters (≈ 0.03 %) — the residual gap is bias-term accounting. **The same formula scales from a few-hundred-parameter toy all the way to the largest open transformer published.**
+The weight-tied total, `124,402,944`, reproduces GPT-2 small to within 36,864 parameters (≈ 0.03 %). That residual is **not** slop — it is exactly the attention biases this formula omits: a bias on each of the four projections per block, $12 \text{ blocks} \times 4 \cdot 768 = 36{,}864$. Add them and the count is exact. The same reconciliation holds one size up: `param_count.rlab` also reconstructs GPT-2 medium ($d = 1024$, $N = 24$) and lands at `354,724,864` against the published `354,823,168` — a gap of `98,304`, which is again exactly the attention biases, $24 \text{ blocks} \times 4 \cdot 1024$. The bias term scales with depth and width in lock-step with the formula. **The same formula scales from a few-hundred-parameter toy all the way to the largest open transformer published.**
 
 ## Connection to Information Theory
 
@@ -347,9 +341,9 @@ The biases are initialised to zero. LayerNorm parameters initialise as $\gamma =
 
 ### Why it matters
 
-A 12-layer transformer with naive $\mathcal{N}(0, 1)$ initialisation produces activations that grow by a factor of $\sim 2^N$ through the residual stream — gradients explode immediately and training fails. The same model with the nanoGPT scheme has bounded activations at step 0 and trains cleanly. Initialisation is the *most* often-skipped detail when porting a transformer implementation between frameworks; many "untrainable" implementations have a single line-of-code bug in this section.
+The reason is a variance argument. Each $d$-dimensional matmul multiplies the activation variance by $n_{\text{in}} \sigma^2$, where $\sigma^2$ is the per-weight variance. With naive $\mathcal{N}(0, 1)$ weights ($\sigma^2 = 1$) at $d_{\text{model}} = 768$, that is a factor of $768$ *per projection* — activations blow up after the very first matmul, and the gradients with them. The fan-in-aware scales above are chosen so $n_{\text{in}} \sigma^2 \approx 1$ (or $\approx 2$ for the GELU case), holding the variance roughly constant across each matmul; Pre-LN then resets the scale at the entry to every sublayer, which is what tames the *accumulation* across a deep stack. Initialisation is the *most* often-skipped detail when porting a transformer implementation between frameworks; many "untrainable" implementations have a single line-of-code bug in this section.
 
-These lessons use a simpler $\mathcal{N}(0, 0.3^2)$ scaling on small models where the depth issue does not arise. Production-scale code should follow the nanoGPT recipe.
+These lessons do not use one fixed scale; each matrix is initialised for its own fan-in. The attention and LM-head projections use $1/\sqrt{d_{\text{model}}}$ (so the $\mathbf{Q}\mathbf{K}^\top$ scores start at unit scale), the two FFN matrices use He scaling $\sqrt{2/n_{\text{in}}}$ (matched to the GELU that follows), and the token embedding uses a flat $0.1$. Combined with Pre-LN's per-block renormalisation, this keeps activations well-behaved at the shallow depths ($N \le 4$) these toy models use. Production-scale code at $N = 12$ and beyond should add the nanoGPT residual-projection rescaling ($1/\sqrt{2N}$) above.
 
 ## Sidebar: Weight Tying (in practice)
 
@@ -381,7 +375,7 @@ The downside is one extra constraint on what the model can express. Empirically 
 - The residual stream stays at width $d_{\text{model}}$ throughout — that is what makes blocks stackable.
 - **Parameter formula**: $n \approx N \cdot 12 d_{\text{model}}^2 + 2 |\mathcal{V}| d_{\text{model}}$. Block params scale as depth × width², embedding/LM-head as vocab × width.
 - **Weight tying** ($\mathbf{W}_U = \mathbf{E}^\top$) halves embedding-related parameters at no architectural cost.
-- The formula reproduces GPT-2 small's published 124M parameters exactly. The same formula handles GPT-3 (175B) without modification.
+- The formula reproduces GPT-2 small's published 124M parameters to within 0.03% — the residual is exactly the attention biases the formula omits ($12 \times 4 \cdot 768 = 36{,}864$). The same formula handles GPT-3 (175B) without modification.
 
 ## Standalone Scripts
 
@@ -399,12 +393,12 @@ Run all with `make lesson-14` (or `rustlab run lessons/14-full-gpt-architecture/
 | `size(H^{(0)})` | `[8, 64]` |
 | `size(H^{(N)})` | `[8, 64]` (shape preserved across blocks) |
 | `size(logits)` | `[8, 50]` |
-| `sum(probs_last)` | `1.0` |
+| `sum(probs_last)` | ≈ `1.0` (up to FP rounding; prints `0.9999999999999999`) |
 | `n_embed` | `3200` |
 | `n_block` | ≈ `49,728` |
 | `n_blocks_total` (× 4) | ≈ `198,912` |
 | `n_total` | ≈ `205,440` |
-| `n_total_tied` (GPT-2 small) | ≈ `124,439,000` |
+| `n_total_tied` (GPT-2 small) | `124,402,944` (36,864 below the published 124,439,808 — the attention biases this formula omits) |
 
 ## Exercises
 

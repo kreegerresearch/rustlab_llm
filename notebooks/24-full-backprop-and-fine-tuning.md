@@ -1,6 +1,6 @@
 # Lesson 24: Full Backprop and Fine-Tuning
 
-Lesson 22 deliberately stopped at the boundary between "every component built" and "every component trained end-to-end." This lesson closes that gap. The chain rule from [[15-backpropagation]] is wired through the [[13-transformer-block]] forward pass, the gradients are verified against a finite-difference probe, and the resulting machinery is then used to demonstrate three training paradigms:
+Lesson 22's capstone trains a full single-block transformer end-to-end — but it does so by *calling* a forward/backward library without deriving the backward half. This lesson opens that black box. The chain rule from [[15-backpropagation]] is wired through the [[13-transformer-block]] forward pass, the gradients are verified against a finite-difference probe, and the resulting machinery — the very library the capstone runs on — is then used to demonstrate three training paradigms:
 
 1. **Pre-training**: end-to-end gradient descent on next-token cross-entropy, driving the loss below the bigram floor on a corpus where context matters.
 2. **Supervised fine-tuning (SFT)**: continue training on instruction-formatted data with loss-masked prompts.
@@ -21,7 +21,7 @@ The same forward/backward library is the spine of all three.
 - Chain rule through every transformer layer from [[15-backpropagation]] — this lesson composes them.
 - The transformer block forward pass from [[13-transformer-block]] — used verbatim.
 - AdamW + warmup-cosine training pattern from [[18-training-loop]].
-- The trained models from [[22-putting-it-all-together]] used a simplified embedding+head architecture; this lesson is the architectural upgrade.
+- The capstone in [[22-putting-it-all-together]] trains the full single-block transformer using exactly the forward/backward library derived here — this lesson is where that backward pass comes from.
 
 ## A Corpus Where Attention Beats Bigram
 
@@ -37,7 +37,9 @@ A bigram model cannot distinguish the two `b` contexts. The analytic floor:
 
 $$\mathcal{L}_{\text{bigram}} = \frac{1}{11}\!\left(4 \cdot 0 + 4 \cdot (-\log\tfrac{4}{7}) + 3 \cdot (-\log\tfrac{3}{7})\right) \approx 0.434\ \text{nats/pair}.$$
 
-A trigram (or any model with a 2-token context window) can predict every next token with $P = 1$, so its loss floor is exactly $0$. Attention with $d_{\text{head}} \geq 2$ has enough capacity to encode this context. **The attention model should drive the loss from ~0.6 (random init) below the bigram floor of 0.434 toward 0.**
+A trigram (or any model with a 2-token context window) can predict every next token with $P = 1$, so its loss floor is exactly $0$. Attention with $d_{\text{head}} \geq 2$ has enough capacity to encode this context. **The trained model should drive the loss from ~0.6 (random init) below the bigram floor of 0.434 toward 0.**
+
+Beating the floor shows the model uses *more* than the current token — but it does not, on its own, prove the extra signal comes from *attention*. On this short, fixed corpus the model also carries a **fixed sinusoidal positional embedding**, which makes every one of the 12 positions distinct; the FFN can memorise a position→next-token map with attention contributing nothing (exactly the effect explored in [[22-putting-it-all-together]]'s Exercise 3). So the final loss is not a clean isolation of attention. The decisive evidence that backprop *through attention* is correct is the finite-difference gradient check in the next section, which probes a weight (`Wq`) that lives inside the attention path.
 
 ## The Full Backward Pass
 
@@ -83,17 +85,17 @@ The `full_backprop.rlab` script first perturbs two scalar parameters — `W_U(1,
 
 ```text
 Gradient check on W_U(1, 1):
-  numerical  = -0.03485661993596345
-  analytical = -0.034856619951966775
-  rel error  = 2.3e-10 (should be < 1e-5)
+  numerical  = -0.0348566
+  analytical = -0.0348566
+  rel error  = 2.2e-10 (should be < 1e-5)
 Gradient check on Wq(1, 1):
-  numerical  = -0.0005294123667232142
-  analytical = -0.0005294123667887494
+  numerical  = -0.000529412
+  analytical = -0.000529412
   rel error  = 6.2e-11 (should be < 1e-5)
 Both checks pass: true
 ```
 
-Relative error around $10^{-10}$ — machine epsilon for $f^{-1}$ around this magnitude. The analytical gradient is correct.
+(The numbers are truncated to six significant figures; the numerical estimate's last few digits shift from run to run and machine to machine with floating-point rounding.) A relative error around $10^{-10}$ is exactly what a *central* difference should give here: its error is the sum of an $O(\varepsilon^2)$ truncation term (with $\varepsilon = 10^{-4}$, that is $\sim 10^{-8}$ scaled by the third derivative) and the floating-point cancellation in forming $L_+ - L_-$ (two losses that agree to ~15 digits, differenced and divided by $2\varepsilon$). The two error sources land the check near $10^{-10}$ — far below the $10^{-5}$ pass threshold, so the analytical gradient is correct.
 
 ### Example — End-to-end training on the `abb` corpus
 
@@ -105,7 +107,7 @@ Final L = 0.000000003918572521921996
 Bigram floor = 0.4345778848093911   -- attention model should beat this.
 ```
 
-The attention model achieves $\mathcal{L} \approx 4 \times 10^{-9}$, essentially zero. The bigram floor is decisively broken — the model has learned the context-2 structure. This is the strongest possible demonstration that the full backward pass is correct: a single-block transformer trained end-to-end with analytical gradients converges to the analytic minimum.
+The attention model achieves $\mathcal{L} \approx 4 \times 10^{-9}$, essentially zero. The bigram floor is decisively broken — the model has learned to use context beyond the current token. Convergence to the analytic minimum is a strong end-to-end sanity check on the whole training loop, but (as noted above) the final loss alone cannot separate attention from the fixed-PE-plus-FFN route on this small fixed corpus. The decisive evidence that the *backward pass* — and in particular backprop through attention — is correct remains the finite-difference gradient check above.
 
 ## Supervised Fine-Tuning (SFT)
 
@@ -154,7 +156,7 @@ if total > 0
 end
 ```
 
-The post-SFT predictions on prompts always pick response token `a` (matching the SFT data), and the model's per-token confidence on the response is $\geq 0.999$. The SFT objective is solved; the price is paid in pretraining-distribution accuracy.
+The post-SFT predictions on prompts always pick response token `a` (matching the SFT data), and the model's per-token confidence on the response is $> 0.99$. The SFT objective is solved; the price is paid in pretraining-distribution accuracy.
 
 ## Direct Preference Optimization (DPO)
 
@@ -174,13 +176,15 @@ $$\mathcal{L}_{\text{DPO}}(\theta) = -\log \sigma\bigl(\beta \cdot \bigl(\log \p
 
 Three properties make this work:
 
-- **No reward model.** SFT requires explicit response labels; DPO needs only relative preferences. The reward implicit in $\beta \cdot \log(\pi_\theta / \pi_{\text{ref}})$ is the analytic optimum of the KL-constrained reward-maximisation problem; no separate reward head needs to be trained.
+- **No separately-trained reward model.** The contrast here is with RLHF/PPO, which first trains a reward model and then optimises against it. DPO folds the reward into the loss: the reward implicit in $\beta \cdot \log(\pi_\theta / \pi_{\text{ref}})$ is the analytic optimum of the KL-constrained reward-maximisation problem, so no separate reward head is trained. (Versus SFT, the difference is the *data*: SFT needs labelled responses; DPO needs only preference pairs — a chosen and a rejected response per prompt.)
 - **No reinforcement learning.** Standard supervised gradients suffice. PPO's exploration/value-baseline machinery is unnecessary.
-- **Stability via reference.** The $-\log \pi_{\text{ref}}$ terms are constants from $\pi_\theta$'s perspective, but they enter the *margin* the policy is maximising. The policy is pushed to make chosen more likely than rejected, **but only by the amount the reference doesn't already do**. The KL distance from $\pi_{\text{ref}}$ is bounded implicitly by $1/\beta$.
+- **Stability via reference.** The $-\log \pi_{\text{ref}}$ terms are constants from $\pi_\theta$'s perspective, but they enter the *margin* the policy is maximising. The policy is pushed to make chosen more likely than rejected, **but only by the amount the reference doesn't already do**. DPO is derived from a KL-regularised objective in which $\beta$ sets the *strength* of the implicit KL penalty toward $\pi_{\text{ref}}$ — larger $\beta$ keeps the policy closer to the reference — but no explicit bound on the KL distance is imposed.
 
 ### Gradient
 
 The gradient of $\mathcal{L}_{\text{DPO}}$ with respect to $\log \pi_\theta(y_w \mid x)$ is $-\beta (1 - \sigma)$; with respect to $\log \pi_\theta(y_l \mid x)$ it is $+\beta (1 - \sigma)$. These then chain through standard cross-entropy gradients into the policy's parameters. The backward path is **the same as supervised cross-entropy** with a sign flip and a scalar weight — *not* a new mathematical construct, just a different upstream gradient.
+
+**A numeric anchor at initialisation.** DPO starts with the policy as a verbatim copy of the reference, so every preference margin $r_\theta(x, y_w) - r_\theta(x, y_l)$ is exactly $0$, $\sigma(0) = \tfrac{1}{2}$, and the loss is $-\log \tfrac{1}{2} = \ln 2 \approx 0.6931$ — precisely the `Initial DPO L` the script prints. At that same point the per-example gradient weight $\beta(1 - \sigma) = \beta/2$ (with $\beta = 0.5$, that is $0.25$) is at its maximum; as the policy learns to prefer chosen over rejected, $\sigma \to 1$ and the weight decays toward $0$, so DPO automatically eases off once the margin is comfortably positive.
 
 ### Example — DPO on toy preference pairs
 
@@ -207,7 +211,7 @@ This lesson runs the entire pipeline at toy scale, with every gradient hand-deri
 - A finite-difference gradient check verifies correctness at relative error $\sim 10^{-10}$. Always run one on a new backward implementation.
 - On a context-2 corpus where bigram cannot solve the task, full-backprop attention drives the loss **below the analytic bigram floor toward 0** — concrete evidence the backward pass is correct.
 - **SFT** is "same loss, response-token-masked, different data, smaller LR." Trades pretraining-distribution loss for SFT loss — this is **catastrophic forgetting**.
-- **DPO** keeps a frozen reference model and contrasts chosen-vs-rejected response log-probs. No reward model, no RL, no PPO. The reference term bounds the policy's drift, addressing catastrophic forgetting.
+- **DPO** keeps a frozen reference model and contrasts chosen-vs-rejected response log-probs. No separately-trained reward model, no RL, no PPO. The reference term regularises (rather than hard-bounds) the policy's drift toward $\pi_{\text{ref}}$, which is what curbs catastrophic forgetting.
 
 ## Standalone Scripts
 
@@ -235,7 +239,7 @@ Run all with `make lesson-24` (or `rustlab run lessons/24-full-backprop-and-fine
 ## Exercises
 
 1. **Numerical-vs-analytical for every parameter.** Modify `full_backprop.rlab` to gradient-check `gamma1(1)` (a LayerNorm scale). Why is the LayerNorm gradient harder to get right than the LM head's?
-2. **Why 0.434?** Rederive the bigram floor on the `abb` corpus by hand. Show that any model that ignores the *previous-previous* token cannot beat it.
+2. **Why 0.434?** Rederive the bigram floor on the `abb` corpus by hand. Show that any model that conditions only on the current token *and has no position information* cannot beat it. Then explain why the transformer here can beat it even with attention disabled — its fixed sinusoidal positional embedding leaks position — and confirm by ablating the PE (set it to zero) that the loss then floors at $\approx 0.434$, mirroring [[22-putting-it-all-together]]'s Exercise 3.
 3. **Effect of $\beta$ in DPO.** Re-run `dpo.rlab` with $\beta \in \{0.1, 0.5, 2.0\}$. Plot the final preference margin vs the post-DPO abb-corpus loss. Where is the sweet spot, and how does it depend on $\beta$?
 4. **SFT without prompt masking.** Remove the loss mask in `sft.rlab` so every position contributes to the SFT loss. How does the catastrophic-forgetting probe change? Why?
 5. **Replay buffer.** Add a "replay" of the pretraining sequence to `sft.rlab` — every other SFT step trains on a pretraining sequence instead. Does this reduce catastrophic forgetting? Does it slow down SFT convergence?

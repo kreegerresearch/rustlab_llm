@@ -26,7 +26,7 @@ $$\mathbf{y} = \mathbf{W}\mathbf{x} + \mathbf{b}.$$
 - $\mathbf{b} \in \mathbb{R}^{d_{\text{out}}}$ — the **bias vector** (learnable).
 - $\mathbf{y}$ is a linear combination of the input features, one per output dimension.
 
-The embedding lookup from [Lesson 04](04-embeddings-and-similarity.md) is a special case: multiplying the embedding matrix by a one-hot input selects one row — exactly a linear layer applied to a one-hot input. This section is pure reference; every later H2 pairs `### Theory` with `### Example — <descriptor>`.
+The embedding lookup from [Lesson 04](04-embeddings-and-similarity.md) is a special case: multiplying the embedding matrix by a one-hot input selects one row — exactly a linear layer applied to a one-hot input.
 
 ## Loss Function: Mean Squared Error
 
@@ -84,21 +84,17 @@ min_loss_flat = min(reshape(L_matrix, 1, n_grid * n_grid));
 Analytic check: $\mathcal{L}(2, 0) = 0.000$ from the expanded formula. The minimum over the $40 \times 40$ grid is $0.0022$ — a hair above zero because the grid doesn't land exactly on $(2, 0)$.
 
 ```rustlab
-figure()
+figure();
 imagesc(L_matrix, "viridis")
 title("MSE Loss L(w,b): y=2x  minimum at (w=2, b=0)")
 ```
 
 <!-- rustlab:output-start -->
-```text
-14
-```
-
 ![plot 1](plots/06-linear-layers-and-gradient-descent/plot-1-3d9e1a4c.svg)
 
 <!-- rustlab:output-end -->
 
-The dark region (minimum loss) is centred at $(w, b) \approx (2, 0)$. The elliptical contours show the loss is more sensitive to $w$ than $b$.
+The heatmap axes are grid **indices** 1–40, not $(w, b)$ values. The columns index `w_grid = linspace(-0.5, 3.5, 40)`, so $w = 2$ lands at column $\approx 25$; the rows index `b_grid = linspace(-3, 3, 40)`, so $b = 0$ lands at row $\approx 21$ (`imagesc` puts row 1 at the top). The dark minimum accordingly sits near row 21, column 25 — i.e. $(w, b) \approx (2, 0)$. The elliptical contours show the loss is more sensitive to $w$ than $b$.
 
 ### Example — Rotatable 3-D paraboloid
 
@@ -107,7 +103,7 @@ The dark region (minimum loss) is centred at $(w, b) \approx (2, 0)$. The ellipt
 ```rustlab
 [W_mesh, B_mesh] = meshgrid(w_grid, b_grid);
 
-figure()
+figure();
 surf(W_mesh, B_mesh, L_matrix, "viridis")
 title("MSE Loss Surface L(w,b)")
 xlabel("w")
@@ -115,10 +111,6 @@ ylabel("b")
 ```
 
 <!-- rustlab:output-start -->
-```text
-15
-```
-
 ![plot 2](plots/06-linear-layers-and-gradient-descent/plot-2-1f74b306.svg)
 
 <!-- rustlab:output-end -->
@@ -133,7 +125,15 @@ The **gradient** $\nabla \mathcal{L} = [\partial \mathcal{L}/\partial w,\; \part
 
 $$w \leftarrow w - \eta \frac{\partial \mathcal{L}}{\partial w}, \qquad b \leftarrow b - \eta \frac{\partial \mathcal{L}}{\partial b},$$
 
-where $\eta > 0$ is the **learning rate**. The partial derivatives, by the chain rule, are
+where $\eta > 0$ is the **learning rate**. To find the partial derivatives, start from the loss written out explicitly:
+
+$$\mathcal{L}(w, b) = \frac{1}{N} \sum_{i=1}^{N} (w x_i + b - y_i)^2.$$
+
+Differentiate term by term. The chain rule on each square pulls down a factor of $2$ times the inside, times the derivative of the inside with respect to the parameter. That inner derivative is $x_i$ for $w$ and $1$ for $b$:
+
+$$\frac{\partial \mathcal{L}}{\partial w} = \frac{1}{N} \sum_{i=1}^{N} 2 (w x_i + b - y_i)\, x_i, \qquad \frac{\partial \mathcal{L}}{\partial b} = \frac{1}{N} \sum_{i=1}^{N} 2 (w x_i + b - y_i)\, (1).$$
+
+Factor the constant $2/N$ out of each sum and write $\hat{y}_i = w x_i + b$:
 
 $$\frac{\partial \mathcal{L}}{\partial w} = \frac{2}{N} \sum_{i=1}^{N} (\hat{y}_i - y_i) \cdot x_i, \qquad \frac{\partial \mathcal{L}}{\partial b} = \frac{2}{N} \sum_{i=1}^{N} (\hat{y}_i - y_i).$$
 
@@ -175,7 +175,7 @@ After 200 steps with $\eta = 0.05$: $w = 1.9898$ (true $w^* = 2$), $b = 0.0299$ 
 The loss decreases monotonically — guaranteed for MSE with a suitable learning rate. Early steps are large (steep gradients far from the minimum); later steps are small.
 
 ```rustlab
-figure()
+figure();
 plot(loss_path, "color", "blue", "label", "MSE loss")
 hold("on")
 hline(0.0, "gray", "minimum")
@@ -187,11 +187,7 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-```text
-16
-```
-
-![plot 3](plots/06-linear-layers-and-gradient-descent/plot-3-33b02aca.svg)
+![plot 3](plots/06-linear-layers-and-gradient-descent/plot-3-c80fc648.svg)
 
 <!-- rustlab:output-end -->
 
@@ -200,15 +196,11 @@ hold("off")
 The trajectory in $(w, b)$ space curves — it does not go straight to the minimum because the loss surface has different curvature in the $w$ and $b$ directions:
 
 ```rustlab
-figure()
+figure();
 scatter(w_path, b_path, "Gradient Descent Path in (w,b) Space - converges to (2, 0)")
 ```
 
 <!-- rustlab:output-start -->
-```text
-17
-```
-
 ![plot 4](plots/06-linear-layers-and-gradient-descent/plot-4-74fc3d86.svg)
 
 <!-- rustlab:output-end -->
@@ -230,7 +222,7 @@ scatter(w_path, b_path, "Gradient Descent Path in (w,b) Space - converges to (2,
 - $\partial \mathcal{L}/\partial b = 0.5 \times (-2-4-6-8) = -10$.
 - $w_1 = 0 - 0.05 \times (-30) = 1.5,\;\; b_1 = 0 - 0.05 \times (-10) = 0.5$.
 
-These match the first row of `w_path` / `b_path` from the descent loop above.
+These match the **second** entries `w_path(2)` / `b_path(2)` from the descent loop above — entry 1 holds the initial $(0, 0)$, and entry 2 is the state after the first update.
 
 ## Key Takeaways
 
@@ -255,10 +247,10 @@ Run all with `make lesson-06` (or `rustlab run lessons/06-linear-layers-and-grad
 | `L_true` (= $\mathcal{L}(2, 0)$) | `0.000` |
 | `L_init` (= $\mathcal{L}(0, 0)$) | `30.0` |
 | `L_check` (analytic) | `0.000` |
-| `min_loss_flat` (over grid) | ≈ `0.06` |
+| `min_loss_flat` (over grid) | ≈ `0.0022` (nearest grid point to $(2, 0)$) |
 | Final `w` after 200 steps | ≈ `2.0` |
 | Final `b` after 200 steps | ≈ `0.0` |
-| Final `loss_path(end)` | ≈ `0` (machine epsilon) |
+| Final `loss_path(end)` | ≈ `1.5e-04` (effectively zero for our purposes) |
 | Step-1 hand check $w_1$ | `1.5` |
 | Step-1 hand check $b_1$ | `0.5` |
 

@@ -1,6 +1,6 @@
 # Lesson 10: Positional Encoding
 
-Attention as built so far ([Lessons 07–09](07-context-and-naive-averaging.md)) is **permutation-invariant**: shuffle the input tokens and the output positions shuffle the same way — no information about *order* enters the computation. That is fatal for language: "dog bites man" and "man bites dog" use the same multiset of tokens with completely different meanings. Positional encoding is the fix — a deterministic vector added to each token's embedding that tags it with its position.
+Attention as built so far ([Lessons 07–09](07-context-and-naive-averaging.md)) is **permutation-equivariant**: shuffle the input tokens and the output positions shuffle the same way — no information about *order* enters the computation. That is fatal for language: "dog bites man" and "man bites dog" use the same multiset of tokens with completely different meanings. Positional encoding is the fix — a deterministic vector added to each token's embedding that tags it with its position.
 
 ## Learning Objectives
 
@@ -26,7 +26,9 @@ The score matrix transforms as $\mathbf{S}' = \mathbf{Q}'\mathbf{K}'^\top = \mat
 
 The causal mask from [Lesson 08](08-scaled-dot-product-attention.md) breaks *full* permutation invariance — token $t$ only sees tokens $1..t$ — but it leaves the relative order *within* the prefix untouched. The model still has no way to distinguish "the cat sat" from "sat the cat" within the visible window. We need to inject position into the *features* themselves.
 
-### Example — Permutation invariance at unit scale
+(One caveat worth flagging: the hard permutation argument here applies to the *single* attention layer we build in this lesson. Multi-layer causal decoders trained with *no* explicit positional encoding can still recover positional information indirectly through the causal mask — each layer can count how many tokens precede it — as shown by Haviv et al., 2022. The sinusoidal scheme below is the direct, single-layer way to supply that signal.)
+
+### Example — Permutation equivariance at unit scale
 
 Build a tiny attention block, run it on $\mathbf{X}$ and on a row-shuffled $\mathbf{X}'$, and check that the outputs differ only by the same permutation:
 
@@ -70,13 +72,13 @@ The original transformer paper uses a fixed (non-learned) encoding built from si
 $$\mathrm{PE}_{t, 2k}   = \sin\!\left(\frac{t}{10000^{\,2k/d_{\text{model}}}}\right), \qquad
   \mathrm{PE}_{t, 2k+1} = \cos\!\left(\frac{t}{10000^{\,2k/d_{\text{model}}}}\right),$$
 
-with $k = 0, 1, \dots, d_{\text{model}}/2 - 1$. The $i = 0$ pair has wavelength $2\pi$ (one full cycle every $\sim 6$ tokens); the highest-$i$ pair has wavelength $2\pi \cdot 10000$ (essentially constant over any practical sequence). The model gets fast and slow position clocks at every dimension pair, so it can read both fine-grained ("which token am I?") and coarse ("which half of the sequence am I in?") position from the same vector.
+with $k = 0, 1, \dots, d_{\text{model}}/2 - 1$. The $k = 0$ pair has wavelength $2\pi$ (one full cycle every $\sim 6$ tokens); for $d_{\text{model}} = 32$ the slowest pair ($k = 15$) has wavelength $2\pi \cdot 10000^{30/32} \approx 2\pi \cdot 5623$ (essentially constant over any practical sequence). The $2\pi \cdot 10000$ figure is the asymptotic design bound, reached only as the pair exponent $2k/d_{\text{model}} \to 1$. The model gets fast and slow position clocks at every dimension pair, so it can read both fine-grained ("which token am I?") and coarse ("which half of the sequence am I in?") position from the same vector.
 
 The encoding is *added* to the token embedding, not concatenated:
 
 $$\mathbf{X}'_t \;=\; \mathbf{E}_{x_t} + \mathrm{PE}_t.$$
 
-This works because the embedding norm is small ($\sim 0.1$ from initialisation) compared to the unit-amplitude PE — token identity dominates locally, position bends the geometry over the sequence.
+This works because the token embedding starts small ($\sim 0.1$ from initialisation) compared to the unit-amplitude PE — so early in training *position* dominates the representation, and token identity reasserts itself only once the embedding is trained up.
 
 ### Example — Build the PE matrix for T=64, d=32
 
@@ -103,7 +105,7 @@ print("PE(1, 1:6):", PE(1, 1:6));
 print("PE(64, 1:6):", PE(64, 1:6));
 ```
 
-Position 1 produces $[\sin(1), \cos(1), \sin(0.422), \cos(0.422), \dots]$; position 64 cycles much further around the fastest sinusoids while barely moving on the slowest ones.
+Position 1 produces $[\sin(1), \cos(1), \sin(0.562), \cos(0.562), \dots]$ — the $k = 1$ pair uses angle $1/10000^{2/32} = 0.5623$, so `PE(1, 3)` renders as $\sin(0.5623) = 0.533$. Position 64 cycles much further around the fastest sinusoids while barely moving on the slowest ones.
 
 ### Example — Vectorized PE construction
 
@@ -127,14 +129,16 @@ The vectorized form reads top-to-bottom as the formula does: build the index gri
 ### Example — Heatmap of the full PE matrix
 
 ```rustlab
-figure()
-imagesc(PE, "viridis")
-title("Sinusoidal Positional Encoding (T=64, d=32)")
+% rustlab 0.3.6 colormaps by |value|; shift to [0,1] so the render is faithful
+% (see docs/rustlab-issues-2026-07-12.md §6)
+figure();
+imagesc((PE + 1) / 2, "viridis")
+title("Sinusoidal Positional Encoding, (PE+1)/2 rescaled (T=64, d=32)")
 xlabel("Embedding dimension")
 ylabel("Position t")
 ```
 
-The horizontal bands on the right (high-$i$, slow sinusoids) barely change down the page. The left columns oscillate rapidly. Each row is a unique fingerprint, and the structure is smooth — nearby rows look similar, far-apart rows look different. That smoothness is what makes "relative position" a learnable feature.
+The columns on the right (high-$i$, slow sinusoids) are near-constant down the page — their value barely changes from one position to the next. The left columns oscillate rapidly. Each row is a unique fingerprint, and the structure is smooth — nearby rows look similar, far-apart rows look different. That smoothness is what makes "relative position" a learnable feature.
 
 ## Why Sinusoids: Translation in Position is a Linear Map
 
@@ -157,10 +161,10 @@ sims_short = zeros(40);                        % similarity for offsets k=0..39 
 sims_far   = zeros(40);                        % same offsets starting at t=20
 
 for k = 0:39
-  sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));
+  sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));   % row t=10 vs row t=10+k
 end
 for k = 0:39
-  sims_far(k + 1) = sum(PE(20, :) .* PE(20 + k, :));
+  sims_far(k + 1) = sum(PE(20, :) .* PE(20 + k, :));      % row t=20 vs row t=20+k
 end
 
 drift = max(abs(sims_short - sims_far));
@@ -172,7 +176,7 @@ Drift across base position $t$: ${drift:%.2e}$ — within a hair of zero. Whatev
 ### Example — Plot the similarity-vs-distance curve
 
 ```rustlab
-figure()
+figure();
 plot(0:39, sims_short, "color", "blue", "label", "PE_t · PE_{t+k}")
 title("PE Dot-Product Similarity vs. Offset k")
 xlabel("Offset k (tokens)")
@@ -202,11 +206,8 @@ for t = 1:T_demo
   X_tok(t, :) = E_pe(ids(t), :);      % assign whole row from the embedding lookup
 end
 
-% PE(1:T_demo, :) returns a sub-matrix; use a loop to add it row-by-row to X_tok.
-X_pos = zeros(T_demo, d_model_pe);
-for t = 1:T_demo
-  X_pos(t, :) = X_tok(t, :) + PE(t, :);
-end
+% Add the first T_demo rows of PE directly — matrix + matrix (verified in rustlab 0.3.6).
+X_pos = X_tok + PE(1:T_demo, :);
 
 % Two positions of the SAME token: are their representations actually distinct?
 diff_tok_only = max(abs(X_tok(1, :) - X_tok(3, :)));   % both rows are token 1, no PE → identical
@@ -215,7 +216,7 @@ print("max |row1 - row3| (token only):", diff_tok_only);
 print("max |row1 - row3| (token + PE):", diff_with_pe);
 ```
 
-Without PE, the token-1 rows at positions 1 and 3 are bit-identical — the model literally cannot tell them apart. Adding PE injects ${diff_with_pe:%.4f}$ worth of separation per dimension, and any downstream attention head can now compute features sensitive to *which* token-1 it is looking at.
+Without PE, the token-1 rows at positions 1 and 3 are bit-identical — the model literally cannot tell them apart. Adding PE opens a gap of up to ${diff_with_pe:%.4f}$ between the two rows (the largest difference across all dimensions), and any downstream attention head can now compute features sensitive to *which* token-1 it is looking at.
 
 ## Sinusoidal vs. Learned Positional Encoding
 
@@ -228,7 +229,7 @@ Two practical choices coexist in modern transformers:
 | **Sinusoidal (fixed)** | Closed-form $\sin / \cos$ table, no parameters | Generalises to *any* sequence length, zero parameters | No way to adapt the encoding to the data |
 | **Learned** | Add a separate `randn(T_max, d_model)` and train it like an embedding | Can specialise per dataset, marginally better at training-length contexts | Bounded by `T_max`; must extrapolate or interpolate to go longer |
 
-GPT-2 and the original BERT use **learned** PE; the original Vaswani transformer and many recent long-context models (RoPE, ALiBi) use carefully chosen *fixed* schemes that share the sinusoidal property of "translation = linear". Either way, *some* positional signal must be added, and the rotation property derived above is the geometric reason fixed schemes work.
+GPT-2 and the original BERT use **learned** PE; the original Vaswani transformer uses the fixed sinusoidal table above. Recent long-context work favours other *fixed* schemes applied to the attention computation rather than added to the embedding. **RoPE** rotates the query and key vectors by a position-dependent angle, so it shares the sinusoidal "translation = rotation" property derived below. **ALiBi** takes a different route entirely: it adds *no* positional vector at all, instead biasing each attention score by a fixed penalty proportional to the query–key distance. Either way *some* positional signal must enter, and the rotation property derived above is the geometric reason the sinusoidal family works.
 
 ## Connection to Information Theory
 
@@ -276,7 +277,7 @@ Run all with `make lesson-10` (or `rustlab run lessons/10-positional-encoding/<n
 
 1. **Frequency span.** What fraction of one full sine cycle does the *fastest* PE pair complete over $T = 64$? What fraction does the *slowest* pair complete? Confirm from the formula and the heatmap.
 2. **Wavelength of pair $k$.** Show algebraically that the wavelength of the $k$-th sinusoid pair is $2\pi \cdot 10000^{2k/d_{\text{model}}}$. For $d_{\text{model}} = 32$, $k = 15$, what is the wavelength in tokens?
-3. **Permutation breaking.** Modify the permutation-invariance demo to add `PE(1:T)` to `X` before applying `attn`. Re-check `O_perm` against `P * O` — does it still match? Explain why not.
+3. **Permutation breaking.** Rebuild the sinusoidal PE at $d_{\text{model}} = 4$ for the demo's $T = 4$ positions (the `PE` from the heatmap example was built at $d = 32$ and will not conform to the $4 \times 4$ input), add `PE(1:T, :)` to `X` before applying `attn`, and re-check `O_perm` against `P * O`. Does it still match? Explain why not.
 4. **Replace with learned.** Sketch the parameter count for a learned PE table at `T_max = 1024` and `d_model = 512`. Is this larger or smaller than the token embedding for $|\mathcal{V}| = 50000$? What goes wrong if you ever feed a sequence longer than `T_max`?
 5. **Order matters how much?** For a random transformer with random weights, compute the average per-token cosine similarity between `attn(X)` and `attn(P*X)` (after un-permuting). Without PE this should be 1.0; *with* PE it should be much less. The drop is a rough measure of how much information PE injects.
 

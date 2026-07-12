@@ -1,4 +1,4 @@
-# Script:  one_hot_encoding.r
+# Script:  one_hot_encoding.rlab
 # System:  One-hot encoding of a character sequence
 # Concept: Mapping token indices to orthogonal basis vectors in R^|V|
 # Equations: (e_i)_j = 1 if j == i, else 0;  e_i · e_j = delta_ij
@@ -49,7 +49,7 @@ print("Dot product l · l (should be 1):", dot_l_l);
 vocab    = {"e", "h", "l", "o"};
 sequence = {"h", "e", "l", "l", "o"};
 
-figure()
+figure();
 heatmap(vocab, sequence, X, "One-Hot Matrix: 'hello' (5 tokens x 4 vocab)", "viridis")
 savefig("one_hot_matrix.svg")
 print("Saved one_hot_matrix.svg")

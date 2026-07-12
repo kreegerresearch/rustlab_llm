@@ -1,4 +1,4 @@
-# Script:  cosine_similarity.r
+# Script:  cosine_similarity.rlab
 # System:  Pairwise cosine similarity between token embedding vectors
 # Concept: cos(a, b) = (a · b) / (||a|| ||b||);  S = E_norm * E_norm^T
 # Equations: cos(a,b) = sum(a.*b) / (sqrt(sum(a.^2)) * sqrt(sum(b.^2)))
@@ -83,7 +83,7 @@ print("Closest token should be 'queen'.");
 # into a direct lookup of cos(row token, col token).
 vocab = {"king", "queen", "man", "woman"};
 
-figure()
+figure();
 heatmap(vocab, vocab, S, "Cosine Similarity: king, queen, man, woman", "viridis")
 savefig("cosine_similarity.svg")
 print("Saved cosine_similarity.svg")

@@ -139,7 +139,7 @@ p_05 = softmax(logits_b / 0.5);
 p_10 = softmax(logits_b / 1.0);
 p_20 = softmax(logits_b / 2.0);
 
-figure()
+figure();
 bar([p_05; p_10; p_20]')
 title("P(. | b) at three temperatures: T=0.5 sharpens, T=2.0 flattens")
 xlabel("token (1=a, 2=b, 3=c)")

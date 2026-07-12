@@ -1,4 +1,4 @@
-# Script:  attention_output.r
+# Script:  attention_output.rlab
 # System:  End-to-end scaled dot-product attention  X → Q, K, V → A → O
 # Concept: Three linear projections turn each input embedding into a query,
 #          key, and value vector.  Attention weights combine the value vectors
@@ -104,23 +104,26 @@ print("Note: parameter count is independent of sequence length T.");
 positions = {"t1", "t2", "t3", "t4", "t5"};
 qk_dims  = {"d1", "d2", "d3", "d4"};
 
-figure()
-subplot(3, 1, 1)
+# TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
+figure();
 heatmap(qk_dims, positions, Q, "Q = X W_Q (queries)", "viridis")
+savefig("qkv_projections_q.svg")
 
-subplot(3, 1, 2)
+figure();
 heatmap(qk_dims, positions, K, "K = X W_K (keys)", "viridis")
+savefig("qkv_projections_k.svg")
 
-subplot(3, 1, 3)
+figure();
 heatmap(qk_dims, positions, V, "V = X W_V (values)", "viridis")
-savefig("qkv_projections.svg")
-print("Saved qkv_projections.svg");
+savefig("qkv_projections_v.svg")
+print("Saved qkv_projections_q.svg, qkv_projections_k.svg, qkv_projections_v.svg");
 
-figure()
-subplot(2, 1, 1)
+# TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
+figure();
 heatmap(positions, positions, A, "Attention weights A", "viridis")
+savefig("attention_output_weights.svg")
 
-subplot(2, 1, 2)
+figure();
 heatmap(qk_dims, positions, O, "Output O = A V  (rows: positions, cols: value dims)", "viridis")
-savefig("attention_output.svg")
-print("Saved attention_output.svg");
+savefig("attention_output_output.svg")
+print("Saved attention_output_weights.svg and attention_output_output.svg");

@@ -1,4 +1,4 @@
-# Script:  context_failure.r
+# Script:  context_failure.rlab
 # System:  Bigram LM failure on ambiguous tokens that depend on prior context
 # Concept: A Markov-1 model cannot disambiguate homonyms — its next-token
 #          distribution depends only on the immediately previous token, so two
@@ -60,7 +60,7 @@ row_sum_bank = sum(p_after_bank);
 print("Row sum (should be 1):", row_sum_bank);
 
 # === Plot the Ambiguous Row ===
-figure()
+figure();
 labels = {"river", "bank", "water", "money", "safe"};
 bar(labels, p_after_bank)
 title("P(next | bank) — symmetric: water and safe are equally likely")

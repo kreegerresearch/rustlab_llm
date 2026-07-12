@@ -1,4 +1,4 @@
-# Script:  softmax_temperature.r
+# Script:  softmax_temperature.rlab
 # System:  Softmax probability distribution over a vocabulary
 # Concept: Temperature scaling of logits; sharpness vs. flatness of output distribution
 # Equations: p_i(T) = exp(z_i / T) / sum_j exp(z_j / T)
@@ -30,9 +30,9 @@ print("Sum at T=0.5 (should be 1):", sum(p_cold));
 print("Sum at T=1.0 (should be 1):", sum(p_neutral));
 print("Sum at T=2.0 (should be 1):", sum(p_warm));
 
-# === Plot: overlaid bar charts for the three distributions ===
+# === Plot: three stacked line-plot subplots, one per temperature ===
 # Each subplot shows one temperature for clear comparison
-figure()
+figure();
 subplot(3, 1, 1)
 plot(p_cold, "color", "blue", "label", "T=0.5")
 title("Softmax at T=0.5 (cold — peaked)")

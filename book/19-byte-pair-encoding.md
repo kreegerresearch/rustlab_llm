@@ -10,7 +10,7 @@ Every lesson so far has used a **character vocabulary** — `a, b, c, …`. Real
 - Run the **BPE merge step** by hand: count adjacent pair frequencies, take the argmax, replace every occurrence with a new symbol.
 - Iterate the merge step five times on a small corpus and read out the **merge order**.
 - Apply learned merges to encode arbitrary new text and explain why the **token-length distribution** has a long tail.
-- Connect BPE's choice of merges to **information theory**: each merge removes the most predictable bigram, lowering encoded length by exactly the bigram's mutual information.
+- Connect BPE's choice of merges to **information theory**: BPE merges the most *frequent* adjacent pair ($\arg\max$ over raw count), and the bits saved by giving that pair its own token are approximately its count times its pointwise mutual information.
 
 ## Background
 
@@ -49,7 +49,7 @@ for m = 1..k:
 return merge_list (and the rewritten S)
 ```
 
-The output is a `merge_list` — an ordered table that any future text can be encoded against. Encoding is the same five steps in reverse: greedily apply each merge in the order it was learned.
+The output is a `merge_list` — an ordered table that any future text can be encoded against. Encoding applies each merge greedily in the order it was learned.
 
 ### Example — Three merges on a tiny corpus
 
@@ -99,9 +99,9 @@ end
 ```
 
 ```rustlab
-% Run three merges, print each one.
-% Track state via two mutable variables (rustlab struct field reassignment
-% inside a loop is awkward; plain variables work cleanly).
+% Run three merges, print each one, threading the sequence and vocab size
+% through two variables.  (bpe_train.rlab threads the same state as struct
+% fields reassigned in the loop instead — either style works fine.)
 cur_seq = seq;
 cur_vocab = vocab_size;
 for m = 1:3
@@ -121,7 +121,7 @@ Merge 3 :  pair ( 8 , 7 )  count = 6   new_id = 9   new len = 17
 
 <!-- rustlab:output-end -->
 
-The first merge picks the most frequent pair `(r, a)` (it appears in every `"abra"`); subsequent merges build up `(a, b) → (a, b, ra) → (ab, ra)`, fusing the full `"abra"`. After three merges the sequence shortens noticeably and the vocabulary grows from 6 to 9.
+The first merge is actually a **three-way tie**: `(a, b)`, `(b, r)`, and `(r, a)` each occur 6 times (twice per `"abracadabra"`, three reps). `argmax` breaks the tie deterministically — scanning the flattened count matrix in column-major order it returns the *first* maximum, which here is `(r, a)` (id 7). Real BPE implementations fix a tie-break too (usually lexicographic) so the merge order is reproducible. The next two merges fuse `(a, b) → ab` (id 8) and then `(ab, ra) → abra` (id 9), building the full `"abra"`. After three merges the sequence shortens from 35 to 17 tokens and the vocabulary grows from 6 to 9.
 
 ## Token-Length Distribution
 
@@ -135,46 +135,83 @@ Once `merge_list` is fixed, encoding *any* string is deterministic: scan the cha
 
 Plotting the frequency of tokens-per-input-word on a histogram yields a **long-tail distribution**: most common words compress to 1–2 tokens, but rare words stretch to 5–10. This is exactly what production tokenisers look like.
 
-### Example — Tokens-per-word histogram
+### Example — Tokens-per-word from the real merges
+
+Apply the five merges the trainer actually learned — `(r,a)→7`, `(a,b)→8`, `(ab,ra)→9`, `(c,a)→10`, `(ca,d)→11` — to a handful of word fragments over the base alphabet, and count how many tokens each compresses to.
 
 ```rustlab
-% Pretend we ran 8 BPE merges (instead of just 3) and assume the merge
-% set captures every full word in our corpus as a single token, plus the
-% prefix/suffix patterns "abra" and "cad".  Build a bucketed length
-% distribution from a synthetic test set:
-%   tokens-per-word = 1 for known words, 2-4 for partial coverage, 5+ rare
-counts_per_len = [50, 32, 18, 12, 5, 2, 1];   % 1, 2, 3, 4, 5, 6, 7+ tokens
-labels = {"1", "2", "3", "4", "5", "6", "7+"};
+% The five merges bpe_train.rlab learns, in order (see the standalone script).
+ma  = [5, 1, 8, 3, 10];
+mb  = [1, 2, 7, 1, 4];
+mid = [7, 8, 9, 10, 11];
 
-figure()
+function out = apply_merge(seq, a, b, new_id)
+  L = length(seq);
+  buf = zeros(L);
+  k = 1; i = 1;
+  while i <= L
+    if i < L && seq(i) == a && seq(i + 1) == b
+      buf(k) = new_id; k = k + 1; i = i + 2;
+    else
+      buf(k) = seq(i); k = k + 1; i = i + 1;
+    end
+  end
+  out = buf(1:(k - 1));
+end
+function out = encode(seq, ma, mb, mid)
+  out = seq;
+  for m = 1:length(ma)
+    out = apply_merge(out, ma(m), mb(m), mid(m));
+  end
+end
+
+% Word fragments (char ids: a=1 b=2 c=3 d=4 r=5).
+w_abracadabra = encode([1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1], ma, mb, mid);
+w_abra        = encode([1, 2, 5, 1], ma, mb, mid);
+w_cad         = encode([3, 1, 4], ma, mb, mid);
+w_bra         = encode([2, 5, 1], ma, mb, mid);
+w_ac          = encode([1, 3], ma, mb, mid);
+w_d           = encode([4], ma, mb, mid);
+
+lens = [length(w_abracadabra), length(w_abra), length(w_cad), ...
+        length(w_bra), length(w_ac), length(w_d)];
+print("tokens per word:", lens);
+
+% Bucket the real per-word token counts into 1 / 2 / 3+.
+counts_per_len = [sum(lens == 1), sum(lens == 2), sum(lens >= 3)];
+labels = {"1", "2", "3+"};
+print("bucketed 1 / 2 / 3+:", counts_per_len);
+
+figure();
 bar(labels, counts_per_len)
-title("Tokens per word — typical BPE distribution")
+title("Tokens per word under the 5 learned merges")
 xlabel("tokens per word")
-ylabel("count")
+ylabel("count of words")
 ```
 
 <!-- rustlab:output-start -->
 ```text
-39
+tokens per word: [1×6]  3.000000  1.000000  1.000000  2.000000  2.000000  1.000000
+bucketed 1 / 2 / 3+: [1×3]  3.000000  2.000000  1.000000
 ```
 
-![plot 1](plots/19-byte-pair-encoding/plot-1-2116b89c.svg)
+![plot 1](plots/19-byte-pair-encoding/plot-1-d2576d09.svg)
 
 <!-- rustlab:output-end -->
 
-The exponential-decay shape is universal — large corpora across English, code, and multiple languages all show it once a BPE tokeniser is trained on them.
+Even on this six-word sample the shape is right: the fully-covered fragments (`abra`, `cad`, `d`) collapse to a single token, partially-covered ones (`bra`, `ac`) take two, and the long `abracadabra` needs three (`abra`·`cad`·`abra`). On a real corpus of tens of thousands of words the same bias produces a genuinely **long-tailed** distribution — most words at 1–2 tokens, a thin tail stretching to 5–10 for rare or morphologically complex words.
 
 ## Information-Theoretic Reading
 
 ### Theory
 
-Each BPE merge removes the **most frequent bigram** from the corpus. From [Lesson 03](03-cross-entropy-loss.md), the source-coding theorem says no lossless code can encode a sequence in fewer bits than its entropy. In a corpus where the bigram $(a, b)$ has empirical probability $p_{ab}$, encoding it as two characters costs at least $-\log_2 p_a - \log_2 p_b$ bits but a *joint* code that gives `(a, b)` its own symbol can charge only $-\log_2 p_{ab}$ — a saving of
+Each BPE merge removes the **most frequent adjacent pair** from the corpus. From [Lesson 03](03-cross-entropy-loss.md), the source-coding theorem says no lossless code can encode a sequence in fewer bits than its entropy. In a corpus where the specific bigram $(a, b)$ has empirical probability $p_{ab}$, encoding its two symbols independently costs $-\log_2 p_a - \log_2 p_b$ bits, while a *joint* code that gives `(a, b)` its own symbol charges only $-\log_2 p_{ab}$ — a per-occurrence saving of
 
-$$\text{savings} = \log_2 p_{ab} - (\log_2 p_a + \log_2 p_b) = -\log_2 \frac{p_a p_b}{p_{ab}} \;=\; I(a; b).$$
+$$\text{PMI}(a; b) \;=\; \log_2 \frac{p_{ab}}{p_a\, p_b} \;=\; \bigl(-\log_2 p_a - \log_2 p_b\bigr) - \bigl(-\log_2 p_{ab}\bigr).$$
 
-That is the **mutual information** between the two character positions. **BPE's greedy step is locally optimal in mutual-information units**: at each step the algorithm picks the bigram with the largest absolute frequency × MI product as the next merge candidate. Iterating produces a code that asymptotically approaches the corpus's character-level entropy from above — it cannot reach it (the merges are restricted to adjacent pairs and cannot capture longer-range structure) but it gets close enough that a transformer can pick up the rest.
+This is the **pointwise mutual information** of that *particular* pair — not the mutual information $I(A; B)$ between the two positions, which is the *average* of the PMI over all pairs. **BPE does not maximise this saving.** Its merge rule — including this lesson's `bpe_step` — is simply $\arg\max$ over the *raw pair count*; it never computes PMI. The two objectives are only loosely coupled: the total bits a merge saves is approximately $\text{count} \times \text{PMI}$, so a very frequent pair usually saves a lot even when its PMI is modest — but the approximation is loose, because every merge shifts the unigram statistics that the next merge's PMI depends on. Iterating the frequency-greedy rule still produces a code that approaches the corpus's character-level entropy from above — it cannot reach it (the merges are restricted to adjacent pairs and cannot capture longer-range structure) but it gets close enough that a transformer can pick up the rest.
 
-A practical consequence: **larger vocabularies waste no information**. Doubling vocab size from 32k to 64k typically saves 5–10 % on encoded length but inflates the embedding matrix by 2× and the LM head by 2×. Production training runs (LLaMA, GPT-3) settle on 32k or 50k, the regime where the marginal token-length saving stops paying for the parameter cost.
+A practical consequence: **the compression returns diminish while the parameter cost keeps growing**. Doubling vocab size from 32k to 64k typically saves only 5–10 % on encoded length but inflates both the embedding matrix and the LM head by 2×. Production training runs (LLaMA, GPT-3) settle on 32k or 50k, the regime where the marginal token-length saving stops paying for the added embedding-and-head parameters.
 
 ## Connection to Earlier Lessons
 
@@ -189,7 +226,7 @@ A practical consequence: **larger vocabularies waste no information**. Doubling 
 - BPE is a **deterministic, greedy** subword-tokenisation algorithm: count adjacent-pair frequencies, merge the most frequent pair, repeat $k$ times.
 - The output is an **ordered merge list** that any future text can be encoded against in $O(\text{len} \cdot k)$ time.
 - Vocabulary size is a **hyperparameter** — larger vocab compresses sequences more but costs more in embedding-and-LM-head parameters. Modern LLMs settle around 32k–100k.
-- Each merge corresponds to compressing the bigram with the **highest absolute mutual information**; the greedy procedure is locally optimal in information-theoretic units.
+- Each merge compresses the **most frequent adjacent pair** (raw count, not MI); the bits it saves are roughly count × pointwise MI, so the frequency-greedy rule is only *approximately* information-optimal.
 - BPE makes the model **OOV-free**: rare words decompose to subwords; the worst case is one-token-per-character (the base vocabulary).
 
 ## Standalone Scripts
@@ -207,18 +244,18 @@ Run all with `make lesson-19` (or `rustlab run lessons/19-byte-pair-encoding/<na
 |---|---|
 | Initial seq length | `35` (3× `"abracadabra"` + 2× `' '`) |
 | Initial vocab | `6` (`a, b, c, d, r, space`) |
-| First merge pair | `(r, a)` — appears 6 times |
+| First merge pair | `(r, a)` — appears 6 times (a 3-way tie with `(a,b)`, `(b,r)`; won on tie-break) |
 | After merge 1 vocab | `7`; sequence length drops by 6 (35 → 29) |
-| After 5 merges | sequence length roughly halved |
+| After 5 merges | sequence length `35 → 11` tokens (≈3.2× shorter; the first 3 merges alone already halve it to 17) |
 | Histogram peak | `1` token (most common) |
 
 ## Exercises
 
-1. **Compute by hand.** Take the first occurrence of `"abracadabra"` and count every adjacent pair. Which pair appears most often? Apply that merge and recount — what is the new most-frequent pair?
+1. **Compute by hand.** Take the first occurrence of `"abracadabra"` and count every adjacent pair. You will find a **three-way tie** — `ab`, `br`, and `ra` each appear twice. Our `bpe_step` breaks the tie by column-major `argmax` (it picks `(r, a)`); choose any of the three winners, apply that merge, then recount. Which pair leads now? Does the final vocabulary depend on which tie-winner you started with?
 2. **Why greedy is fine.** What goes wrong if you choose the *least* frequent pair to merge first? What if you pick a random pair?
 3. **OOV handling.** Encode the word `"xyzzy"` against a BPE merge list trained on `"abracadabra…"`. What is the resulting token sequence? How many tokens long?
 4. **Vocab size vs sequence length.** For the corpus in `bpe_train.rlab`, plot total sequence length as a function of `n_merges` from 0 to 8. Where is the elbow? What does that tell you about an optimal vocab size for this corpus?
-5. **Information-theoretic bound.** Compute the bigram mutual information $I(a; b)$ for the first chosen merge. Multiply by the pair count — does it match the savings (in bits) of replacing those character pairs with one token?
+5. **Information-theoretic saving.** Compute the *pointwise* mutual information $\text{PMI}(r; a) = \log_2 \tfrac{p_{ra}}{p_r\,p_a}$ for the first chosen merge from the corpus's unigram and bigram counts. Multiply by the pair count (6). How close is that to the actual bits saved by the merge? Why is it only approximate (hint: what happens to $p_a$ and $p_r$ after the merge rewrites the sequence)?
 
 ## What's next
 

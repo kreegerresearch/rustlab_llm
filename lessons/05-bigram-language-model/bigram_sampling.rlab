@@ -1,4 +1,4 @@
-# Script:  bigram_sampling.r
+# Script:  bigram_sampling.rlab
 # System:  Text generation via CDF-based sampling from a bigram language model
 # Concept: Multinomial sampling using cumulative distribution + uniform threshold
 # Equations: CDF_j = sum_{k=1}^{j} P_ik;  x_{t+1} = sum(CDF < u) + 1,  u ~ Uniform(0,1)
@@ -22,7 +22,7 @@ p_b = P(2, :);
 cdf_b = cumsum(p_b);
 print("  P(b)   =", p_b);
 print("  CDF(b) =", cdf_b);
-% sum-of-bool no longer auto-coerces in 0.3; cast with .* 1 (or use find).
+# sum(cdf_b < u) counts how many CDF bins fall strictly below u; +1 gives the 1-based token index.
 print("  u=0.3 → sum(CDF < 0.3) + 1 =", sum(cdf_b < 0.3) + 1, "  (expect 1 = a)");
 print("  u=0.7 → sum(CDF < 0.7) + 1 =", sum(cdf_b < 0.7) + 1, "  (expect 3 = c)");
 
@@ -32,6 +32,7 @@ generated = zeros(n_generate);
 generated(1) = 1;   # start with token a
 
 # Pre-draw all uniform samples for reproducibility
+seed(7);
 draws = rand(n_generate - 1);
 
 for t = 1:(n_generate - 1)
@@ -53,7 +54,7 @@ print("Mean cross-entropy loss on training corpus (nats):", mean_ce);
 print("Perplexity = exp(loss):", exp(mean_ce));
 
 # === Plot row distributions ===
-figure()
+figure();
 subplot(3, 1, 1)
 plot(P(1, :), "color", "blue", "label", "P(next | a)")
 title("P(next | a) — deterministic: always b")

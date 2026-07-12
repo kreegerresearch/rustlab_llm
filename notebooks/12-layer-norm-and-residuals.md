@@ -34,7 +34,7 @@ v = [1.0, 2.0, 3.0, 4.0, 5.0];
 mu_v    = mean(v);
 sigma_v = sqrt(mean((v - mu_v) .^ 2));        % population std
 
-ln_v_manual = (v - mu_v) / (sigma_v + 1e-12);
+ln_v_manual = (v - mu_v) / sqrt(sigma_v ^ 2 + 1e-5);   % same eps-in-sqrt form as the builtin
 ln_v_call   = layernorm(v);
 
 print("v:                 ", v);
@@ -45,11 +45,11 @@ print("layernorm builtin: ", ln_v_call);
 print("max diff:          ", max(abs(ln_v_manual - ln_v_call)));
 ```
 
-Built-in `layernorm` matches the by-hand computation up to the regularisation $\epsilon$ — they agree to ${max(abs(ln_v_manual - ln_v_call)):%.2e}$. Output mean is exactly 0; (population) std is exactly 1.
+With the manual code now using the same $\sqrt{\sigma^2 + \epsilon}$ denominator as the builtin, the two agree to ${max(abs(ln_v_manual - ln_v_call)):%.2e}$ — machine precision. The output mean is exactly 0; the (population) std is 1 up to the $\epsilon$ term (here $\approx 1 - 2.5\times10^{-6}$, since $\epsilon = 10^{-5}$ sits under the square root).
 
 ### Example — Per-row LN on a token batch
 
-In a transformer the input is a $T \times d_{\text{model}}$ matrix and LN runs once per row. `layernorm` accepts vectors today; we loop over rows and reassemble. (See AGENTS.md Rustlab Recommendations — a matrix overload would let us drop the loop.)
+In a transformer the input is a $T \times d_{\text{model}}$ matrix and LN runs once per row. The `layernorm(M)` matrix overload standardises each row independently, so a single call handles the whole batch.
 
 ```rustlab
 seed(12);
@@ -85,14 +85,14 @@ Every post-LN row has mean ≈ 0 and (population) std ≈ 1 — independently of
 pre_flat  = reshape(H_pre, 1, T_demo * d_demo);
 post_flat = reshape(H_ln,  1, T_demo * d_demo);
 
-figure()
+figure();
 subplot(2, 1, 1)
-histogram(pre_flat)
+histogram(pre_flat);
 title("Pre-LN activation distribution (mean ≈ 1.5, std ≈ 3)")
 ylabel("count")
 
 subplot(2, 1, 2)
-histogram(post_flat)
+histogram(post_flat);
 title("Post-LN activation distribution (mean ≈ 0, std ≈ 1)")
 xlabel("activation value")
 ylabel("count")
@@ -122,15 +122,14 @@ seed(13);
 d_res = 32;
 n_layers = 24;
 
-% Random per-layer weights — mildly contractive (norm < 1) so the no-residual path collapses
+% Random per-layer weights. randn(d,d)/sqrt(d) is roughly norm-preserving on
+% average — its top singular value is ≈ 2 (the Marchenko–Pastur edge), not < 1 —
+% so the no-residual collapse below is driven by GELU clipping half the signal
+% at every layer, not by the projection shrinking it.
+% Pack each layer's matrix into a tall stack via a block row write.
 W_stack = zeros(n_layers * d_res, d_res);
 for L = 1:n_layers
-  W_L = randn(d_res, d_res) * (1.0 / sqrt(d_res));   % spectral norm ≈ 1
-  for r = 1:d_res
-    for c = 1:d_res
-      W_stack((L - 1) * d_res + r, c) = W_L(r, c);
-    end
-  end
+  W_stack((L - 1) * d_res + 1:L * d_res, :) = randn(d_res, d_res) * (1.0 / sqrt(d_res));
 end
 
 x0 = randn(d_res);
@@ -142,12 +141,7 @@ mag_res(1)    = norm(x0);
 x_plain = x0;
 x_resi  = x0;
 for L = 1:n_layers
-  W_L = zeros(d_res, d_res);
-  for r = 1:d_res
-    for c = 1:d_res
-      W_L(r, c) = W_stack((L - 1) * d_res + r, c);
-    end
-  end
+  W_L = W_stack((L - 1) * d_res + 1:L * d_res, :);   % read this layer's block back
 
   % Use right-multiply x * W' so the result stays a vector and the residual
   % addition below works (see AGENTS.md Rustlab Recommendations on the
@@ -166,23 +160,25 @@ print("layer 24   magnitude no-res:", mag_no_res(n_layers + 1));
 print("layer 24   magnitude w/ res:", mag_res(n_layers + 1));
 ```
 
-Without residuals the magnitude collapses by orders of magnitude across 24 sublayers (GELU clips half the signal at every layer; the survivors get further attenuated by the random projection). With residuals — each step adds a small correction to a preserved running state — the magnitude stays $O(1)$. **Forward signal preservation is a proxy for backward gradient preservation**: the same identity path that keeps $\mathbf{x}$ alive keeps $\partial L / \partial \mathbf{x}$ alive.
+Without residuals the magnitude collapses by orders of magnitude across 24 sublayers — GELU zeroes out roughly half the signal at every layer, and that repeated clipping (not the near-norm-preserving random projection, whose top singular value is ≈ 2) is what drives the decay. With residuals — each step adds a small correction to a preserved running state — the magnitude stays $O(1)$. **Forward signal preservation is a proxy for backward gradient preservation**: the same identity path that keeps $\mathbf{x}$ alive keeps $\partial L / \partial \mathbf{x}$ alive.
 
 ### Example — Plot magnitude vs. depth
 
 ```rustlab
-figure()
+figure();
 hold("on")
-plot(0:n_layers, mag_no_res, "color", "red",  "label", "no residual")
-plot(0:n_layers, mag_res,    "color", "blue", "label", "with residual")
-title("Activation magnitude vs. depth (24 random GELU sublayers, d=32)")
+% Log-y axis: exponential decay shows as a straight line, so the ~7-order
+% collapse of the no-residual path is visible instead of pinned to zero.
+semilogy(0:n_layers, mag_no_res, "color", "red",  "label", "no residual")
+semilogy(0:n_layers, mag_res,    "color", "blue", "label", "with residual")
+title("Activation magnitude vs. depth (24 random GELU sublayers, d=32, log-y)")
 xlabel("layer index")
-ylabel("|x|")
+ylabel("log10(|x|)")
 legend()
 hold("off")
 ```
 
-The red curve drops fast; the blue curve plateaus. This forward-pass demonstration is the entire reason ResNets, transformers, and every other "very deep" architecture uses residual connections.
+On the log-y axis the no-residual magnitude falls as a roughly straight line — exponential decay across depth, about seven orders of magnitude by layer 24 — while the residual curve stays flat near the top. (A linear-scale plot would pin the collapsed curve to zero and hide the decay entirely.) This forward-pass demonstration is the entire reason ResNets, transformers, and every other "very deep" architecture uses residual connections.
 
 ## Pre-LN vs Post-LN
 
@@ -200,13 +196,42 @@ The key difference: Pre-LN keeps the residual stream $\mathbf{x}$ *unnormalised*
 
 A **final LayerNorm** is applied to the residual stream just before the language-model head, since the unnormalised stream would otherwise have unbounded scale by the end of a deep stack.
 
+### Example — Forward magnitude under Pre-LN vs Post-LN
+
+The two placements differ in *what the residual stream carries*. Stack $N$ random GELU sublayers under each rule and track the running magnitude:
+
+```rustlab
+seed(21);
+d_pp = 32;
+N_pp = 12;
+
+x_pre  = randn(d_pp);          % Pre-LN  residual stream
+x_post = x_pre;                % Post-LN residual stream (same start)
+mag_pre  = norm(x_pre);
+mag_post = norm(x_post);
+
+for L = 1:N_pp
+  W_L = randn(d_pp, d_pp) * (1.0 / sqrt(d_pp));
+  x_pre  = x_pre + gelu(layernorm(x_pre) * W_L');    % Pre-LN:  x <- x + f(LN(x))
+  x_post = layernorm(x_post + gelu(x_post * W_L'));  % Post-LN: x <- LN(x + f(x))
+  mag_pre  = norm(x_pre);
+  mag_post = norm(x_post);
+end
+
+print("Pre-LN  magnitude at layer N:", mag_pre);
+print("Post-LN magnitude at layer N:", mag_post);
+print("sqrt(d) reference:           ", sqrt(d_pp));
+```
+
+Post-LN renormalises the *entire* stream every layer, so its magnitude is pinned near $\sqrt{d}$ (each row leaves LN with unit variance) no matter how deep the stack — the running state keeps no memory of its own scale. Pre-LN normalises only the sublayer *input*; the residual stream itself is never touched, so it accumulates each sublayer's contribution and its magnitude grows with depth. That growing, unnormalised stream is exactly the "clean gradient highway" the theory above describes, and it is why GPT-style code adds one final LayerNorm before the LM head to rebound the scale.
+
 ## Connection to Information Theory
 
 LayerNorm and residuals do not add information — but they protect it.
 
-**LayerNorm is an invertible warp** (modulo the $\epsilon$ regulariser): standardisation is a deterministic affine map, and the affine $\boldsymbol{\gamma}\boldsymbol{\beta}$ is invertible whenever $\gamma_i \neq 0$. By the data processing inequality, no information is lost — but the *representation* of that information is forced into a known range, which is what subsequent learned projections (especially attention's softmax) need to behave well. Without LN, activation magnitudes drift across depth; with LN, every sublayer sees inputs of approximately unit scale and so learns weights that are well-conditioned.
+**LayerNorm is a lossy projection, not an invertible warp.** Standardisation $(\mathbf{x} - \mu)/\sqrt{\sigma^2 + \epsilon}$ is many-to-one: for any $a > 0$ and any $b$, the vectors $\mathbf{x}$ and $a\mathbf{x} + b\mathbf{1}$ map to the *same* output — $\mathrm{LN}(\mathbf{x}) = \mathrm{LN}(a\mathbf{x} + b\mathbf{1})$. LN therefore destroys exactly each token's mean and scale (2 of the $d$ degrees of freedom); only $d - 2$ pass through. Only the learned affine $\boldsymbol{\gamma}, \boldsymbol{\beta}$, applied *after* standardisation, is invertible, and it cannot recover the mean and scale that were already discarded. What LN buys is not information preservation but *conditioning*: the surviving directions are forced into a known range, which is what subsequent learned projections (especially attention's softmax) need to behave well. This dovetails with why Pre-LN architectures (below) thread the *unnormalised* residual stream through the whole network — the per-token mean and scale that LN drops from each sublayer's input are still carried, intact, on the residual highway.
 
-**Residuals preserve information across depth.** Each sublayer $f$ is a lossy non-linear transform — by data processing, $I(\mathbf{x}; f(\mathbf{x})) \le H(\mathbf{x})$. Without residuals, repeated application can only shed information layer by layer. The residual sum $\mathbf{y} = \mathbf{x} + f(\mathbf{x})$ keeps $\mathbf{x}$ recoverable (subtract $f(\mathbf{x})$ if you know it), so $I(\mathbf{x}; \mathbf{y}) = H(\mathbf{x})$ in the limit of small $f$. Stack 24 such blocks and the model can, in principle, retain the original token identity at the top of the network — even while each individual block has been allowed to non-linearly rewrite features. Information-theoretically, the residual stream is a **lossless backbone** with lossy non-linear *side-computations* attached.
+**Residuals preserve information across depth.** Each sublayer $f$ is a lossy non-linear transform — by data processing, $I(\mathbf{x}; f(\mathbf{x})) \le H(\mathbf{x})$. Without residuals, repeated application can only shed information layer by layer. The residual sum $\mathbf{y} = \mathbf{x} + f(\mathbf{x})$ is instead *invertible* whenever $f$ is a contraction ($\mathrm{Lip}(f) < 1$): the map $\mathbf{x} \mapsto \mathbf{x} + f(\mathbf{x})$ then has a unique inverse (this is the Banach fixed-point argument behind invertible ResNets), so $\mathbf{x}$ is fully recoverable from $\mathbf{y}$ and $I(\mathbf{x}; \mathbf{y}) = H(\mathbf{x})$. The demo's $0.1$ scaling on $f$ is exactly what forces that contraction. Stack 24 such blocks and the model can, in principle, retain the original token identity at the top of the network — even while each individual block has been allowed to non-linearly rewrite features. Information-theoretically, the residual stream is a **lossless backbone** with lossy non-linear *side-computations* attached.
 
 This complements Lesson 11's observation that the FFN does not change $I(X_{t+1}; X_{1..t})$ — it re-shapes representations. Residuals ensure those re-shapings can stack indefinitely without the model accidentally discarding the predictive bits attention worked to extract.
 
@@ -232,8 +257,8 @@ Run all with `make lesson-12` (or `rustlab run lessons/12-layer-norm-and-residua
 | Variable | Expected Value |
 |---|---|
 | `mean(layernorm(v))` | `0` (machine epsilon) |
-| `std(layernorm(v))` (population) | `1` (machine epsilon) |
-| `max diff` (manual vs builtin LN) | < `1e-5` |
+| `std(layernorm(v))` (population) | ≈ `1` (`1 − 2.5e-6`, from the ε under the sqrt) |
+| `max diff` (manual vs builtin LN) | ≈ `0` (machine epsilon — manual now uses the same ε form) |
 | `means_post` (per row, after LN) | all ≈ `0` |
 | `stds_post` (per row, after LN) | all ≈ `1` |
 | `mag_no_res(end)` | $\ll$ `mag_no_res(1)` (collapses) |

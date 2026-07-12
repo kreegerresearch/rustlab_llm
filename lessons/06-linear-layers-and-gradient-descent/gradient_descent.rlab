@@ -1,4 +1,4 @@
-# Script:  gradient_descent.r
+# Script:  gradient_descent.rlab
 # System:  Gradient descent on MSE loss for  y = w*x + b
 # Concept: Iterative parameter update: w ← w - η * ∂L/∂w;  b ← b - η * ∂L/∂b
 # Equations: ∂L/∂w = (2/N)*sum((w*x+b-y)*x);  ∂L/∂b = (2/N)*sum(w*x+b-y)
@@ -45,7 +45,7 @@ print("  b =", b, "  (true b* = 0)");
 print("  Loss =", loss_path(n_steps + 1));
 
 # === Loss curve ===
-figure()
+figure();
 plot(loss_path, "color", "blue", "label", "MSE loss")
 hold("on")
 hline(0.0, "gray", "minimum")
@@ -57,7 +57,7 @@ savefig("loss_curve.svg")
 print("Saved loss_curve.svg");
 
 # === Gradient descent path in (w, b) space ===
-figure()
+figure();
 scatter(w_path, b_path, "Gradient Descent Path in (w,b) Space — converges to (2, 0)")
 savefig("gd_path.svg")
 print("Saved gd_path.svg");

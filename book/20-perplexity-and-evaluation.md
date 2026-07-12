@@ -8,7 +8,7 @@
 
 - Derive **perplexity** $\mathrm{PPL} = e^{\mathcal{L}}$ from average cross-entropy $\mathcal{L}$ in nats (and $\mathrm{PPL} = 2^{\mathcal{L}}$ for $\mathcal{L}$ in bits).
 - Interpret perplexity as the **effective number of equally-likely choices** the model is uncertain about per token.
-- State the two **floor and ceiling** baselines: uniform-prior PPL = $|\mathcal{V}|$ (model knows nothing) and PPL = 1 (model is perfect).
+- State the two **reference baselines**: uniform-prior PPL = $|\mathcal{V}|$ (a model that has learned only the alphabet) and PPL = 1 (a perfect model). Only PPL ≥ 1 is a hard bound — the uniform value is a starting reference, not a ceiling, and a miscalibrated model can score *worse* than it.
 - Track perplexity through a training run and recognise the same train/val signatures from [Lesson 18](18-training-loop.md): healthy convergence, underfitting, overfitting.
 - Use perplexity to **compare language models** trained on the same corpus (lower = better) and discuss why cross-corpus comparison is harder.
 
@@ -69,6 +69,35 @@ PPL sharp   = 1.1825824177485913
 
 A uniform distribution over 4 classes has entropy $\log 4 \approx 1.386$ nats and $\mathrm{PPL} = 4$. Peaked distributions have $\mathrm{PPL}$ between 1 and 4, with $\mathrm{PPL} \to 1$ as the distribution concentrates on a single class.
 
+### Example — PPL vs confidence in the correct class
+
+Sweep the probability the model puts on the *correct* class from chance ($1/K$) up to near-certainty, spreading the rest uniformly over the other $K-1$ classes, and watch PPL fall from $K$ toward 1.
+
+```rustlab
+K = 4;
+ps = linspace(1.0 / K, 0.999, 50);      % confidence on the correct class
+ppl_curve = zeros(50);
+for k = 1:50
+  p = ps(k);
+  rest = (1 - p) / (K - 1);
+  q = [p, rest, rest, rest];
+  ppl_curve(k) = exp(-sum(q .* log(q)));
+end
+
+figure();
+plot(ps, ppl_curve, "color", "blue", "label", "PPL(p_correct)")
+title("Perplexity as confidence in the correct class grows")
+xlabel("probability on the correct class")
+ylabel("PPL")
+```
+
+<!-- rustlab:output-start -->
+![plot 1](plots/20-perplexity-and-evaluation/plot-1-63a46f4a.svg)
+
+<!-- rustlab:output-end -->
+
+At $p = 1/K = 0.25$ the distribution is uniform and $\mathrm{PPL} = K = 4$; as $p \to 1$ the model concentrates its mass on the right answer and $\mathrm{PPL} \to 1$. The curve is steepest near the top — the last increment of confidence buys the largest PPL drop.
+
 ## Why Perplexity, Not Cross-Entropy?
 
 ### Theory
@@ -76,7 +105,7 @@ A uniform distribution over 4 classes has entropy $\log 4 \approx 1.386$ nats an
 Cross-entropy and perplexity carry the same information, but perplexity has two advantages for human reading:
 
 1. **Linear-in-uncertainty units.** A jump from PPL 50 to 25 is "the model halved its uncertainty"; the same jump in cross-entropy is from $\log 50 = 3.91$ to $\log 25 = 3.22$ — accurate but unintuitive.
-2. **Direct comparison to baselines.** "Is $\mathrm{PPL} = 30$ good?" depends on $|\mathcal{V}|$. If $|\mathcal{V}| = 50000$ (GPT-3 scale), then 30 is excellent — the model is one in a thousand of the uniform baseline. If $|\mathcal{V}| = 256$ (byte-level LM), 30 is mediocre.
+2. **Direct comparison to baselines.** "Is $\mathrm{PPL} = 30$ good?" depends on $|\mathcal{V}|$. If $|\mathcal{V}| = 50000$ (GPT-3 scale), then 30 is excellent — the model's perplexity is roughly one in 1700 of the uniform baseline ($50000/30 \approx 1667$). If $|\mathcal{V}| = 256$ (byte-level LM), 30 is mediocre.
 
 The conversion is one line: $\mathrm{PPL} = e^{\mathcal{L}}$ for $\mathcal{L}$ in nats, $\mathrm{PPL} = 2^{\mathcal{L}}$ for $\mathcal{L}$ in bits. Always check which logarithm a paper is using.
 
@@ -86,7 +115,7 @@ The conversion is one line: $\mathrm{PPL} = e^{\mathcal{L}}$ for $\mathcal{L}$ i
 
 Take any training run and plot $\mathrm{PPL}$ instead of $\mathcal{L}$ on the y-axis. The shape of the curve is the same — both are monotone-decreasing functions of training progress — but PPL has two visually-useful properties:
 
-- The curve **starts at $|\mathcal{V}|$** and **must end at 1 or higher**. The y-axis has natural endpoints, so a glance tells you how close you are to perfect.
+- A uniform-init run **starts near $|\mathcal{V}|$** and **cannot end below 1**. PPL = 1 is a hard floor; the $|\mathcal{V}|$ start is just the uniform-prior reference (a badly miscalibrated model can briefly sit *above* it), so a glance still tells you how close you are to perfect.
 - The curve is **multiplicative-rate-friendly**. If $\mathrm{PPL}_t / \mathrm{PPL}_{t+1} = 1.05$ for every $t$, the model is improving by a constant factor per step — easy to recognise on a log-scale plot.
 
 The standalone script `perplexity_curve.rlab` reruns the [Lesson 18](18-training-loop.md) training loop with PPL computed on both train and val sets and plots the result.
@@ -134,17 +163,19 @@ The standalone script trains the same 24-parameter embedding+head model from [Le
 
 The training run pushes both train and val PPL down by roughly $3 \to 1.4$ — almost halving the effective branching factor.
 
+Watch the exact number: the run's final *train* PPL is $1.4042$, a hair **below** the $1.4148$ bigram floor. That is not a bug. The floor $1.4148 = e^{0.347}$ is the *population* value, while the train PPL is measured on the 49 training pairs, whose empirical entropy is $24\ln 2/49 = 0.3395$ nats — an empirical PPL floor of $e^{0.3395} = 1.4042$. The finite training sample under-represents the uncertain `b`-transition (24 of 49 pairs start from `b`, below the true $\tfrac12$), so its floor sits just under the population one. This is the same finite-sample effect flagged in [Lesson 18](18-training-loop.md).
+
 ## Connection to Compression
 
 ### Theory
 
 Cross-entropy in bits per token is **exactly** the compressed size (in bits per source symbol) achieved by an arithmetic coder using the model's predicted distribution. This means:
 
-- A language model with $\mathrm{PPL} = 2^{2.3} = 4.92$ on a corpus reaches compression ratio $2.3$ bits per character.
+- A language model with $\mathrm{PPL} = 2^{2.3} = 4.92$ on a corpus reaches a compression *rate* of $2.3$ bits per character.
 - Halving the perplexity gains 1 bit per character.
 - The theoretical floor for any next-token model is the corpus's true conditional entropy $H(X_t \mid X_{<t})$, which corresponds to $\mathrm{PPL} = e^{H}$.
 
-"Better language model" and "better text compressor" are not analogies — they are exactly the same number under arithmetic coding ([Lesson 05](05-bigram-language-model.md)). A 1-bit-per-char improvement in perplexity translates directly to half-the-storage on a Wikipedia dump.
+"Better language model" and "better text compressor" are not analogies — they are exactly the same number under arithmetic coding ([Lesson 05](05-bigram-language-model.md)). Since compressed size is bits-per-character times length, a model that reaches *half* the bits-per-character of another compresses the same Wikipedia dump to half the size — while *halving the perplexity* removes exactly 1 bit per character (which is half the file only if you started at 2 bits/char).
 
 ## Per-Token Perplexity Distribution
 
@@ -263,12 +294,27 @@ geometric mean PPL  : 2.973337943715371  (matches exp(mean cross-entropy))
 
 <!-- rustlab:output-end -->
 
+The per-token distribution is the diagnostic the summary numbers hide — plot it directly:
+
+```rustlab
+figure();
+histogram(ppls);
+title("Per-token perplexity across the validation pairs")
+xlabel("per-token PPL")
+ylabel("count")
+```
+
+<!-- rustlab:output-start -->
+![plot 2](plots/20-perplexity-and-evaluation/plot-2-fe8cbfd1.svg)
+
+<!-- rustlab:output-end -->
+
 Two summary statistics matter:
 
 - **Mean per-token PPL** — sensitive to outliers (rare tokens with very low $\hat p$ inflate it).
 - **Median per-token PPL** — the typical token's PPL. Often much lower than the mean; the gap quantifies how skewed the distribution is.
 
-Plotting both as horizontal lines on the per-token PPL histogram from the previous section is the cheapest "where is my model's effort going?" diagnostic.
+On this **untrained** model the histogram is a tight clump — all $19$ per-token PPLs sit between $2.65$ and $3.42$, and the mean ($2.99$) and median ($2.91$) are nearly equal. That is exactly what a uniformly-bad model looks like: no token is much harder than any other. The mean-far-above-median gap only emerges in a **trained** model, where most tokens are easy (PPL near 1) and a few rare or ambiguous ones form a long right tail that drags the mean up. Watching mean and median diverge over training — overlaying both on this histogram — is the cheapest "where is my model's effort going?" diagnostic.
 
 ## Connection to Earlier Lessons
 
@@ -285,7 +331,7 @@ Plotting both as horizontal lines on the per-token PPL histogram from the previo
 - Perplexity is the **effective branching factor**: how many equally-likely options the model is uncertain about per token.
 - Reference points: $\mathrm{PPL} = |\mathcal{V}|$ (uniform random) and $\mathrm{PPL} = 1$ (perfect).
 - Lower PPL = better model — but only on the same vocab and the same test set.
-- $\mathrm{PPL}$ in bits is **literally** a compression ratio; LM quality and text-compression ratio are the same number.
+- Cross-entropy in bits per character is **literally** the compression *rate* (bits per symbol an arithmetic coder achieves); perplexity itself is the unitless effective branching factor $2^{\text{bits/char}}$.
 
 ## Standalone Scripts
 
@@ -301,8 +347,8 @@ Run all with `make lesson-20` (or `rustlab run lessons/20-perplexity-and-evaluat
 | Variable | Expected Value |
 |---|---|
 | `entropy_to_ppl(p_uniform)` over 4 classes | `4.0` |
-| `entropy_to_ppl(p_peaked)` (0.7/0.1/0.1/0.1) | ≈ `2.32` |
-| `entropy_to_ppl(p_sharp)` (0.97/0.01/0.01/0.01) | ≈ `1.21` |
+| `entropy_to_ppl(p_peaked)` (0.7/0.1/0.1/0.1) | ≈ `2.5611` |
+| `entropy_to_ppl(p_sharp)` (0.97/0.01/0.01/0.01) | ≈ `1.1826` |
 | Initial train PPL (`perplexity_curve.rlab`) | ≈ `3.0` (uniform over 3 classes) |
 | Final train PPL (`perplexity_curve.rlab`) | ≈ `1.4` (the bigram floor) |
 | Final val PPL | similar to train PPL (no overfit on this small model) |
@@ -310,7 +356,7 @@ Run all with `make lesson-20` (or `rustlab run lessons/20-perplexity-and-evaluat
 ## Exercises
 
 1. **Endpoint sanity.** What perplexity does a random-init model produce on a $|\mathcal{V}| = 256$ byte-level vocabulary? On $|\mathcal{V}| = 50000$ BPE tokens? Are these the right baselines to compare a trained LM against?
-2. **Bits per character.** GPT-3 reaches roughly 1.7 bits per byte on a typical English corpus. Convert this to perplexity over the byte vocabulary ($|\mathcal{V}| = 256$). What fraction of the uniform PPL is that?
+2. **Bits per character.** Published evaluations put GPT-3-175B around 0.8 bits per byte on typical English text. Convert this to perplexity over the byte vocabulary ($|\mathcal{V}| = 256$): $\mathrm{PPL} = 2^{0.8}$. What fraction of the uniform PPL ($256 = 2^8$) is that?
 3. **Cross-vocab comparison.** Two models — one with $|\mathcal{V}| = 100$ and another with $|\mathcal{V}| = 1000$ — claim PPL = 30 on the same English text. Are they equally good? Compute bits-per-character for each and explain.
 4. **Tail-of-the-distribution.** Take any trained model on a fixed test set. Its mean per-token loss is $\mathcal{L}$, but the *median* token loss is often much lower. Why? What does this say about which tokens dominate the average?
 5. **Floor for the period-4 corpus.** A trigram model conditions on the previous *two* tokens. Compute its theoretical PPL on the corpus `"abcbabcb…"`. Is it equal to 1, greater than 1, or undefined?

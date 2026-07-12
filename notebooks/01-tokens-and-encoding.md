@@ -36,7 +36,7 @@ For the corpus `"to be or not to be"`:
 | `r` | 6 |
 | `t` | 7 |
 
-The string `"hello"` would encode to $[4, 3, 5, 5, 6]$ under a similar scheme. The inverse mapping $\text{decode} : \{1, \ldots, |\mathcal{V}|\} \to \mathcal{V}$ reconstructs text from integer sequences.
+Under the smaller vocabulary $\{e{:}1,\; h{:}2,\; l{:}3,\; o{:}4\}$ used in the one-hot section below, the string `"hello"` — the sequence `h, e, l, l, o` — encodes to $[2, 1, 3, 3, 4]$. The inverse mapping $\text{decode} : \{1, \ldots, |\mathcal{V}|\} \to \mathcal{V}$ reconstructs text from integer sequences.
 
 ## Character Frequencies
 
@@ -50,7 +50,6 @@ This is a discrete probability distribution over the vocabulary — every $f_i \
 
 ### Example — Computing relative frequencies
 
-<!-- hide -->
 ```rustlab
 % Corpus: "to be or not to be" — vocabulary (sorted): ' ', b, e, n, o, r, t
 chars = {" ", "b", "e", "n", "o", "r", "t"};
@@ -74,7 +73,7 @@ The corpus has **${total}** characters across a vocabulary of size **${vocab_siz
 ### Example — Frequency bar chart
 
 ```rustlab
-figure()
+figure();
 bar(chars, freqs, "Character Frequencies: 'to be or not to be'")
 ```
 
@@ -144,7 +143,7 @@ Orthogonality confirmed: $\mathbf{e}_h \cdot \mathbf{e}_e = ${dot_h_e}$ and $\ma
 vocab    = {"e", "h", "l", "o"};                  % columns: vocabulary slots
 sequence = {"h", "e", "l", "l", "o"};             % rows: tokens in order
 
-figure()
+figure();
 heatmap(vocab, sequence, X, "One-Hot Matrix: 'hello' (5 tokens x 4 vocab)", "viridis")
 ```
 
@@ -158,8 +157,8 @@ $$H(p) = -\sum_{i=1}^{|\mathcal{V}|} p_i \log_2 p_i \quad [\text{bits/symbol}].$
 
 Two reference points for the corpus `"to be or not to be"`:
 
-- **Uniform-vocabulary baseline.** If every character were equally likely, each token would need $\log_2 |\mathcal{V}| = \log_2 7 \approx 2.807$ bits — pure $\log_2$ of vocabulary size. This is what fixed-width binary encoding achieves.
-- **Frequency-aware bound.** With the actual frequencies $f_i$ from the bar chart above, $H(f) \approx 2.55$ bits/symbol — about $0.25$ bits less per token. A variable-length code (Huffman, arithmetic) could reach that bound; a fixed-width binary code cannot.
+- **Uniform-vocabulary baseline.** If every character were equally likely, each token would carry $\log_2 |\mathcal{V}| = \log_2 7 \approx 2.807$ bits — the entropy of the uniform distribution over the vocabulary. This is a rate a block or arithmetic code can approach, but a *fixed-width* binary code cannot split a bit: it rounds up to $\lceil \log_2 7 \rceil = 3$ bits per symbol.
+- **Frequency-aware bound.** With the actual frequencies $f_i$ from the bar chart above, $H(f) \approx ${-sum(freqs .* log2(freqs)):%.3f}$ bits/symbol — about ${log2(7) + sum(freqs .* log2(freqs)):%.3f}$ bits less per token than the uniform baseline. A variable-length code (Huffman, arithmetic) could approach that bound; a fixed-width binary code cannot.
 
 **One-hot encoding is the opposite of compressed.** A one-hot vector spends $|\mathcal{V}|$ bits to carry $\log_2 |\mathcal{V}|$ bits of information — like representing the number 5 as `00000100000` instead of `101`. We accept this overhead because one-hot vectors plug directly into matrix algebra (Lesson 04 onwards). The embedding layer ([Lesson 04](04-embeddings-and-similarity.md)) is, viewed information-theoretically, a learned dimensionality reduction back toward the entropy bound — a *dense* code where each dimension carries fractional bits of information about the token.
 

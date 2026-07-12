@@ -1,7 +1,7 @@
 <svg width="900" height="500" viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg">
 <rect x="0" y="0" width="900" height="500" opacity="1" fill="#1E1E2E" stroke="none"/>
 <text x="450" y="25" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="17.741935483870968" opacity="1" fill="#CDD6F4">
-Optimiser trajectories on  L = ½(20 θ₁² + θ₂²)
+Optimiser trajectories on  L = ½(200 θ₁² + θ₂²)
 </text>
 <text x="20" y="238" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4" transform="rotate(270, 20, 238)">
 θ₂  (flat direction)
@@ -10,26 +10,38 @@ Optimiser trajectories on  L = ½(20 θ₁² + θ₂²)
 θ₁  (steep direction)
 </text>
 <polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="89,47 89,429 "/>
-<text x="80" y="381" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
--1.0
-</text>
-<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,381 89,381 "/>
-<text x="80" y="321" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+<text x="80" y="399" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
 0.0
 </text>
-<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,321 89,321 "/>
-<text x="80" y="260" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,399 89,399 "/>
+<text x="80" y="359" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.5
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,359 89,359 "/>
+<text x="80" y="319" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
 1.0
 </text>
-<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,260 89,260 "/>
-<text x="80" y="200" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,319 89,319 "/>
+<text x="80" y="279" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+1.5
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,279 89,279 "/>
+<text x="80" y="239" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
 2.0
 </text>
-<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,200 89,200 "/>
-<text x="80" y="140" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,239 89,239 "/>
+<text x="80" y="199" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+2.5
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,199 89,199 "/>
+<text x="80" y="159" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
 3.0
 </text>
-<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,140 89,140 "/>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,159 89,159 "/>
+<text x="80" y="119" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+3.5
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,119 89,119 "/>
 <text x="80" y="79" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
 4.0
 </text>
@@ -77,9 +89,9 @@ Optimiser trajectories on  L = ½(20 θ₁² + θ₂²)
 <polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="405,429 405,47 "/>
 <polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="563,429 563,47 "/>
 <polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="721,429 721,47 "/>
-<polyline fill="none" opacity="1" stroke="#D62728" stroke-width="2" points="90,79 879,101 247,121 752,139 348,155 671,170 413,184 620,196 454,207 587,217 481,227 565,235 498,243 552,250 509,256 543,262 515,267 538,272 520,276 534,280 523,284 532,287 525,290 530,293 526,296 529,298 527,300 529,302 527,303 529,305 527,306 528,308 527,309 528,310 528,311 528,312 528,313 528,313 528,314 528,315 528,315 528,316 528,316 528,316 528,317 528,317 528,318 528,318 528,318 528,318 528,319 528,319 528,319 528,319 528,319 528,319 528,319 528,320 528,320 528,320 528,320 "/>
-<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="90,79 199,109 307,139 410,169 506,198 589,227 654,254 698,280 722,304 726,326 715,346 691,362 659,376 621,386 580,393 540,397 503,398 471,396 446,392 429,386 421,379 422,371 430,361 445,352 464,342 486,332 510,323 532,314 552,307 569,301 581,295 587,292 589,289 585,288 577,289 565,290 552,293 538,296 524,300 512,304 502,309 495,314 492,318 493,322 496,326 502,329 510,332 519,334 528,335 536,335 542,335 547,334 549,333 549,331 547,329 543,327 538,324 532,322 527,320 522,318 518,316 "/>
-<polyline fill="none" opacity="1" stroke="#2CA02C" stroke-width="2" points="90,79 210,116 325,151 433,184 528,217 607,247 664,275 699,301 712,324 707,344 689,360 660,373 625,382 588,387 550,389 515,389 485,386 462,381 447,374 440,367 440,358 448,349 461,340 478,332 497,323 516,316 534,310 550,305 562,301 569,298 573,296 572,296 567,297 559,298 550,301 539,304 529,307 520,311 512,314 507,318 504,321 504,324 507,326 511,328 516,329 522,330 528,330 533,330 537,329 540,328 541,327 540,325 539,324 536,322 533,321 529,320 526,319 523,318 522,317 521,317 521,317 "/>
+<polyline fill="none" opacity="1" stroke="#D62728" stroke-width="2" points="90,79 879,82 247,85 752,88 348,91 671,93 413,96 620,99 454,102 587,104 481,107 565,110 498,112 552,115 509,117 543,120 515,122 538,125 520,127 534,130 523,132 532,135 525,137 530,139 526,142 529,144 527,146 529,149 527,151 529,153 527,155 528,158 527,160 528,162 528,164 528,166 528,168 528,170 528,172 528,174 528,176 528,178 528,180 528,182 528,184 528,186 528,188 528,190 528,192 528,194 528,196 528,198 528,199 528,201 528,203 528,205 528,206 528,208 528,210 528,212 528,213 "/>
+<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="90,79 109,87 129,94 149,101 168,108 188,115 207,122 226,130 245,137 264,144 283,151 301,158 319,165 336,172 354,178 371,185 387,192 403,199 418,205 433,212 447,218 460,225 473,231 485,237 497,243 507,249 517,255 526,261 535,267 542,273 549,278 555,284 560,289 564,294 568,299 571,304 573,309 575,314 576,318 576,323 576,327 575,331 574,335 573,339 571,343 569,347 567,350 564,353 562,357 559,360 556,363 553,366 550,368 547,371 544,374 541,376 539,378 536,380 534,382 531,384 529,386 "/>
+<polyline fill="none" opacity="1" stroke="#2CA02C" stroke-width="2" points="90,79 111,88 133,97 154,105 175,114 196,122 217,130 238,139 258,147 278,155 297,163 317,171 335,179 354,187 371,195 388,202 405,210 421,217 436,225 451,232 465,239 478,246 490,253 502,259 512,266 522,272 531,278 539,285 546,291 553,296 558,302 563,307 567,313 570,318 572,323 574,328 575,332 576,337 576,341 575,345 574,349 573,353 571,357 569,360 566,364 564,367 561,370 558,373 555,376 552,378 549,381 546,383 543,385 541,387 538,389 535,391 533,392 531,394 528,395 527,397 525,398 "/>
 <rect x="785" y="52" width="90" height="66" opacity="0.85" fill="#1E1E2E" stroke="none"/>
 <rect x="785" y="52" width="90" height="66" opacity="0.3" fill="none" stroke="#CDD6F4"/>
 <text x="825" y="62" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">

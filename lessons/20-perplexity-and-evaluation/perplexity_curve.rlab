@@ -1,4 +1,4 @@
-# Script:  perplexity_curve.r
+# Script:  perplexity_curve.rlab
 # System:  Track perplexity through training of the same 24-parameter LM
 #          from Lesson 18.  PPL = exp(L) plotted alongside the loss curve.
 # Concept: PPL is just exp(L) and inherits L's training-curve shape; it
@@ -116,9 +116,16 @@ PPL_val   = exp(L_val);
 print("Final train PPL:", PPL_train(n_train + 1));
 print("Final val   PPL:", PPL_val(n_train + 1));
 print("Bigram floor (Lesson 05): exp(0.347) =", exp(0.347));
+# The final train PPL (~1.4042) sits just BELOW the 1.4148 population floor
+# because it is measured on the finite training sample: only 24 of the 49
+# training pairs start from the ambiguous state b, so the empirical entropy is
+# 24*ln2/49 = 0.33950 nats and the empirical PPL floor is exp(0.33950) =
+# 1.40425 -- exactly what the run converges to.  1.4148 is the true-distribution
+# floor no Markov-1 model can beat; the finite empirical sample can sit under it.
+print("Empirical train floor: exp(24*ln2/49) =", exp(24 * log(2) / 49));
 
 # === Plot 1: PPL curves ===
-figure()
+figure();
 steps = 0:n_train;
 plot(steps, PPL_train, "color", "red",  "label", "train PPL")
 hold("on")
@@ -134,7 +141,7 @@ savefig("perplexity_curve.svg")
 print("Saved perplexity_curve.svg");
 
 # === Plot 2: side-by-side L and PPL ===
-figure()
+figure();
 subplot(2, 1, 1)
 plot(steps, L_train, "color", "red", "label", "train L")
 title("Cross-entropy loss (nats)")

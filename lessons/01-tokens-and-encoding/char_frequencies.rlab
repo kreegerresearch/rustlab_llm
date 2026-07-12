@@ -1,4 +1,4 @@
-# Script:  char_frequencies.r
+# Script:  char_frequencies.rlab
 # System:  Character-level tokenisation of a text corpus
 # Concept: Vocabulary construction and relative character frequency distribution
 # Equations: f_i = c_i / sum(c), where c_i is the count of character i
@@ -38,7 +38,7 @@ print("Highest frequency:", max_freq);
 # === Bar Chart ===
 # x-axis: character index (1=space, 2=b, 3=e, 4=n, 5=o, 6=r, 7=t)
 # y-axis: relative frequency
-figure()
+figure();
 bar(freqs, "Character Frequencies: 'to be or not to be'")
 savefig("char_frequencies.svg")
 print("Saved char_frequencies.svg")

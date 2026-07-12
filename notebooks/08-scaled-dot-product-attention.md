@@ -14,7 +14,7 @@ $$\mathrm{Attn}(\mathbf{Q},\mathbf{K},\mathbf{V}) \;=\; \mathrm{softmax}\!\left(
 
 ## Background
 
-Embeddings as dense row vectors from [Lesson 04](04-embeddings-and-similarity.md). Softmax, cross-entropy, and probability row-normalisation from [Lessons 02–03](02-probability-and-softmax.md). Linear layers as $\mathbf{y} = \mathbf{x}\mathbf{W}$ from [Lesson 06](06-linear-layers-and-gradient-descent.md). Causal prefix averaging as $\bar{\mathbf{X}} = \mathbf{W}\mathbf{X}$ from [Lesson 07](07-context-and-naive-averaging.md).
+Embeddings as dense row vectors from [Lesson 04](04-embeddings-and-similarity.md). Softmax, cross-entropy, and probability row-normalisation from [Lessons 02–03](02-probability-and-softmax.md). Linear layers from [Lesson 06](06-linear-layers-and-gradient-descent.md), where a layer was written $\mathbf{y} = \mathbf{W}\mathbf{x} + \mathbf{b}$ with $\mathbf{x}$ a column vector. Here rows are tokens, so we right-multiply instead: $\mathbf{X}\mathbf{W}$ applies the same linear map to every row of $\mathbf{X}$ at once. Causal prefix averaging as $\bar{\mathbf{X}} = \mathbf{W}\mathbf{X}$ from [Lesson 07](07-context-and-naive-averaging.md).
 
 ## Queries, Keys, Values
 
@@ -109,7 +109,7 @@ print("A_unscaled :", A_unscaled_v);
 print("A_scaled   :", A_scaled_v);
 ```
 
-At $d_k = 512$ unscaled, the softmax assigns $\approx 1.0$ to the argmax row and $\approx 0$ to every other position — the **score gap** is so large after exponentiation that one entry wins absolutely. With $1/\sqrt{d_k}$ scaling, the row stays well-spread and the model can actually learn to *blend* values across positions. The same calculation through the backward pass shows that the unscaled gradient through the attention row is essentially zero on every non-argmax column — **gradients vanish almost everywhere**, training stalls, the model is effectively a hard selector. The √d_k factor is what makes attention differentiable in practice.
+At $d_k = 512$ unscaled, the softmax assigns $\approx 1.0$ to the argmax row and $\approx 0$ to every other position — the **score gap** is so large after exponentiation that one entry wins absolutely. With $1/\sqrt{d_k}$ scaling, the row stays well-spread and the model can actually learn to *blend* values across positions. The same calculation through the backward pass shows that with a saturated softmax the gradient through the attention row vanishes on *every* column — including the argmax, where the local softmax term $p(1-p) \to 0$ as $p \to 1$. So **gradients vanish everywhere**, training stalls, the model is effectively a hard selector. The √d_k factor is what makes attention differentiable in practice.
 
 ## The Causal Mask
 
@@ -119,7 +119,7 @@ For a language model, token $t$ must not see tokens at positions $i > t$. Add a 
 
 $$M_{t, i} = \begin{cases} 0 & i \le t \\ -\infty & i > t. \end{cases}$$
 
-In practice we use a large negative value (e.g. $-10^9$) to avoid `NaN` from $\exp(-\infty)$.
+In practice we use a large finite negative value (e.g. $-10^9$) rather than literal $-\infty$. It is not that $\exp(-\infty)$ misbehaves — IEEE arithmetic gives $\exp(-\infty) = 0$ exactly. The problem is the numerically-stable softmax, which subtracts each row's maximum before exponentiating: with literal $-\infty$ entries that subtraction can produce $-\infty - (-\infty) = \text{NaN}$. A large finite value avoids that edge case and keeps gradients finite.
 
 ### Example — Apply the mask to S
 
@@ -177,18 +177,26 @@ Token 1 can only attend to itself, so $A_{1,1} = ${A_1_1:%.4f}$. Every row sums 
 Both axes are **token positions**: rows are the query positions $t$ (which token is asking) and columns are the key positions $i$ (which token is being read). With position labels on the axes, the causal structure becomes literally readable — "row $t_3$ only has weight on columns $t_1, t_2, t_3$".
 
 ```rustlab
+% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 positions = {"t1", "t2", "t3", "t4", "t5"};
 
-figure()
-subplot(3, 1, 1)
+figure();
 heatmap(positions, positions, S, "Scaled scores S = Q K^T / sqrt(d_k)", "viridis")
+```
 
-subplot(3, 1, 2)
-heatmap(positions, positions, S_masked, "After causal mask (upper triangle → -∞)", "viridis")
+```rustlab
+figure();
+% rustlab 0.3.6 colormaps by |value|; shift by +1e9 so masked cells render dark (min)
+% (see docs/rustlab-issues-2026-07-12.md §6)
+heatmap(positions, positions, S_masked + 1.0e9, "Causal mask pattern (+1e9 shift: masked → dark)", "viridis")
+```
 
-subplot(3, 1, 3)
+```rustlab
+figure();
 heatmap(positions, positions, A, "Attention weights A = softmax_row(S_masked)", "viridis")
 ```
+
+The second figure's color scale is swamped by the $10^9$ mask offset, so it shows only *where* the mask blocks attention (the dark upper triangle) rather than any score structure — read the actual scaled scores off the first figure instead.
 
 The final attention matrix is **lower-triangular** (causality) with **rows summing to 1** (softmax) — exactly the same shape as the Lesson 07 averaging matrix, but now the weights depend on the content of $\mathbf{Q}$ and $\mathbf{K}$.
 
@@ -262,12 +270,15 @@ Row 1 of $\mathbf{O}$ equals row 1 of $\mathbf{V}$ (token 1 only attends to itse
 ### Example — Attention weights and output heatmaps
 
 ```rustlab
+% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 out_dims = {"d1", "d2", "d3", "d4"};
 
-figure()
-subplot(2, 1, 1)
+figure();
 heatmap(positions, positions, A2, "Attention weights A", "viridis")
-subplot(2, 1, 2)
+```
+
+```rustlab
+figure();
 heatmap(out_dims, positions, O, "Output O = A V  (rows: positions, cols: value dims)", "viridis")
 ```
 
@@ -291,7 +302,7 @@ Attention is **soft information routing**. Each row $\mathbf{A}_t$ is a probabil
 
 Two quantities make this concrete:
 
-- **Per-row entropy.** $H(\mathbf{A}_t) = -\sum_i A_{t,i} \log A_{t,i}$ measures how concentrated row $t$ is. A uniform row over $t$ positions has $H = \log_2 t$ bits — the [Lesson 07](07-context-and-naive-averaging.md) baseline. A peaked row picking out one position has $H \to 0$. **Trained attention heads typically have much lower row entropy than the uniform baseline**, meaning they have learned that a small subset of past tokens carries the relevant information for predicting the next.
+- **Per-row entropy.** $H(\mathbf{A}_t) = -\sum_i A_{t,i} \log_2 A_{t,i}$ measures (in bits) how concentrated row $t$ is. A uniform row over $t$ positions has $H = \log_2 t$ bits — the [Lesson 07](07-context-and-naive-averaging.md) baseline. A peaked row picking out one position has $H \to 0$. **Trained attention heads typically have much lower row entropy than the uniform baseline**, meaning they have learned that a small subset of past tokens carries the relevant information for predicting the next.
 - **Mutual information between context and target.** The earlier-lesson conditional entropy $H(X_{t+1} \mid X_{1..t})$ is the floor any next-token predictor can reach. Uniform averaging from [Lesson 07](07-context-and-naive-averaging.md) collapses the prior context into a single bag-of-tokens vector and discards most of $I(X_{t+1};\, X_{1..t})$. Attention preserves it: by re-weighting per-token at every step, the model can keep $\mathbf{o}_t$ informative about $X_{t+1}$ for any prior token whose mutual information was non-trivial. This is the mechanism by which attention reduces the cross-entropy loss below the bigram floor of [Lesson 05](05-bigram-language-model.md).
 
 Viewed this way, the $1/\sqrt{d_k}$ scale is also information-theoretic: too-large scores → near-deterministic softmax → row entropy collapses to 0 → the head selects a single token and ignores all others. Stable variance keeps row entropy in a usable range so the head can reweight rather than commit.
@@ -302,7 +313,7 @@ Viewed this way, the $1/\sqrt{d_k}$ scale is also information-theoretic: too-lar
 - The **score matrix** $\mathbf{S} = \mathbf{Q}\mathbf{K}^\top / \sqrt{d_k}$ measures query-key similarity; the $1/\sqrt{d_k}$ scale keeps variance stable as $d_k$ grows.
 - The **causal mask** zeros out future positions so position $t$ can only look at tokens $1..t$. Without it, language-model training would leak future tokens.
 - **Softmax is row-wise** — each row of $\mathbf{A}$ is a probability distribution over the first $t$ tokens.
-- The **parameter count** of one self-attention block ($\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V$) is $3 \cdot d_{\text{model}} \cdot d_k$, independent of sequence length.
+- The **parameter count** of one self-attention block ($\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V$) is $3 \cdot d_{\text{model}} \cdot d_k$ when $d_v = d_k$ (in general $d_{\text{model}}(2 d_k + d_v)$), independent of sequence length.
 
 ## Standalone Scripts
 
@@ -318,6 +329,8 @@ Run all with `make lesson-08` (or `rustlab run lessons/08-scaled-dot-product-att
 | Variable | Expected Value |
 |---|---|
 | `scale` (= $1/\sqrt{4}$) | `0.5` |
+| `Var(q.k) / d_k` at $d_k = 4 / 64 / 512$ | ≈ `0.99` / `1.00` / `1.03` (variance grows linearly with $d_k$) |
+| `max A_unscaled` vs `max A_scaled` at $d_k = 512$ | ≈ `1.0` (saturated) vs ≈ `0.52` (well-spread) |
 | `A_1_1` | `1.0000` (token 1 attends only to itself) |
 | `max_upper` (max of upper-triangle $\mathbf{A}$) | ≈ `0` (machine epsilon × softmax of $-10^9$) |
 | `row_sums` (each row of $\mathbf{A}$) | `1.0` |

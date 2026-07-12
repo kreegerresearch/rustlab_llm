@@ -1,4 +1,4 @@
-# Script:  train_loop.r
+# Script:  train_loop.rlab
 # System:  Tiny embedding-then-linear language model on a periodic 60-char
 #          corpus over { a, b, c }.  Trains with AdamW + warmup+cosine LR
 #          schedule.  Saves three diagnostic plots.
@@ -25,9 +25,10 @@ E = randn(vocab, d_emb) * 0.3;
 W = randn(d_emb, vocab) * 0.3;
 
 # === Corpus ===
-# Periodic "abcbabc..." sequence, 60 chars.  Train on first 50 pairs;
-# validate on the last 9.  (Periodic sequences mean train/val are i.i.d.
-# under the bigram model, so a healthy run sees val ~ train.)
+# Periodic "abcbabc..." sequence, 60 chars.  Train on 49 pairs (chars 1..50);
+# validate on 9 pairs (chars 50..59); char 60 is unused.  A healthy run sees
+# val near train, with a small gap from finite-sample weighting of the only
+# uncertain transition (current-token b -> {a, c}).
 function tokens = build_seq(n)
   tokens = zeros(n);
   pat = [1, 2, 3, 2];     % a, b, c, b — period 4
@@ -37,8 +38,7 @@ function tokens = build_seq(n)
 end
 
 corpus = build_seq(60);
-train_seq = corpus(1);    % 60 elements as vector
-# Use first 50 for train, remaining for val.  Index by hand below.
+# Use first 50 chars for train, chars 50..59 for val.  Index by hand below.
 n_train_pairs = 49;        # pairs (1..49) -> (2..50)
 n_val_pairs = 9;           # pairs (50..58) -> (51..59)
 
@@ -97,8 +97,10 @@ lr_curve         = zeros(n_train + 1);
 
 loss_train_curve(1) = mean_loss(1,  n_train_pairs, corpus, E, W);
 loss_val_curve(1)   = mean_loss(50, n_val_pairs,   corpus, E, W);
-grad_norm_curve(1)  = 0.0;
 lr_curve(1)         = 0.0;
+# grad_norm_curve(1) (step 0) is left unset: the first real gradient is
+# computed at step 1, so the grad-norm plot starts at step 1 (no step-0 zero
+# that would plot as log10(0) and stretch the axis).
 
 print("Initial train loss (should be ~log(3) = 1.0986):", loss_train_curve(1));
 print("Initial val   loss (should be ~log(3) = 1.0986):", loss_val_curve(1));
@@ -157,7 +159,7 @@ print("Bigram entropy reference (Lesson 05): ~0.347 nats / ~1.414 perplexity");
 print("(For 'abcbabcb...': P(a|b)=P(c|b)=0.5, P(b|a)=P(b|c)=1.  H = 0.347 nats.)");
 
 # === Diagnostic plots ===
-figure()
+figure();
 steps = 0:n_train;
 plot(steps, loss_train_curve, "color", "red",  "label", "train")
 hold("on")
@@ -170,15 +172,15 @@ legend("train", "val")
 savefig("train_val_loss.svg")
 print("Saved train_val_loss.svg");
 
-figure()
-plot(steps, log10(grad_norm_curve + 1e-12), "color", "green", "label", "log10 ||grad||")
-title("Gradient norm vs step (log10)")
+figure();
+plot(1:n_train, log10(grad_norm_curve(2:(n_train + 1))), "color", "green", "label", "log10 ||grad||")
+title("Gradient norm vs step (log10, from step 1)")
 xlabel("step")
 ylabel("log10 ||grad||")
 savefig("grad_norm.svg")
 print("Saved grad_norm.svg");
 
-figure()
+figure();
 plot(steps, lr_curve, "color", "purple", "label", "eta")
 title("Learning-rate schedule (warmup + cosine)")
 xlabel("step")

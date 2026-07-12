@@ -1,4 +1,4 @@
-# Script:  attention_weights.r
+# Script:  attention_weights.rlab
 # System:  Scaled dot-product attention — deriving the attention weight matrix
 # Concept: Given hand-crafted Q, K, compute scores = Q K^T / sqrt(d_k), apply
 #          a causal mask (upper triangle → -inf), then row-wise softmax to get
@@ -89,20 +89,24 @@ print("A(1, 1) (token 1 can only attend to itself — should be 1):", A(1, 1));
 # without translating cell indices.
 positions = {"t1", "t2", "t3", "t4", "t5"};
 
-figure()
-subplot(3, 1, 1)
+# TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
+figure();
 heatmap(positions, positions, S, "Scaled scores S = Q K^T / sqrt(d_k)", "viridis")
+savefig("attention_pipeline_scores.svg")
 
-subplot(3, 1, 2)
-heatmap(positions, positions, S_masked, "After causal mask (upper triangle → -∞)", "viridis")
+figure();
+# rustlab 0.3.6 colormaps by |value|; shift by +1e9 so masked cells render dark (min)
+# (see docs/rustlab-issues-2026-07-12.md §6)
+heatmap(positions, positions, S_masked + 1.0e9, "After causal mask, +1e9 shift (masked → dark)", "viridis")
+savefig("attention_pipeline_masked.svg")
 
-subplot(3, 1, 3)
+figure();
 heatmap(positions, positions, A, "Attention weights A = softmax_row(S_masked)", "viridis")
-savefig("attention_pipeline.svg")
-print("Saved attention_pipeline.svg");
+savefig("attention_pipeline_weights.svg")
+print("Saved attention_pipeline_scores.svg, attention_pipeline_masked.svg, attention_pipeline_weights.svg");
 
 # Standalone heatmap of the final weights
-figure()
+figure();
 heatmap(positions, positions, A, "Causal Attention Weights — lower triangular, rows sum to 1", "viridis")
 savefig("attention_weights.svg")
 print("Saved attention_weights.svg");

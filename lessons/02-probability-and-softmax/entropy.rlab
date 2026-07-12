@@ -1,4 +1,4 @@
-# Script:  entropy.r
+# Script:  entropy.rlab
 # System:  Shannon entropy of softmax probability distributions
 # Concept: Entropy measures the uncertainty (spread) of a distribution
 # Equations: H(p) = -sum_i p_i * log2(p_i)   [bits]
@@ -50,7 +50,7 @@ print("Entropy of near-deterministic distribution:", H_det, "bits  (should be â‰
 # === Entropy vs Temperature bar chart ===
 # Four representative temperatures
 H_vec = [H05, H10, H20, H50];
-figure()
+figure();
 bar(H_vec, "Entropy (bits) at T = 0.5, 1.0, 2.0, 5.0")
 hold("on")
 hline(log2(vocab_size), "red", "max = log2(4)")

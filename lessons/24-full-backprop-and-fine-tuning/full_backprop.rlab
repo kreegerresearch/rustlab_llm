@@ -10,8 +10,8 @@
 #          full backward pass through:
 #              embed -> LN1 -> attention -> residual -> LN2 -> FFN
 #                    -> residual -> LM head -> softmax + cross-entropy.
-#          Verify with a numerical gradient check (forward-finite-diff vs
-#          analytical) on a randomly-chosen scalar parameter.  Then train
+#          Verify with a numerical gradient check (central finite-difference,
+#          (L+ - L-)/(2*eps), vs analytical) on chosen scalar parameters.  Then train
 #          for 600 steps with AdamW and watch the loss drop below the
 #          analytic bigram floor (~ 0.434 nats / pair) toward 0.
 # Equations:  see notebooks/24-full-backprop-and-fine-tuning.md "Full
@@ -121,7 +121,9 @@ function y = gelu_grad(z)
 end
 
 # === 4. Forward pass — returns logits, loss, and a cache of intermediates ===
-function [logits, L, cache] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+# NOTE: named acts (not cache) — rustlab 0.3.6 reserved 'cache' as a statement keyword
+# TODO: rename back to cache if rustlab un-reserves the identifier
+function [logits, L, acts] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
                                        Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U)
   T = length(ids);
   d_model = size(E)(2);
@@ -170,7 +172,7 @@ function [logits, L, cache] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, 
   L = L / (T - 1);
 
   # Cache everything backward will need.
-  cache = struct("T", T, "H_in", H_in, "H_ln1", H_ln1, "x_norm1", x_norm1, "sigma1", sigma1, ...
+  acts = struct("T", T, "H_in", H_in, "H_ln1", H_ln1, "x_norm1", x_norm1, "sigma1", sigma1, ...
                  "Q", Q, "K", K, "V", V, "S", S, "A", A, "attn_out", attn_out, "proj", proj, ...
                  "H_mid", H_mid, "H_ln2", H_ln2, "x_norm2", x_norm2, "sigma2", sigma2, ...
                  "pre_gelu", pre_gelu, "hidden", hidden, "ffn_out", ffn_out, "H_out", H_out, ...
@@ -180,27 +182,27 @@ end
 # === 5. Backward pass — every line follows the chain rule in the notebook ===
 function [dE, dgamma1, dbeta1, dgamma2, dbeta2, ...
           dWq, dWk, dWv, dWo, dW1, db1f, dW2, db2f, dW_U] = ...
-    backward(ids, cache, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U)
-  # Pull cache fields into locals — `cache.M(t, :)` would be parsed as a
+    backward(ids, acts, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U)
+  # Pull acts fields into locals — `acts.M(t, :)` would be parsed as a
   # function call to `M(...)`.  Locals dodge that.
-  T        = cache.T;
-  H_ln1    = cache.H_ln1;
-  x_norm1  = cache.x_norm1;
-  sigma1   = cache.sigma1;
-  Q        = cache.Q;
-  K        = cache.K;
-  V        = cache.V;
-  A        = cache.A;
-  attn_out = cache.attn_out;
-  H_mid    = cache.H_mid;
-  H_ln2    = cache.H_ln2;
-  x_norm2  = cache.x_norm2;
-  sigma2   = cache.sigma2;
-  pre_gelu = cache.pre_gelu;
-  hidden   = cache.hidden;
-  H_out    = cache.H_out;
-  logits   = cache.logits;
-  scale    = cache.scale;
+  T        = acts.T;
+  H_ln1    = acts.H_ln1;
+  x_norm1  = acts.x_norm1;
+  sigma1   = acts.sigma1;
+  Q        = acts.Q;
+  K        = acts.K;
+  V        = acts.V;
+  A        = acts.A;
+  attn_out = acts.attn_out;
+  H_mid    = acts.H_mid;
+  H_ln2    = acts.H_ln2;
+  x_norm2  = acts.x_norm2;
+  sigma2   = acts.sigma2;
+  pre_gelu = acts.pre_gelu;
+  hidden   = acts.hidden;
+  H_out    = acts.H_out;
+  logits   = acts.logits;
+  scale    = acts.scale;
 
   d_model = size(E)(2);
   vocab = size(E)(1);
@@ -291,11 +293,11 @@ end
 function ok = grad_check(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
                           Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U)
   eps_g = 1e-4;
-  [logits_0, L_0, cache] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
+  [logits_0, L_0, acts] = forward(ids, E, PE, gamma1, beta1, gamma2, beta2, ...
                                     Wq, Wk, Wv, Wo, W1, b1f, W2, b2f, W_U);
   [dE, dgamma1, dbeta1, dgamma2, dbeta2, ...
    dWq, dWk, dWv, dWo, dW1, db1f, dW2, db2f, dW_U] = ...
-      backward(ids, cache, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U);
+      backward(ids, acts, E, gamma1, gamma2, Wq, Wk, Wv, Wo, W1, W2, W_U);
 
   # Perturb W_U(1, 1).
   W_U_plus = W_U; W_U_plus(1, 1) = W_U_plus(1, 1) + eps_g;

@@ -1,4 +1,4 @@
-# Script:  adam_step.r
+# Script:  adam_step.rlab
 # System:  Adam optimizer applied to the same anisotropic 2D quadratic
 # Concept: Maintain a first-moment EMA m and second-moment EMA v of the
 #          gradient.  Apply bias correction to both before the update.
@@ -35,14 +35,18 @@ loss_curve(1) = loss_aniso2(theta, a, b);
 g1 = grad_aniso2(theta, a, b);
 m_after = beta1 * m + (1 - beta1) * g1;
 v_after = beta2 * v + (1 - beta2) * (g1 .* g1);
-m_hat_t1 = m_after / (1 - beta1 ^ 1);   # divides by 0.1 -> blows up to g1
-v_hat_t1 = v_after / (1 - beta2 ^ 1);   # divides by 0.001 -> blows up to g1.^2
+m_hat_t1 = m_after / (1 - beta1 ^ 1);   # /0.1   -> recovers g1 exactly at t=1
+v_hat_t1 = v_after / (1 - beta2 ^ 1);   # /0.001 -> recovers g1.^2 exactly at t=1
 
 print("Step 1 — raw m =", m_after);
 print("Step 1 — bias-corrected m_hat =", m_hat_t1);
 print("Step 1 — raw v =", v_after);
 print("Step 1 — bias-corrected v_hat =", v_hat_t1);
-print("Without bias correction the first step would be ~10x too small (1 - beta1 = 0.1).");
+# Skipping BOTH corrections leaves the raw step m/sqrt(v) equal to the corrected
+# step m_hat/sqrt(v_hat) times (1-beta1)/sqrt(1-beta2).  At (0.9, 0.999) that is
+# 0.1/sqrt(0.001) = 3.162, so the first step is ~3.16x too LARGE (not too small).
+raw_ratio = (1 - beta1) / sqrt(1 - beta2);
+print("Uncorrected/corrected first-step magnitude ratio (1-b1)/sqrt(1-b2):", raw_ratio);
 
 # Now run the full optimisation
 for k = 1:n_steps
@@ -58,12 +62,15 @@ end
 print("Final theta:", theta);
 print("Final loss :", loss_aniso2(theta, a, b));
 
-# Bias-correction factor at large t — should be near 1
-print("Bias factor (1-beta1^60):", 1 - beta1 ^ 60);
-print("Bias factor (1-beta2^60):", 1 - beta2 ^ 60);
+# Bias-correction factors at t=60.  m_hat's factor (1-beta1^60) ~ 0.998 is
+# effectively 1 (beta1 half-life ~6.6 steps).  But v_hat's factor (1-beta2^60)
+# is still only ~0.058 — about a 17x rescale — because beta2's half-life is
+# ~693 steps: the second moment is NOT done bias-correcting after 60 steps.
+print("Bias factor (1-beta1^60), ~0.998:", 1 - beta1 ^ 60);
+print("Bias factor (1-beta2^60), still far from 1:", 1 - beta2 ^ 60);
 
 # === Plot loss curve ===
-figure()
+figure();
 steps = 0:n_steps;
 plot(steps, log10(loss_curve + 1e-12), "color", "blue", "label", "Adam")
 title("Adam log10 loss on anisotropic bowl")

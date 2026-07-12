@@ -88,7 +88,7 @@ Each row sums to 1.000 — a valid distribution. At $T = 0.5$ token 1 gets $0.83
 ### Example — Stacked subplots: cold / neutral / warm
 
 ```rustlab
-figure()
+figure();
 subplot(3, 1, 1)
 plot(p_cold, "color", "blue", "label", "T=0.5")
 title("Softmax at T=0.5 (cold - peaked)")
@@ -110,10 +110,6 @@ ylim([0, 1])
 ```
 
 <!-- rustlab:output-start -->
-```text
-4
-```
-
 ![plot 1](plots/02-probability-and-softmax/plot-1-654de164.svg)
 
 <!-- rustlab:output-end -->
@@ -132,6 +128,13 @@ $$H(\mathbf{p}) = -\sum_{i=1}^{|\mathcal{V}|} p_i \log_2 p_i \quad [\text{bits}]
 Higher temperature $\to$ higher entropy.
 
 ### Example — Entropy at four temperatures
+
+A small `eps` is added inside the `log2` so a probability that underflows to zero yields a finite term instead of `log(0) = -inf`:
+
+```rustlab
+eps = 1e-12;        % floor inside log2 to avoid log(0)
+vocab_size = 4;
+```
 
 ```rustlab
 p05 = softmax(z / 0.5);
@@ -166,7 +169,7 @@ Uniform over 4 tokens: $H = 2.000$ bits (matches $\log_2 4 = 2$). Near-determini
 ### Example — Entropy bar chart vs. the maximum
 
 ```rustlab
-figure()
+figure();
 T_labels = {"T=0.5", "T=1.0", "T=2.0", "T=5.0"};
 H_vec = [H05, H10, H20, H50];
 bar(T_labels, H_vec, "Entropy (bits) vs. Temperature")
@@ -176,10 +179,6 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-```text
-5
-```
-
 ![plot 2](plots/02-probability-and-softmax/plot-2-4aaa1e92.svg)
 
 <!-- rustlab:output-end -->
@@ -213,7 +212,7 @@ These two facts return in [Lesson 03](03-cross-entropy-loss.md) (cross-entropy a
 
 | Script | What it computes |
 |---|---|
-| `softmax_temperature.rlab` | softmax of `[2.0, 1.0, 0.5, -0.5]` at $T = 0.5, 1.0, 2.0$; overlaid bar plot |
+| `softmax_temperature.rlab` | softmax of `[2.0, 1.0, 0.5, -0.5]` at $T = 0.5, 1.0, 2.0$; three stacked line-plot subplots (cold / neutral / warm) |
 | `entropy.rlab` | entropy at $T = 0.5, 1.0, 2.0, 5.0$ plus uniform and near-deterministic baselines |
 
 Run all with `make lesson-02` (or `rustlab run lessons/02-probability-and-softmax/<name>.rlab`).
@@ -222,16 +221,16 @@ Run all with `make lesson-02` (or `rustlab run lessons/02-probability-and-softma
 
 | Variable | Expected Value |
 |---|---|
-| `p_cold(1)` (T=0.5) | ≈ `0.701` |
-| `p_neutral(1)` (T=1.0) | ≈ `0.580` |
-| `p_warm(1)` (T=2.0) | ≈ `0.418` |
+| `p_cold(1)` (T=0.5) | ≈ `0.839` |
+| `p_neutral(1)` (T=1.0) | ≈ `0.598` |
+| `p_warm(1)` (T=2.0) | ≈ `0.423` |
 | `sum(p_cold)` | `1.0` |
-| `H05` | ≈ `1.110` bits |
-| `H10` | ≈ `1.591` bits |
-| `H20` | ≈ `1.879` bits |
-| `H50` | ≈ `1.978` bits |
+| `H05` | ≈ `0.802` bits |
+| `H10` | ≈ `1.525` bits |
+| `H20` | ≈ `1.862` bits |
+| `H50` | ≈ `1.977` bits |
 | `H_uniform` | `2.0` bits (= $\log_2 4$) |
-| `H_det` | ≈ `0.014` bits |
+| `H_det` | ≈ `0.013` bits |
 
 ## Exercises
 

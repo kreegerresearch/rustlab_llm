@@ -88,8 +88,9 @@ The MHA computation is exactly Lesson 09's: per head, score → mask → softmax
 ### Example — LN1, then per-head Q/K/V, attention, concat, project
 
 ```rustlab
-% Per-row LayerNorm of the residual stream — see AGENTS.md Rustlab
-% Recommendations on the matrix overload.
+% Normalise each token's representation independently, row by row, to make
+% the per-token nature of LayerNorm explicit.  (layernorm(M) does all rows in
+% one call — the loop is purely for readability.)
 H_norm1 = zeros(T, d_model);
 for t = 1:T
   H_norm1(t) = layernorm(H_in(t, :));
@@ -169,6 +170,7 @@ FFN applies $\mathbf{W}_2 \, \mathrm{GELU}(\mathbf{W}_1 \mathbf{x} + \mathbf{b}_
 ### Example — LN2, FFN, second residual
 
 ```rustlab
+% Row-by-row LayerNorm again — one standardisation per token.
 H_norm2 = zeros(T, d_model);
 for t = 1:T
   H_norm2(t) = layernorm(H_mid(t, :));
@@ -198,26 +200,32 @@ print("|MHA contribution|  / |H_in|  =", norm(A_out) / norm(H_in));
 print("|FFN contribution|  / |H_mid| =", norm(F_out) / norm(H_mid));
 ```
 
-At random initialisation each sublayer adds a small perturbation to the residual stream — ratios are typically well below 1, which is why a deep stack does not blow up at init. The training process scales these contributions up where they help and down where they don't.
+At *this* lesson's initialisation the sublayer contributions are **not** small perturbations. The MHA branch is about the same size as the residual stream it feeds into ($\|\mathrm{MHA}\| / \|\mathbf{H}_{\text{in}}\| \approx 0.99$); the FFN branch is a bit smaller ($\approx 0.52$, because its two He-scaled projections contract the variance). Adding a branch of comparable magnitude to the stream grows the norm roughly like the square root of the number of accumulated terms: $\|\mathbf{H}_{\text{in}}\| = 6.07$ becomes $\|\mathbf{H}_{\text{mid}}\| = 9.20$ after the first residual and $\|\mathbf{H}_{\text{out}}\| = 10.54$ after the second. Production GPTs keep these ratios well below 1 on purpose — they shrink each residual-branch *output* projection at initialisation (nanoGPT divides its variance by $2N$, i.e. scales the weights by $1/\sqrt{2N}$; see [Lesson 14](14-full-gpt-architecture.md)'s initialization sidebar) precisely so a deep stack's residual stream stays bounded. Training then scales each contribution up where it helps and down where it doesn't.
 
 ### Example — Visualise the residual stream at each stage
 
 ```rustlab
-figure()
-subplot(3, 1, 1)
-imagesc(H_in,  "viridis")
-title("H_in (T=4, d_model=8)")
-
-subplot(3, 1, 2)
-imagesc(H_mid, "viridis")
-title("H_mid (after MHA + residual)")
-
-subplot(3, 1, 3)
-imagesc(H_out, "viridis")
-title("H_out (after FFN + residual)")
+% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
+% rustlab 0.3.6 colormaps by |value|; shift each panel so min = 0 so the render
+% is faithful (see docs/rustlab-issues-2026-07-12.md §6)
+figure();
+imagesc(H_in - min(min(H_in)),  "viridis")
+title("H_in - min (T=4, d_model=8)")
 ```
 
-Each row of each panel is one token's representation; each column is one feature dimension. The structure barely changes between panels — that is the residual stream doing its job. Zoom in and you can see the FFN and MHA each nudge specific cells, but the dominant pattern carried by $\mathbf{H}_{\text{in}}$ persists.
+```rustlab
+figure();
+imagesc(H_mid - min(min(H_mid)), "viridis")
+title("H_mid - min (after MHA + residual)")
+```
+
+```rustlab
+figure();
+imagesc(H_out - min(min(H_out)), "viridis")
+title("H_out - min (after FFN + residual)")
+```
+
+Each row of each figure is one token's representation; each column is one feature dimension. The structure barely changes between the three figures — that is the residual stream doing its job. Zoom in and you can see the FFN and MHA each nudge specific cells, but the dominant pattern carried by $\mathbf{H}_{\text{in}}$ persists.
 
 ## Stacking Two Blocks
 
@@ -239,6 +247,7 @@ W_ff2_2 = randn(d_ff,    d_model) * sqrt(2.0 / d_ff);
 
 % Run the same block forward pass on H_out as input
 H_in2 = H_out;
+% Block 2 re-normalises the residual stream per token, from scratch.
 H_norm1b = zeros(T, d_model);
 for t = 1:T
   H_norm1b(t) = layernorm(H_in2(t, :));
@@ -287,7 +296,7 @@ print("After block 2 |H| =", norm(H_out2));
 print("After block 2 shape:", size(H_out2));
 ```
 
-After two blocks the residual stream's magnitude is the same order as the input — residuals + identity-dominant init keep the stack stable. Real transformers go to $N = 12$ (GPT-2 small), $N = 96$ (GPT-3) or beyond using the same recipe.
+After two blocks the residual stream's magnitude has grown from $\|\mathbf{H}_{\text{in}}\| = 6.07$ to $\|\mathbf{H}\| = 14.85$ — about $2.4\times$ — because each block keeps adding sublayer outputs of comparable size to the stream. That growth does not diverge catastrophically, but it does *accumulate*: this is exactly the effect the $1/\sqrt{2N}$ residual-branch output-projection init (previous section, detailed in [Lesson 14](14-full-gpt-architecture.md)'s initialization sidebar) is designed to cancel, so a 12- or 96-block stack stays bounded. Real transformers go to $N = 12$ (GPT-2 small), $N = 96$ (GPT-3) or beyond using the same recipe.
 
 ## Parameter Count per Block
 
@@ -306,6 +315,8 @@ Total (ignoring small lower-order terms): $\boxed{12 d_{\text{model}}^2 + O(d_{\
 
 The $4 d_{\text{model}}^2$ for attention vs. $8 d_{\text{model}}^2$ for FFN means **FFN holds twice the parameters of attention** in every block — confirmed in [Lesson 11](11-feed-forward-block.md). The number of heads $H$ does not appear: more heads at fixed $d_{\text{model}}$ just slices the same matrices into narrower per-head views.
 
+**Attention biases are omitted here.** Real GPT-2 attention adds a bias to each projection — $3 d_{\text{model}}$ for the packed Q/K/V and $d_{\text{model}}$ for the output projection, $4 d_{\text{model}}$ per block. These are exactly the parameters [Lesson 14](14-full-gpt-architecture.md) reports as its 36,864-parameter "Discrepancy" when it reconstructs GPT-2 small from this formula ($12 \text{ blocks} \times 4 \cdot 768 = 36{,}864$).
+
 ### Example — Block parameter count
 
 ```rustlab
@@ -323,7 +334,7 @@ print("Total per block:", n_block);
 print("FFN / attention:", n_ffn / n_attn);
 ```
 
-For our toy $d_{\text{model}} = 8$ the block has ${n_block} parameters total. Scale to $d_{\text{model}} = 384$ (nanoGPT-small) and the block has ~1.77M parameters — multiplied by $N$ blocks in [Lesson 14](14-full-gpt-architecture.md).
+For our toy $d_{\text{model}} = 8$ the block has ${n_block} parameters total. This count omits the two LayerNorms' affine parameters ($\boldsymbol{\gamma}, \boldsymbol{\beta}$), since the forward pass here uses $\gamma = 1, \beta = 0$. Add them back — $+4 d_{\text{model}} = 32$ — and you get 840, which is exactly what [Lesson 14](14-full-gpt-architecture.md)'s `block_params()` counter reports (it includes the LN affines). Scale to $d_{\text{model}} = 384$ (nanoGPT-small) and the block has ~1.77M parameters — multiplied by $N$ blocks in [Lesson 14](14-full-gpt-architecture.md).
 
 ## Connection to Information Theory
 
@@ -340,7 +351,7 @@ A useful framing: a transformer is a **conditional entropy refinement pipeline**
 
 ### Theory
 
-Real transformer blocks insert **dropout** at three points: after the attention output projection, after the FFN output projection, and on the embedded inputs before the first block. Dropout zeros each activation independently with probability $p_{\text{drop}}$ during training and scales the survivors by $1 / (1 - p_{\text{drop}})$ so the expected magnitude is preserved:
+Real transformer blocks insert **dropout** at four points: on the attention probability matrix right after the softmax (GPT-2's `attn_pdrop`; nanoGPT's `self.attn_dropout(att)`), after the attention output projection, after the FFN output projection, and on the embedded inputs before the first block. Dropout zeros each activation independently with probability $p_{\text{drop}}$ during training and scales the survivors by $1 / (1 - p_{\text{drop}})$ so the expected magnitude is preserved:
 
 $$\tilde a_i = \begin{cases} a_i / (1 - p_{\text{drop}}) & \text{w.p. } 1 - p_{\text{drop}} \\ 0 & \text{w.p. } p_{\text{drop}} \end{cases}$$
 

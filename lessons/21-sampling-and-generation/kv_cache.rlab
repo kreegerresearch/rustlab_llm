@@ -21,7 +21,8 @@
 #                    K_cache <- [K_cache; k], V_cache <- [V_cache; v]
 #                    a = softmax(q * K_cache' / sqrt(d))      (1 x t)
 #                    out_row = a * V_cache                     (1 x d)
-#   attention FLOPs (rough): naive ~ 4 t^2 d + 3 t d^2, cached ~ 4 t d + 3 d^2
+#   attention FLOPs (rough): naive ~ 3 t d^2 + 2 t^2 d + t^2,
+#                            cached ~ 3 d^2 + 2 t d + t   (matches the counts below)
 # Units:   activations dimensionless; flops counted in arithmetic operations.
 
 # === 1. Setup: tiny model ===
@@ -135,7 +136,7 @@ print("Cumulative FLOPs at T:", naive_cum(T_run), "(naive) vs", cached_cum(T_run
 print("Cumulative ratio at T:", naive_cum(T_run) / cached_cum(T_run));
 
 # === 8. Plot: per-step and cumulative FLOPs ===
-figure()
+figure();
 subplot(1, 2, 1)
 plot(1:T_run, naive_flops_step, "color", "red", "label", "naive")
 hold("on")

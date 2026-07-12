@@ -1,4 +1,4 @@
-# Script:  param_count.r
+# Script:  param_count.rlab
 # System:  Full GPT decoder
 # Concept: Parameter count by component for the toy config and for two
 #          published GPT-2 sizes; bar chart of the toy config breakdown;
@@ -68,7 +68,7 @@ print("Discrepancy             :", 354823168 - n_gpt2_med_tied);
 # === Bar chart of toy-config breakdown ===
 labels = {"embed", "blocks", "LN_f", "LM head"};
 counts = [n_embed_toy, n_blocks_toy, n_ln_f_toy, n_lm_toy];
-figure()
+figure();
 bar(labels, counts)
 title("Toy GPT parameter count by component")
 ylabel("parameters")

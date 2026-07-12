@@ -20,9 +20,10 @@ for that convention.
   Define `vocab_size`, embedding matrices, etc. once, reuse below.
 - The renderer captures the active figure automatically. **Don't** call
   `savefig()` inside notebook code blocks — that belongs in `.rlab` scripts.
-- Use `figure()` (not `clf;`) at the start of each plot block. `figure()`
-  creates a fresh figure and avoids state leaking across notebooks in
-  directory-mode rendering.
+- Use `figure();` (not `clf;`) at the start of each plot block — with
+  the semicolon: bare `figure()` echoes its integer handle into the
+  captured output, and the handle increments across the whole directory
+  render. Same for `histogram(...);` (echoes its bin matrix otherwise).
 - If a plot block uses `hold("on")`, close it with `hold("off")` at the
   end. Lingering `hold("on")` state leaks into the next notebook in
   directory mode and inflates the captured-plot count.
