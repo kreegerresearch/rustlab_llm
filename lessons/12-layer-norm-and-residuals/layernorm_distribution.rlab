@@ -1,4 +1,4 @@
-# Script:  layernorm_distribution.r
+# Script:  layernorm_distribution.rlab
 # System:  LayerNorm sublayer used in every transformer block
 # Concept: Standardise each token vector to mean 0 and std 1 across feature dim;
 #          show the activation distribution before and after
@@ -31,14 +31,14 @@ end
 pre_flat  = reshape(H_pre, 1, T * d);
 post_flat = reshape(H_ln,  1, T * d);
 
-figure()
+figure();
 subplot(2, 1, 1)
-histogram(pre_flat)
+histogram(pre_flat);
 title("Pre-LN activation distribution (mean ≈ 1.5, std ≈ 3.0)")
 ylabel("count")
 
 subplot(2, 1, 2)
-histogram(post_flat)
+histogram(post_flat);
 title("Post-LN activation distribution (mean ≈ 0, std ≈ 1)")
 xlabel("activation value")
 ylabel("count")

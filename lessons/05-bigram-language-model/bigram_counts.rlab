@@ -1,4 +1,4 @@
-# Script:  bigram_counts.r
+# Script:  bigram_counts.rlab
 # System:  Character-level bigram language model
 # Concept: Bigram count matrix C[i,j] = #times token j follows token i; row-normalise to P
 # Equations: P_ij = C_ij / sum_k(C_ik);  P^smooth_ij = (C_ij + 1) / (sum_k C_ik + |V|)
@@ -86,12 +86,12 @@ print("Row entropy H(c) bits:", H(3), "  (0 = deterministic)");
 # === Heatmaps ===
 # heatmap(xlabels, ylabels, M, title, cmap) puts the vocabulary characters
 # directly on the axes — rows are the "current" token, cols are "next".
-figure()
+figure();
 heatmap(tokens, tokens, C, "Bigram Count Matrix C (rows=current, cols=next)", "viridis")
 savefig("bigram_counts.svg")
 print("Saved bigram_counts.svg");
 
-figure()
+figure();
 heatmap(tokens, tokens, P, "Bigram Probability Matrix P (row-normalised)", "viridis")
 savefig("bigram_probabilities.svg")
 print("Saved bigram_probabilities.svg");

@@ -1,8 +1,8 @@
-# Script:  two_block_stack.r
+# Script:  two_block_stack.rlab
 # System:  Stack of 2 Pre-LN transformer blocks
 # Concept: Demonstrate that block output shape feeds straight into the next
 #          block as input, and the residual stream stays bounded.
-# Equations:  same as block_forward.r, applied twice with different weights
+# Equations:  same as block_forward.rlab, applied twice with different weights
 # Units:   token features, dimensionless
 
 seed(13);
@@ -92,7 +92,7 @@ print("Output shape after 2 blocks:", size(H2));
 # === Plot magnitudes ===
 mags = [norm(H_in), norm(H1), norm(H2)];
 labels = {"H_in", "H1", "H2"};
-figure()
+figure();
 bar(labels, mags)
 title("Residual stream magnitude after each block")
 ylabel("|H|")

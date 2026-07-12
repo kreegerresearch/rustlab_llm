@@ -1,4 +1,4 @@
-# Script:  attention_backward.r
+# Script:  attention_backward.rlab
 # System:  One causal attention head — full forward + analytical backward
 # Concept: Decompose the head's backward pass into four steps.
 #          1. O = A V         => dL/dV, dL/dA

@@ -1,4 +1,4 @@
-# Script:  residual_signal.r
+# Script:  residual_signal.rlab
 # System:  Deep stack of GELU sublayers, with and without residual connections
 # Concept: Show that residuals preserve activation magnitude across depth — a
 #          forward-pass proxy for the gradient-preservation argument that
@@ -14,15 +14,13 @@ d = 32;
 n_layers = 24;
 alpha = 0.1;             % small residual step keeps the identity dominant
 
-# === Stack of weight matrices, packed into one tall matrix ===
+# === Stack of weight matrices, packed into one tall matrix via block row writes ===
+# randn(d,d)/sqrt(d) is roughly norm-preserving on average: its top singular value
+# is ~ 2 (the Marchenko-Pastur edge), NOT < 1. The no-residual collapse below is
+# driven by GELU clipping half the signal each layer, not by the projection.
 W_stack = zeros(n_layers * d, d);
 for L = 1:n_layers
-  W_L = randn(d, d) * (1.0 / sqrt(d));            % spectral norm ≈ 1
-  for r = 1:d
-    for c = 1:d
-      W_stack((L - 1) * d + r, c) = W_L(r, c);
-    end
-  end
+  W_stack((L - 1) * d + 1:L * d, :) = randn(d, d) * (1.0 / sqrt(d));
 end
 
 # === Forward sweep, two flavours ===
@@ -35,12 +33,7 @@ mag_res(1)    = norm(x0);
 x_plain = x0;
 x_resi  = x0;
 for L = 1:n_layers
-  W_L = zeros(d, d);
-  for r = 1:d
-    for c = 1:d
-      W_L(r, c) = W_stack((L - 1) * d + r, c);
-    end
-  end
+  W_L = W_stack((L - 1) * d + 1:L * d, :);   % read this layer's block back
 
   % Use x * W' (right-multiply) so the result stays a vector, not a 1xN matrix.
   % See AGENTS.md Rustlab Recommendations — (W*x')' returns a matrix and
@@ -59,14 +52,14 @@ print("Layer 24   magnitude (no res):", mag_no_res(n_layers + 1));
 print("Layer 24   magnitude (w/ res):", mag_res(n_layers + 1));
 print("Ratio (no_res / w_res):       ", mag_no_res(n_layers + 1) / mag_res(n_layers + 1));
 
-# === Plot ===
-figure()
+# === Plot (log-y so the ~7-order collapse shows as a straight line) ===
+figure();
 hold("on")
-plot(0:n_layers, mag_no_res, "color", "red",  "label", "no residual")
-plot(0:n_layers, mag_res,    "color", "blue", "label", "with residual")
-title("Activation magnitude vs. depth (24 random GELU sublayers, d=32)")
+semilogy(0:n_layers, mag_no_res, "color", "red",  "label", "no residual")
+semilogy(0:n_layers, mag_res,    "color", "blue", "label", "with residual")
+title("Activation magnitude vs. depth (24 random GELU sublayers, d=32, log-y)")
 xlabel("layer index")
-ylabel("|x|")
+ylabel("log10(|x|)")
 legend()
 hold("off")
 savefig("residual_signal.svg")

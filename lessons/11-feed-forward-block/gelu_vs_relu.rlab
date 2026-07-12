@@ -1,9 +1,11 @@
-# Script:  gelu_vs_relu.r
+# Script:  gelu_vs_relu.rlab
 # System:  Activation functions inside the FFN sublayer
 # Concept: Compare ReLU and GELU shapes and finite-difference derivatives near zero
 # Equations:
 #   ReLU(x) = max(0, x)
 #   GELU(x) = x * Phi(x), Phi the standard-normal CDF
+#   (rustlab's gelu(), like GPT-2, uses the Hendrycks-Gimpel tanh
+#    approximation — matches x*Phi(x) to ~1e-3)
 # Units:   x and y both dimensionless
 
 # === Sample both activations on a wide range ===
@@ -12,7 +14,7 @@ y_relu = relu(xs);
 y_gelu = gelu(xs);
 
 # === Plot both on the same axes ===
-figure()
+figure();
 hold("on")
 plot(xs, y_relu, "color", "blue", "label", "ReLU(x)")
 plot(xs, y_gelu, "color", "red",  "label", "GELU(x)")

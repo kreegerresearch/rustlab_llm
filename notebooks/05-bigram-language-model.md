@@ -24,7 +24,7 @@ The full history can be arbitrarily long. The bigram model makes the **Markov as
 
 $$P(x_{t+1} \mid x_1, \ldots, x_t) \approx P(x_{t+1} \mid x_t).$$
 
-This reduces the problem to estimating $|\mathcal{V}|^2$ conditional probabilities — one for every ordered pair of tokens. This section is pure framing; every later H2 pairs `### Theory` with `### Example — <descriptor>`.
+This reduces the problem to estimating $|\mathcal{V}|^2$ conditional probabilities — one for every ordered pair of tokens.
 
 ## Building the Bigram Matrix
 
@@ -74,7 +74,7 @@ The corpus has ${n_tokens} tokens, producing ${n_bigrams} bigrams. Total counts 
 % Row-normalise to probability matrix P
 P = zeros(vocab_size, vocab_size);
 for i = 1:vocab_size
-  row_sum = sum(C(i));
+  row_sum = sum(C(i, :));
   P(i, 1) = C(i, 1) / row_sum;
   P(i, 2) = C(i, 2) / row_sum;
   P(i, 3) = C(i, 3) / row_sum;
@@ -83,7 +83,7 @@ end
 print("Normalised probability matrix P:");
 print(P);
 
-row_sums = [sum(P(1)), sum(P(2)), sum(P(3))];
+row_sums = [sum(P(1, :)), sum(P(2, :)), sum(P(3, :))];
 print("Row sums (each should be 1):", row_sums);
 ```
 
@@ -103,7 +103,7 @@ $$P_{ij}^{\text{smooth}} = \frac{C_{ij} + 1}{\sum_k (C_{ik} + 1)} = \frac{C_{ij}
 C_smooth = C + ones(vocab_size, vocab_size);
 P_smooth = zeros(vocab_size, vocab_size);
 for i = 1:vocab_size
-  row_sum_s = sum(C_smooth(i));
+  row_sum_s = sum(C_smooth(i, :));
   P_smooth(i, 1) = C_smooth(i, 1) / row_sum_s;
   P_smooth(i, 2) = C_smooth(i, 2) / row_sum_s;
   P_smooth(i, 3) = C_smooth(i, 3) / row_sum_s;
@@ -129,7 +129,7 @@ The entropy of each row of $\mathbf{P}$ tells us how predictable the next token 
 eps = 1e-12;
 H = zeros(vocab_size);
 for i = 1:vocab_size
-  p = P(i);
+  p = P(i, :);
   H(i) = max([0.0, -sum(p .* log2(p + eps))]);
 end
 ```
@@ -141,12 +141,12 @@ Row entropies: $H(a) = ${H(1):%.3f}$ bits (deterministic → `b`), $H(b) = ${H(2
 Both axes of the bigram matrix are vocabulary tokens — current token on the rows, next token on the columns. `heatmap(xlabels, ylabels, M, ...)` puts those labels directly on the axes so the cells can be read as $C_{ij}$ or $P_{ij}$ without translating indices back to characters.
 
 ```rustlab
-figure()
+figure();
 heatmap(tokens, tokens, C, "Bigram Count Matrix C (rows=current, cols=next)", "viridis")
 ```
 
 ```rustlab
-figure()
+figure();
 heatmap(tokens, tokens, P, "Bigram Probability Matrix P (row-normalised)", "viridis")
 ```
 
@@ -164,9 +164,6 @@ To generate text, repeatedly sample the next token using the **CDF method**:
 ### Example — CDF lookup for two uniform draws
 
 ```rustlab
-% Use the probability matrix from above
-P = [0.0, 1.0, 0.0; 0.5, 0.0, 0.5; 0.0, 1.0, 0.0];
-
 print("Sampling mechanism demonstration:");
 p_b = P(2, :);
 cdf_b = cumsum(p_b);
@@ -211,9 +208,15 @@ The **perplexity** of the model on a sequence is $\exp(\mathcal{L})$ — the mod
 ### Example — Mean cross-entropy and perplexity on the corpus
 
 ```rustlab
-log_probs = [log(1.0), log(0.5), log(1.0), log(0.5), log(1.0), log(0.5), log(1.0), log(0.5)];
-mean_ce = -real(mean(log_probs));
-ppl = exp(mean_ce);
+% Accumulate the log-probability of every bigram in the live corpus,
+% reading each transition probability straight out of P.
+n_pairs  = len(seq) - 1;
+total_lp = 0.0;
+for t = 1:n_pairs
+  total_lp = total_lp + log(P(seq(t), seq(t + 1)));
+end
+mean_ce = -total_lp / n_pairs;
+ppl     = exp(mean_ce);
 ```
 
 Mean cross-entropy on the training corpus: ${mean_ce:%.4f}$ nats, corresponding to perplexity ${ppl:%.3f}$.
@@ -221,7 +224,7 @@ Mean cross-entropy on the training corpus: ${mean_ce:%.4f}$ nats, corresponding 
 ### Example — Per-row probability bars
 
 ```rustlab
-figure()
+figure();
 subplot(3, 1, 1)
 bar(tokens, P(1, :), "P(next | a) — deterministic: always b")
 ylabel("Probability")
@@ -255,9 +258,9 @@ the **conditional entropy** of the next token given the current one. For our `"a
 
 $$H(X_1, \dots, X_T) \;=\; \sum_{t=1}^{T} H(X_t \mid X_1, \dots, X_{t-1}).$$
 
-A bigram approximates each conditional with $H(X_t \mid X_{t-1})$, dropping all earlier context. By the data processing inequality $H(X_t \mid X_{t-1}) \ge H(X_t \mid X_1, \dots, X_{t-1})$ — extra context never *increases* entropy. The bigram's loss therefore upper-bounds the loss of any longer-context model. **Every later lesson** — n-grams, attention, transformers — is a method to close that gap, recovering more of the conditional entropy that bigrams discarded.
+A bigram approximates each conditional with $H(X_t \mid X_{t-1})$, dropping all earlier context. Because conditioning cannot increase entropy (equivalently, the non-negativity of conditional mutual information), $H(X_t \mid X_{t-1}) \ge H(X_t \mid X_1, \dots, X_{t-1})$ — extra context never *increases* entropy. The bigram's loss therefore upper-bounds the loss of the optimal longer-context model. **Every later lesson** — n-grams, attention, transformers — is a method to close that gap, recovering more of the conditional entropy that bigrams discarded.
 
-**Compression equivalence.** Train a bigram on Wikipedia, plug its conditional distributions into an arithmetic coder, and you have a working text compressor. Its compression ratio (in bits/byte) equals exactly the cross-entropy loss above. "Better language model" and "better text compressor" are not analogies — they are synonyms under arithmetic coding.
+**Compression equivalence.** Train a bigram on Wikipedia, plug its conditional distributions into an arithmetic coder, and you have a working text compressor. Its compression ratio (in bits per token) equals the cross-entropy loss above, up to a small constant arithmetic-coding overhead. (Bits/byte only when the tokens are literally bytes.) "Better language model" and "better text compressor" are not analogies — they are synonyms under arithmetic coding.
 
 ## Key Takeaways
 

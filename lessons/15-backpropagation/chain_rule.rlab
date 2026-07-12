@@ -1,4 +1,4 @@
-# Script:  chain_rule.r
+# Script:  chain_rule.rlab
 # System:  Two-layer MLP  y = tanh(x W1) W2  with squared-error loss
 # Concept: Apply the chain rule right-to-left to compute every parameter
 #          gradient; verify each entry against a centred finite-difference
@@ -34,13 +34,14 @@ print("Prediction y_hat:");
 print(y_hat);
 
 # === Backward (right to left) ===
-# Scalarise (y_hat - t) and use M(1) to coerce 1xN matrices to vectors when
-# we need vector-vector elementwise ops.  See AGENTS.md "Vector vs. 1xN
-# matrix type distinction".
+# sum() scalarises the 1x1 (y_hat - t).  dL_da1_m is a 1 x d_h matrix; index
+# it as M(1, :) to pull the whole first row out as a length-d_h vector so the
+# elementwise step below is vector .* vector.  Using M(1) instead grabs only
+# the first scalar element, which then broadcasts and corrupts the gradient.
 dL_dy     = sum(y_hat - t);             # scalar
 dL_dW2    = a1' * dL_dy;                # d_h × 1
 dL_da1_m  = dL_dy * W2';                # 1 × d_h matrix
-dL_da1    = dL_da1_m(1);                # row 1 -> vector of length d_h
+dL_da1    = dL_da1_m(1, :);             # row 1 -> vector of length d_h
 dL_dz1    = dL_da1 .* (1 - a1 .^ 2);    # vector .* vector = vector
 dL_dW1    = x' * dL_dz1;                # d_in × d_h
 dL_dx     = dL_dz1 * W1';               # 1 × d_in
@@ -67,7 +68,7 @@ for i = 1:d_in
     end
   end
 end
-print("Max |fd - analytic| over W1 entries (should be ~1e-9):", max_err);
+print("Max |fd - analytic| over W1 entries (should be ~1e-11):", max_err);
 
 # === Finite-difference check at every entry of W2 ===
 max_err2 = 0.0;
@@ -82,4 +83,4 @@ for j = 1:d_h
     max_err2 = err;
   end
 end
-print("Max |fd - analytic| over W2 entries (should be ~1e-9):", max_err2);
+print("Max |fd - analytic| over W2 entries (should be ~1e-11):", max_err2);

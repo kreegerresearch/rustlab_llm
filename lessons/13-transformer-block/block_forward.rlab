@@ -1,4 +1,4 @@
-# Script:  block_forward.r
+# Script:  block_forward.rlab
 # System:  One Pre-LN transformer block (MHA → residual → FFN → residual)
 # Concept: Trace the (T, d_model) shape through every step; verify the block
 #          preserves shape and operates as a function on the residual stream.
@@ -95,14 +95,20 @@ print("H_out shape:                     ", size(H_out));
 print("|H_in| =", norm(H_in), "  |H_mid| =", norm(H_mid), "  |H_out| =", norm(H_out));
 
 # === Visualise the residual stream at each stage ===
-figure()
-subplot(3, 1, 1)
-imagesc(H_in,  "viridis")
-title("H_in (T=4, d_model=8)")
-subplot(3, 1, 2)
-imagesc(H_mid, "viridis")
-title("H_mid (after MHA + residual)")
-subplot(3, 1, 3)
-imagesc(H_out, "viridis")
-title("H_out (after FFN + residual)")
-savefig("block_forward.svg")
+# TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
+# rustlab 0.3.6 colormaps by |value|; shift each panel so min = 0 so the render
+# is faithful (see docs/rustlab-issues-2026-07-12.md §6)
+figure();
+imagesc(H_in - min(min(H_in)),  "viridis")
+title("H_in - min (T=4, d_model=8)")
+savefig("block_forward_hin.svg")
+
+figure();
+imagesc(H_mid - min(min(H_mid)), "viridis")
+title("H_mid - min (after MHA + residual)")
+savefig("block_forward_hmid.svg")
+
+figure();
+imagesc(H_out - min(min(H_out)), "viridis")
+title("H_out - min (after FFN + residual)")
+savefig("block_forward_hout.svg")

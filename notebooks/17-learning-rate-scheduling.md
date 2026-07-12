@@ -28,7 +28,7 @@ The fix: ramp $\eta$ linearly from 0 to $\eta_{\max}$ over the first $T_w$ steps
 
 $$\eta_{\text{warmup}}(t) \;=\; \eta_{\max} \cdot \frac{t}{T_w} \quad \text{for } t \in [0, T_w].$$
 
-Typical $T_w$ in published papers: **2000 steps for GPT-3, 5000 for LLaMA, 100–500 for nanoGPT-scale runs**. The rule of thumb: $T_w \ge 1/(1-\beta_2) \approx 1000$ steps for default $\beta_2 = 0.999$, so the schedule pulls $\eta$ from 0 to peak just as $\hat{\mathbf{v}}$ becomes a reliable scale estimate.
+Typical $T_w$ in published papers: **GPT-3 warms up over its first 375 M tokens, LLaMA-1 and LLaMA-2 use 2000 steps, and small char-level runs use 100–500 steps**. A useful *heuristic* ties $T_w$ to Adam's second-moment horizon $1/(1-\beta_2) \approx 1000$ steps (for default $\beta_2 = 0.999$): warming up over roughly that many steps lets $\eta$ reach its peak just as $\hat{\mathbf{v}}$ becomes a reliable scale estimate. It is a motivation, not a bound — large-scale runs sit at or above this horizon, while small-scale runs routinely undercut it, because a tiny model's $\hat{\mathbf{v}}$ stabilises on far less data.
 
 ## The Cosine Decay Phase
 
@@ -44,7 +44,7 @@ Why cosine and not exponential or step decay?
 
 - **Step decay** (drop by 10× at fixed milestones) introduces sudden gradient-magnitude shocks that disrupt Adam's moment estimates.
 - **Exponential decay** $\eta_t = \eta_0 \gamma^t$ is too aggressive early and too slow late.
-- **Cosine** has zero derivative at both endpoints — the LR transitions smoothly into the warmup peak and into the final floor, with no discontinuities for Adam to chase.
+- **Cosine** has zero derivative at both ends of the *decay segment* — it leaves the peak flat and approaches the floor flat, so the late-training LR settles gently instead of dropping in shocks the way step decay does. (The composite schedule does have one slope kink at $t = T_w$, where the warmup ramp of slope $\eta_{\max}/T_w$ meets the decay's zero slope. That single kink at the peak is harmless; step decay introduces a fresh one at every milestone.)
 
 A typical schedule sets $\eta_{\min} = 0.1 \cdot \eta_{\max}$. The 10× cap on the LR range keeps the optimiser productive even at the end of training.
 
@@ -69,7 +69,7 @@ end
 ```
 
 ```rustlab
-figure()
+figure();
 steps = 0:T_total;
 plot(steps, eta_sched, "color", "blue", "label", "warmup + cosine")
 title("Learning-rate schedule (T_w=500, T_total=5000)")
@@ -83,11 +83,11 @@ Three regions are visible: a steep linear ramp to the peak in the first 500 step
 
 ### Theory
 
-A simulated training run shows the schedule's *effect*. With a too-aggressive constant LR the loss diverges in the first few steps; with a too-conservative constant LR it converges slowly; with the warmup+cosine schedule it tracks the conservative curve early (during warmup) and the aggressive curve later (peak LR), then settles below both.
+A simulated training run shows the schedule's *effect*. A constant LR above the stability limit **diverges**; a constant LR well below it converges but only **slowly**; the warmup+cosine schedule spends its peak-LR phase moving fast, then decays into the same low-noise floor the slow run eventually reaches — but in far fewer steps. The honest comparison is *not* "the schedule wins on final loss" (the patient constant-low run reaches an equally good floor if you wait); it is "the schedule reaches that floor sooner, and never risks the divergence the high-LR run suffers".
 
 ### Example — Simulated loss curves under three schedules
 
-A noisy quadratic surrogate for cross-entropy. Three runs: constant high LR, constant low LR, warmup+cosine.
+A noisy quadratic surrogate for cross-entropy, with curvature 10 in $\theta_1$ so the gradient-descent stability limit is $\eta < 2/10 = 0.2$. Three runs: a constant high LR of $0.25$ (above the limit — it diverges), a constant low LR of $0.02$ (safe but slow), and warmup+cosine (peak $0.18$, floor $0.02$). We measure each run's **steps-to-floor**: the first step at which the loss drops below $1.01$ (the noiseless bowl floors at $1.0$).
 
 ```rustlab
 seed(17);
@@ -103,17 +103,17 @@ n_train = 300;
 sigma = 0.3;
 init  = [-3.0, 2.0];
 
-% Run 1: constant high LR (often diverges with bad init)
+% Run 1: constant high LR = 0.25 (above the 0.2 stability limit -> diverges)
 theta = init;
 loss_high = zeros(n_train + 1);
 loss_high(1) = surrogate_loss(theta);
 for t = 1:n_train
   g = surrogate_grad(theta) + sigma * randn(2);
-  theta = theta - 0.18 * g;
+  theta = theta - 0.25 * g;
   loss_high(t + 1) = surrogate_loss(theta);
 end
 
-% Run 2: constant low LR (always safe, never fast)
+% Run 2: constant low LR = 0.02 (always safe, never fast)
 theta = init;
 loss_low = zeros(n_train + 1);
 loss_low(1) = surrogate_loss(theta);
@@ -143,26 +143,46 @@ for t = 1:n_train
   loss_sched(t + 1) = surrogate_loss(theta);
 end
 
-print("constant high LR  final loss:", loss_high(n_train + 1));
-print("constant low  LR  final loss:", loss_low(n_train + 1));
-print("warmup+cosine     final loss:", loss_sched(n_train + 1));
+print("constant high LR (0.25) final loss:", loss_high(n_train + 1), " (diverged)");
+print("constant low  LR (0.02) final loss:", loss_low(n_train + 1));
+print("warmup+cosine           final loss:", loss_sched(n_train + 1));
+
+% Steps to reach the floor neighbourhood: first step with loss < 1.01.
+% (while idiom -- rustlab has no break/continue; stop at the first hit.)
+thresh = 1.01;
+N = n_train + 1;
+i = 1;
+while i < N && loss_low(i) >= thresh
+  i = i + 1;
+end
+step_low = i - 1;                 % curve index k holds step k-1
+i = 1;
+while i < N && loss_sched(i) >= thresh
+  i = i + 1;
+end
+step_sched = i - 1;
+ratio = step_low / step_sched;
+print("steps to loss < 1.01  (constant low) :", step_low);
+print("steps to loss < 1.01  (warmup+cosine):", step_sched);
 ```
 
 ```rustlab
-figure()
+figure();
 steps = 0:n_train;
-plot(steps, loss_high,  "color", "red",   "label", "constant high LR")
+% high-LR loss diverges to ~1e105; clamp to 1e4 and plot log10 so the
+% low/schedule descent stays legible next to the divergence.
+plot(steps, log10(min(loss_high, 1.0e4)), "color", "red",   "label", "constant high LR (diverges)")
 hold("on")
-plot(steps, loss_low,   "color", "blue",  "label", "constant low LR")
-plot(steps, loss_sched, "color", "green", "label", "warmup + cosine")
+plot(steps, log10(loss_low),   "color", "blue",  "label", "constant low LR")
+plot(steps, log10(loss_sched), "color", "green", "label", "warmup + cosine")
 hold("off")
-title("Loss vs step under three LR strategies")
+title("log10(loss) vs step under three LR strategies")
 xlabel("step")
-ylabel("L")
-legend("high", "low", "warmup+cosine")
+ylabel("log10 L")
+legend("high (clamped)", "low", "warmup+cosine")
 ```
 
-The high-LR run shows large fluctuations early (the optimiser overshoots before noise averages out); the low-LR run is smooth but slow; the schedule run starts gentle, accelerates as the warmup completes, and decays into a low-noise tail.
+The high-LR curve climbs off the top of the axis: with $\eta = 0.25$ past the $0.2$ stability limit, each step in the steep $\theta_1$ direction is amplified by $\lvert 1 - 0.25\cdot 10\rvert = 1.5$, so the loss grows geometrically (we clamp it at $10^4$ and plot $\log_{10}$ so the other two stay legible). The low-LR run descends smoothly but only reaches the floor around step ${step_low:%.0f}$; the schedule reaches the *same* floor around step ${step_sched:%.0f}$ — about ${ratio:%.1f}× sooner — by spending its middle phase near the peak LR. Neither converged run "wins" on final loss (both land at ≈ 1.001); the schedule simply gets there faster while the high-LR run never gets there at all.
 
 ## Hyperparameter Cheat Sheet
 
@@ -172,15 +192,15 @@ What real published transformers use:
 
 | Model | $\eta_{\max}$ | $T_w$ | $T_d$ | $\eta_{\min} / \eta_{\max}$ |
 |---|---|---|---|---|
-| nanoGPT (124M) | $6 \times 10^{-4}$ | 100 | 5000 | 0.1 |
+| nanoGPT GPT-2 124M repro | $6 \times 10^{-4}$ | 2000 | 600000 | 0.1 |
 | GPT-3 (175B) | $6 \times 10^{-5}$ | 375 M tokens | 260 B tokens | 0.1 |
 | LLaMA-1 (7B) | $3 \times 10^{-4}$ | 2000 | 1 T tokens | 0.1 |
 | LLaMA-2 (70B) | $1.5 \times 10^{-4}$ | 2000 | 2 T tokens | 0.1 |
 
 Patterns to notice:
 
-- **$\eta_{\max}$ scales roughly with $1/\sqrt{N_{\text{params}}}$** — bigger models need smaller peak LRs because they have more parameters whose collective updates can destabilise the loss.
-- **$T_w$ is roughly fixed at a few hundred to a few thousand steps** — independent of model size, because it is bounded below by Adam's bias-correction horizon $1/(1-\beta_2)$.
+- **$\eta_{\max}$ decreases sublinearly with model size** — bigger models need smaller peak LRs because they have more parameters whose collective updates can destabilise the loss (a 1400× jump from 124 M to 175 B params drops $\eta_{\max}$ only 10×).
+- **$T_w$ stays in the hundreds-to-thousands range** — only weakly dependent on model size, because it is anchored to Adam's second-moment horizon $1/(1-\beta_2)$ rather than to parameter count.
 - **$\eta_{\min} / \eta_{\max} \approx 0.1$** is the universal default. Going lower wastes the tail of training; going higher leaves Adam too jittery to settle.
 
 ## Connection to Information Theory
@@ -198,9 +218,9 @@ Read this way, an LR schedule is not a heuristic — it is a *time-varying step 
 ## Key Takeaways
 
 - **Warmup** ramps $\eta$ from 0 to $\eta_{\max}$ over the first hundreds-to-thousands of steps so Adam's moment estimates stabilise before any aggressive update happens.
-- **Cosine decay** smoothly transitions $\eta$ from peak to floor over the remaining steps, with zero derivative at both endpoints — no discontinuities that would shock Adam.
+- **Cosine decay** transitions $\eta$ from peak to floor over the remaining steps, with zero derivative at both ends of the decay segment — the only slope kink in the composite schedule is the harmless one at the warmup peak, far gentler than step decay's repeated jumps.
 - The combination `linear warmup + cosine decay` is the de-facto LLM standard; the only knobs that change between papers are $\eta_{\max}$, $T_w$, $T_d$, and the floor ratio $\eta_{\min}/\eta_{\max}$.
-- Warmup is bounded below by Adam's bias-correction horizon $1/(1-\beta_2) \approx 1000$ steps; LRs *higher* than the peak in early training are usually divergent.
+- Warmup length is commonly chosen near Adam's second-moment horizon $1/(1-\beta_2) \approx 1000$ steps (a heuristic, not a bound — small runs use far fewer); a constant LR above the loss surface's stability limit diverges, and starting small is exactly what warmup buys.
 - $\eta_{\min}/\eta_{\max} \approx 0.1$ is universal across published models.
 
 ## Standalone Scripts
@@ -219,9 +239,11 @@ Run all with `make lesson-17` (or `rustlab run lessons/17-learning-rate-scheduli
 | `eta_sched(1)` | `0` (cold start) |
 | `eta_sched(T_warmup + 1)` | $\eta_{\max} = 6 \times 10^{-4}$ |
 | `eta_sched(T_total + 1)` | $\eta_{\min} = 6 \times 10^{-5}$ (the floor) |
-| `loss_high(end)` (constant high LR) | high variance, often above the schedule's |
-| `loss_low(end)` (constant low LR) | smooth but slow — clearly above schedule's |
-| `loss_sched(end)` (schedule) | lowest of the three, with low tail variance |
+| `loss_high(end)` (constant high LR = 0.25) | diverges (≈ $10^{105}$ — above the 0.2 stability limit) |
+| `loss_low(end)` (constant low LR = 0.02) | ≈ `1.0006` (reaches the noise floor, slowly) |
+| `loss_sched(end)` (warmup+cosine) | ≈ `1.0018` (same floor as the low-LR run) |
+| `step_low` (constant-low steps to loss < 1.01) | `127` |
+| `step_sched` (schedule steps to loss < 1.01) | `36` |
 
 ## Exercises
 
@@ -229,7 +251,7 @@ Run all with `make lesson-17` (or `rustlab run lessons/17-learning-rate-scheduli
 2. **The cosine endpoints.** Verify algebraically that $\eta_{\text{decay}}(T_w) = \eta_{\max}$ and $\eta_{\text{decay}}(T_d) = \eta_{\min}$.
 3. **Warmup length scales with $\beta_2$.** Adam's bias correction $1 - \beta_2^t$ reaches 0.99 at $t \approx \log(0.01) / \log(\beta_2)$. Compute this for $\beta_2 \in \{0.99, 0.999, 0.9999\}$. What does each tell you about the minimum sensible $T_w$?
 4. **Re-run schedule_vs_constant.rlab** with $\sigma = 1.0$ instead of $0.3$. Which schedule (high-LR vs scheduled) is most robust to higher gradient noise? Why?
-5. **What if you skip cosine.** Modify `lr_schedule.rlab` to keep $\eta = \eta_{\max}$ flat after warmup (no decay). Run on a real loss surface (e.g. import `optimizer_comparison.rlab` from Lesson 16). Does it ever converge? Why or why not?
+5. **What if you skip cosine.** Modify `lr_schedule.rlab` to keep $\eta = \eta_{\max}$ flat after warmup (no decay). Run on a real loss surface (e.g. copy the loss-surface setup from `optimizer_comparison.rlab` in Lesson 16). Does it ever converge? Why or why not?
 
 ## What's next
 

@@ -1,4 +1,4 @@
-# Script:  gpt_forward.r
+# Script:  gpt_forward.rlab
 # System:  Full GPT decoder forward pass on a toy config
 # Concept: Wire token embedding + sinusoidal PE + N transformer blocks +
 #          final LayerNorm + LM head into one end-to-end pipeline; print
@@ -123,9 +123,11 @@ print("argmax next token id:", argmax(probs_last));
 print("max prob value:      ", max(probs_last));
 
 # Heatmap of logits across T positions
-figure()
-imagesc(logits, "viridis")
-title("Logits (T=8, |V|=50)")
+# rustlab 0.3.6 colormaps by |value|; shift so min = 0 so the render is faithful
+# (see docs/rustlab-issues-2026-07-12.md §6)
+figure();
+imagesc(logits - min(min(logits)), "viridis")
+title("Logits - min (T=8, |V|=50)")
 xlabel("vocab id")
 ylabel("position t")
 savefig("gpt_forward.svg")

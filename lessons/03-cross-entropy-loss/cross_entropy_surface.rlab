@@ -1,4 +1,4 @@
-# Script:  cross_entropy_surface.r
+# Script:  cross_entropy_surface.rlab
 # System:  Cross-entropy loss as a function of predicted probability
 # Concept: L(p_c) = -log(p_c); convex loss that penalises low-confidence correct predictions
 # Equations: L = -log(p_hat_c)   where p_hat_c is the predicted probability of the correct token
@@ -42,7 +42,7 @@ L_vhigh = -log(p_vhigh);
 print("  p=0.99  :", L_vhigh, "nats");
 
 # === Plot: L(p) curve ===
-figure()
+figure();
 hold("on")
 plot(p_hat, loss, "color", "blue", "label", "L = -log(p)")
 hline(L_4, "gray", "baseline = log(4)")
@@ -81,7 +81,7 @@ L_flat = reshape(L_surface, 1, n * n);
 print("Min loss on grid:", min(L_flat), "  (approached as z1 → ∞)");
 print("Max loss on grid:", max(L_flat), "  (reached at z1 most negative, z2 most positive)");
 
-figure()
+figure();
 surf(Z1, Z2, L_surface, "viridis")
 title("CE Loss over logit space (3-class, z3=0, correct=class 1)")
 xlabel("z1 (correct)")

@@ -12,8 +12,11 @@
 #          The dot product between a query at position m and a key at
 #          position n depends only on the RELATIVE position (n - m), not
 #          on the absolute positions.  This is what makes RoPE attractive
-#          for long-context generalisation: extrapolating to unseen lengths
-#          is well-behaved because the rotation periodicity is bounded.
+#          for long-context work: the relative-only score makes context
+#          EXTENSION cheap (interpolate positions or rescale the base
+#          frequency -- position interpolation / NTK / YaRN).  Note that
+#          vanilla RoPE does NOT extrapolate zero-shot beyond the trained
+#          context; scores degrade past the offsets seen during training.
 # Equations:
 #   theta_k    = base^(-2k / d_head)            k = 0, 1, ..., d_head/2 - 1
 #   phi_{m,k}  = m * theta_k                    position m's rotation angle
@@ -119,9 +122,11 @@ print("");
 print("Heatmap of <RoPE(q, m), RoPE(k, n)> — diagonals are constant:");
 print(M);
 
-figure()
-imagesc(M, "viridis")
-title("<RoPE(q,m), RoPE(k,n)> — constant along (n - m) diagonals")
+# rustlab 0.3.6 colormaps by |value|; shift so min = 0 so the render is faithful
+# (see docs/rustlab-issues-2026-07-12.md §6)
+figure();
+imagesc(M - min(min(M)), "viridis")
+title("<RoPE(q,m), RoPE(k,n)> - min — constant along (n - m) diagonals")
 xlabel("key position n")
 ylabel("query position m")
 savefig("rope.svg")

@@ -14,8 +14,8 @@
 #          parameter count by ~1-2%.
 # Equations:
 #   GELU FFN:   y = W2 * GELU(W1 x + b1) + b2
-#   SwiGLU FFN: u = W1 x                 (1 x d_ff_swig — the gate)
-#               v = W2 x                 (1 x d_ff_swig — the activated path)
+#   SwiGLU FFN: u = W1 x                 (1 x d_ff_swig — gate / activated path, SiLU here)
+#               v = W2 x                 (1 x d_ff_swig — the linear path)
 #               y = W3 * (silu(u) .* v)
 #   silu(z) = z * sigmoid(z) = z / (1 + exp(-z))
 #
@@ -101,8 +101,8 @@ W3_g = zeros(1, d_model); W3_g(1, 1) = 1.0;             % output back to dim 1
 
 H_a = ffn_swiglu(reshape(x_a, 1, d_model), W1_g, W2_g, W3_g);
 H_b = ffn_swiglu(reshape(x_b, 1, d_model), W1_g, W2_g, W3_g);
-print("  SwiGLU(x_a)[1] =", H_a(1, 1), "  (gate open  -> ~x_a(1)^2)");
-print("  SwiGLU(x_b)[1] =", H_b(1, 1), "  (gate closed -> ~0)");
+print("  SwiGLU(x_a)[1] =", H_a(1, 1), "  (gate open:  silu(5*x)*x ~ 5*x_a(1)^2)");
+print("  SwiGLU(x_b)[1] =", H_b(1, 1), "  (gate mostly closed -> small)");
 print("  A pure-matmul layer (no nonlinearity) gives x_a(1) and x_b(1) directly,");
 print("  losing the gate's data-dependent on/off behaviour.");
 
@@ -112,7 +112,7 @@ silu_v = z ./ (1.0 + exp(-z));
 gelu_v = gelu(z);
 relu_v = relu(z);
 
-figure()
+figure();
 plot(z, silu_v, "color", "blue",  "label", "silu (z*sigmoid(z), LLaMA/Mistral)")
 hold("on")
 plot(z, gelu_v, "color", "red",   "label", "gelu (Lesson 11, GPT-2)")

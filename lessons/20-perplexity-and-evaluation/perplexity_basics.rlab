@@ -1,4 +1,4 @@
-# Script:  perplexity_basics.r
+# Script:  perplexity_basics.rlab
 # System:  Compute perplexity of three reference probability distributions.
 # Concept: PPL = exp(H) where H = -sum(p * log(p)) is the entropy in nats.
 #          A uniform distribution over K classes has PPL = K.  A peaked
@@ -64,7 +64,7 @@ for k = 1:50
   ppl_curve(k) = exp(-sum(q .* log(q)));
 end
 
-figure()
+figure();
 plot(ps, ppl_curve, "color", "blue", "label", "PPL(p_correct)")
 title("Perplexity as the model's confidence in the correct class grows")
 xlabel("probability assigned to the correct class")

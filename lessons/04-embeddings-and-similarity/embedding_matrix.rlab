@@ -1,4 +1,4 @@
-# Script:  embedding_matrix.r
+# Script:  embedding_matrix.rlab
 # System:  Token embedding lookup via a learned embedding matrix
 # Concept: E in R^(|V| x d); one-hot lookup selects a dense row vector
 # Equations: h = E^T * e_i  =  E_i  (row i of the embedding matrix)
@@ -11,6 +11,8 @@ d_embed    = 6;   # embedding dimension (d << vocab_size in practice)
 # === Random Embedding Matrix Initialisation ===
 # At the start of training, embeddings are drawn from a small normal distribution.
 # Scale by 0.1 so initial activations are not too large (standard practice).
+# seed the shared RNG so the draw is deterministic (matches the notebook).
+seed(42);
 E = randn(vocab_size, d_embed) * 0.1;
 
 print("Embedding matrix E  (shape: vocab_size x d_embed):");
@@ -30,18 +32,21 @@ print(e3);
 print("Embedded representation of token 3  (= row 3 of E):");
 print(h3);
 print("Row 3 of E directly:");
-print(E(3));
+print(E(3, :));
 
 # === Verify: lookup result equals the row ===
-# Max absolute difference should be 0 (or machine epsilon ~1e-16)
-diff = max(abs(h3 - E(3)));
+# E(3, :) is row 3 of E; E(3) would be a single column-major scalar element.
+# Max absolute difference should be 0 (one-hot multiply reproduces the row).
+diff = max(abs(h3 - E(3, :)));
 print("Max difference between lookup and direct row access (should be ~0):", diff);
 
 # === Heatmap of Embedding Matrix ===
 # Rows = tokens (0..vocab_size-1), Columns = embedding dimensions (0..d_embed-1)
 # At random init all rows look similar; after training clusters would appear.
-figure()
-imagesc(E, "viridis")
-title("Embedding Matrix E  (8 tokens x 6 dims)  — random init")
+# rustlab 0.3.6 colormaps by |value|; shift so min = 0 so the render is faithful
+# (see docs/rustlab-issues-2026-07-12.md §6)
+figure();
+imagesc(E - min(min(E)), "viridis")
+title("Embedding Matrix E - min(E)  (8 tokens x 6 dims)  — random init")
 savefig("embedding_matrix.svg")
 print("Saved embedding_matrix.svg")

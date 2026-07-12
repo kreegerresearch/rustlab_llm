@@ -1,4 +1,4 @@
-# Script:  lr_schedule.r
+# Script:  lr_schedule.rlab
 # System:  Warmup + cosine-decay learning-rate schedule.
 # Concept: eta(t) is a piecewise function:
 #            t in [0, T_w]   linear ramp from 0 to eta_max
@@ -41,7 +41,7 @@ print("  t= 4000:", eta_sched(4001));
 print("  t= 5000:", eta_sched(5001));
 
 # === Plot ===
-figure()
+figure();
 steps = 0:T_total;
 plot(steps, eta_sched, "color", "blue", "label", "warmup + cosine")
 title("LR schedule:  T_w=500, T_total=5000, eta_max=6e-4")

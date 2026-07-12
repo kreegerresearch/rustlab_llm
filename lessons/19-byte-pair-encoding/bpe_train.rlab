@@ -1,4 +1,4 @@
-# Script:  bpe_train.r
+# Script:  bpe_train.rlab
 # System:  Byte-pair encoding on a small character corpus.
 # Concept: One BPE step counts every adjacent pair, takes the argmax, and
 #          rewrites the sequence by replacing each occurrence of that pair
@@ -81,7 +81,7 @@ print("Compression ratio  :", length(seq) / length(state.seq));
 
 # === Bar chart of merge frequencies ===
 labels = {"merge 1", "merge 2", "merge 3", "merge 4", "merge 5"};
-figure()
+figure();
 bar(labels, merge_count)
 title("Pair count chosen by each BPE merge step")
 xlabel("merge step")

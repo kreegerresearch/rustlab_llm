@@ -1,4 +1,4 @@
-# Script:  pe_translation.r
+# Script:  pe_translation.rlab
 # System:  Sinusoidal positional encoding — relative-position structure
 # Concept: Verify that PE_t . PE_{t+k} depends only on the offset k, not on t
 # Equations:
@@ -29,8 +29,8 @@ n_offsets = 40;
 sims_short = zeros(n_offsets);
 sims_far   = zeros(n_offsets);
 for k = 0:(n_offsets - 1)
-  sims_short(k + 1) = sum(PE(10) .* PE(10 + k));
-  sims_far(k + 1)   = sum(PE(20) .* PE(20 + k));
+  sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));   # row t=10 vs row t=10+k
+  sims_far(k + 1)   = sum(PE(20, :) .* PE(20 + k, :));   # row t=20 vs row t=20+k
 end
 
 drift = max(abs(sims_short - sims_far));
@@ -40,7 +40,7 @@ print("sims_short(2) (offset 1)                 =", sims_short(2));
 print("sims_short(end) (offset 39)              =", sims_short(n_offsets));
 
 # === Plot ===
-figure()
+figure();
 hold("on")
 plot(0:(n_offsets - 1), sims_short, "color", "blue", "label", "base t=10")
 plot(0:(n_offsets - 1), sims_far,   "color", "red",  "label", "base t=20")

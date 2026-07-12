@@ -1,4 +1,4 @@
-# Script:  softmax_ce_grad.r
+# Script:  softmax_ce_grad.rlab
 # System:  Softmax over K logits + cross-entropy loss against a one-hot target
 # Concept: The softmax+CE composition has a famously simple gradient
 #          dL/dz = p - 1_y  (the prediction error vector).

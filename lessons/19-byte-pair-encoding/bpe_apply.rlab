@@ -1,4 +1,4 @@
-# Script:  bpe_apply.r
+# Script:  bpe_apply.rlab
 # System:  Apply a fixed BPE merge list to encode test inputs.
 # Concept: Given a learned merge_list (ordered list of (a, b) -> id pairs),
 #          encoding any character sequence is deterministic: apply each
@@ -10,14 +10,14 @@
 # Units:   integer token ids; counts dimensionless.
 
 # === Hardcoded merge list ===
-# These are the merges from bpe_train.r (in order):
-#   1: (2, 5) -> 7   meaning ('b', 'r') -> 'br'
-#   2: (1, 7) -> 8   meaning ('a', 'br') -> 'abr'
-#   3: (8, 1) -> 9   meaning ('abr', 'a') -> 'abra'
-#   4: (4, 9) -> 10  meaning ('d', 'abra') -> 'dabra'
-#   5: (1, 10) -> 11 meaning ('a', 'dabra') -> 'adabra'
-merge_a   = [2, 1, 8, 4, 1];
-merge_b   = [5, 7, 1, 9, 10];
+# These are the merges learned by bpe_train.rlab (in order):
+#   1: (5, 1)  -> 7   meaning ('r', 'a')  -> 'ra'
+#   2: (1, 2)  -> 8   meaning ('a', 'b')  -> 'ab'
+#   3: (8, 7)  -> 9   meaning ('ab', 'ra') -> 'abra'
+#   4: (3, 1)  -> 10  meaning ('c', 'a')  -> 'ca'
+#   5: (10, 4) -> 11  meaning ('ca', 'd') -> 'cad'
+merge_a   = [5, 1, 8, 3, 10];
+merge_b   = [1, 2, 7, 1, 4];
 merge_id  = [7, 8, 9, 10, 11];
 n_merges = length(merge_a);
 
@@ -54,7 +54,7 @@ end
 input_A = [1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1];
 # Input B: "abracadabra abracadabra" — two reps of A, separated by space (id 6)
 input_B = [1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1, 6, 1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1];
-# Input C: "abc cad bra" — partial coverage (br merges to 7, no longer pieces match)
+# Input C: "abc cad bra" — partial coverage ('ab'->8, 'cad'->11, 'ra'->7)
 input_C = [1, 2, 3, 6, 3, 1, 4, 6, 2, 5, 1];
 
 enc_A = encode(input_A, merge_a, merge_b, merge_id);
@@ -82,7 +82,7 @@ labels = {"A: 'abracadabra'", "B: 2x reps", "C: partial coverage"};
 encoded_lens = [length(enc_A), length(enc_B), length(enc_C)];
 input_lens   = [length(input_A), length(input_B), length(input_C)];
 
-figure()
+figure();
 bar(labels, encoded_lens)
 title("Encoded token count per input under the trained BPE")
 xlabel("input")
@@ -117,7 +117,7 @@ for v = [length(enc_A), length(enc_B), length(enc_C)]
   end
 end
 
-figure()
+figure();
 bar(buckets, hist_counts)
 title("Distribution of encoded lengths (3 test inputs)")
 xlabel("encoded tokens")

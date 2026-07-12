@@ -1,4 +1,4 @@
-# Script:  gradient_flow.r
+# Script:  gradient_flow.rlab
 # System:  N-layer linear stack, each layer a random matrix scaled to a target
 #          spectral radius rho.  Backprop the gradient from layer N to layer 1
 #          and record its norm at each depth.
@@ -54,12 +54,16 @@ print("L1/L12 ratio  (rho=1.3, expect >> 1):", G_norms(3, 1) / G_norms(3, N));
 
 # === Heatmap (log10 to fit all three regimes on one scale) ===
 # Rows are the three regimes; columns are layer depths L1..L12.  Categorical
-# axis labels turn the heatmap into a direct lookup of "what is log10(||g||)
-# at depth k for spectral-radius rho?".
+# axis labels turn the heatmap into a direct lookup of "how many orders of
+# magnitude above the smallest norm is depth k for spectral-radius rho?".
+# We plot log10(||g|| / min ||g||) rather than log10(||g||): the ratio is >= 0
+# everywhere, which keeps the heatmap rows in label order (the renderer flips
+# rows vertically when the data contains negative values).
 regimes = {"rho=0.7  (vanish)", "rho=1.0  (stable)", "rho=1.3  (explode)"};
 layers  = {"L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12"};
 
-figure()
-heatmap(layers, regimes, log10(G_norms + 1e-12), "log10(||grad||) per layer (rows: regime, cols: depth)", "viridis")
+g_min = min(min(G_norms));
+figure();
+heatmap(layers, regimes, log10(G_norms / g_min), "log10(||grad|| / min) per layer (rows: regime, cols: depth)", "viridis")
 savefig("gradient_flow.svg")
 print("Saved gradient_flow.svg");

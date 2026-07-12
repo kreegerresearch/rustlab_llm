@@ -7,8 +7,11 @@
 #          z, sampling draws from softmax(z), and the loop terminates on max
 #          length or EOS.
 # Equations:
-#   repetition penalty p:  z'_i = z_i / p  if i was emitted in the last w
-#                          tokens, else z_i unchanged
+#   repetition penalty p:  z'_i = z_i / p (if z_i > 0) or z_i * p (if z_i <= 0),
+#                          for i emitted in the last w tokens; else unchanged.
+#                          Sign-aware, matching HF RepetitionPenaltyLogitsProcessor:
+#                          multiplying a negative logit (rather than dividing it)
+#                          keeps the penalty pushing every token *down*.
 #   sampling step:         x_{t+1} ~ softmax(z' / T)  (then optional top-K / top-P)
 # Units:   logits in nats; probabilities dimensionless.
 
@@ -117,7 +120,13 @@ function z_out = apply_repetition_penalty(z, recent, penalty)
   for i = 1:length(recent)
     tok = recent(i);
     if tok >= 1
-      z_out(tok) = z_out(tok) / penalty;
+      # Sign-aware: divide positive logits, multiply negative ones so both
+      # move the token toward *less* likely (HF RepetitionPenaltyLogitsProcessor).
+      if z_out(tok) > 0
+        z_out(tok) = z_out(tok) / penalty;
+      else
+        z_out(tok) = z_out(tok) * penalty;
+      end
     end
   end
 end
@@ -189,7 +198,7 @@ p_raw  = softmax(logits_b);
 p_pen  = softmax(apply_repetition_penalty(logits_b, [1, 1], 2.0));   % 'a' recently emitted twice
 p_t05  = softmax(logits_b / 0.5);
 
-figure()
+figure();
 bar([p_raw; p_pen; p_t05]')
 title("P(. | b) under (raw, penalty on 'a', temp 0.5)")
 xlabel("token (1=a, 2=b, 3=c)")

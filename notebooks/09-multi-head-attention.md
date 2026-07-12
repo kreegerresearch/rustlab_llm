@@ -18,7 +18,7 @@ Scaled dot-product attention, the causal mask, and the $\mathbf{Q}, \mathbf{K}, 
 
 A single attention head can compute *one* way of relating tokens — for example, "each token attends to the previous one". But language has many relationships: syntactic (subject-verb agreement), coreference (*it* → *mat*), long-range dependencies (quotes), positional (first-token, last-token). A single softmax-weighted sum collapses all of them into one pattern.
 
-**Multi-head attention** runs $H$ independent attention computations in parallel, each with its own projection matrices. Each head can specialise in a different relationship, and the outputs are combined at the end. This section is pure motivation; every later H2 pairs `### Theory` with `### Example — <descriptor>`.
+**Multi-head attention** runs $H$ independent attention computations in parallel, each with its own projection matrices. Each head can specialise in a different relationship, and the outputs are combined at the end.
 
 ## Per-Head Projections
 
@@ -121,24 +121,30 @@ A4_row4 = A4(4, :);   % slice the whole 4th row, not a scalar linear-index
 
 Head 4 row 4 should equal $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case is exactly the Lesson 07 averaging matrix. Computed: ${A4_row4(1):%.3f}, ${A4_row4(2):%.3f}, ${A4_row4(3):%.3f}, ${A4_row4(4):%.3f}, ${A4_row4(5):%.3f}, ${A4_row4(6):%.3f}.
 
-### Example — 2×2 grid of head heatmaps
+### Example — Four head-attention heatmaps
 
-Both axes are token positions $t_1..t_T$ — labelled axes make the per-head pattern read at a glance: head 1 lights up column $t_1$, head 2 the sub-diagonal, head 3 the diagonal, head 4 every available position equally.
+Both axes are token positions $t_1..t_T$ — labelled axes make the per-head pattern read at a glance: head 1 lights up column $t_1$, head 2 the sub-diagonal, head 3 the diagonal, head 4 every available position equally. Each head gets its own figure below (one heatmap per panel).
 
 ```rustlab
+% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 positions = {"t1", "t2", "t3", "t4", "t5", "t6"};
 
-figure()
-subplot(2, 2, 1)
+figure();
 heatmap(positions, positions, A1, "Head 1 — first token", "viridis")
+```
 
-subplot(2, 2, 2)
+```rustlab
+figure();
 heatmap(positions, positions, A2, "Head 2 — previous token", "viridis")
+```
 
-subplot(2, 2, 3)
+```rustlab
+figure();
 heatmap(positions, positions, A3, "Head 3 — self", "viridis")
+```
 
-subplot(2, 2, 4)
+```rustlab
+figure();
 heatmap(positions, positions, A4, "Head 4 — uniform", "viridis")
 ```
 
@@ -214,6 +220,11 @@ W_O = [ 0.0, 0.0, 1.0, 0.0;
         0.0, 1.0, 0.0, 0.0 ];
 
 O = O_concat * W_O;
+
+% Row 4 makes the W_O permutation visible: the head-1 pair (columns 1–2)
+% and the head-2 pair (columns 3–4) trade places.
+print("O_concat row 4:", O_concat(4, :));
+print("O row 4:       ", O(4, :));
 ```
 
 <!-- hide -->
@@ -225,22 +236,24 @@ n_wo  = d_model * d_model;
 n_tot = n_qkv + n_wo;
 ```
 
-Shapes: $\mathrm{Concat} \in \mathbb{R}^{${concat_shape(1)} \times ${concat_shape(2)}}$, $\mathbf{O} \in \mathbb{R}^{${out_shape(1)} \times ${out_shape(2)}}$.
+Shapes: $\mathrm{Concat} \in \mathbb{R}^{${concat_shape(1)} \times ${concat_shape(2)}}$, $\mathbf{O} \in \mathbb{R}^{${out_shape(1)} \times ${out_shape(2)}}$. The hand-set $\mathbf{W}_O$ is a permutation, so the effect is a visible column swap: the value ${O_concat(4,3):%.3f} sitting in column 3 of `O_concat` row 4 lands in column 1 of `O` (${O(4,1):%.3f}), while ${O_concat(4,1):%.3f} moves the other way to column 3 (${O(4,3):%.3f}). A learned $\mathbf{W}_O$ mixes head features rather than merely reordering them.
 
 ### Example — Concat and final output heatmaps
 
-Rows are still token positions; columns are now feature dimensions. The first $d_v = 2$ columns of `Concat` come from head 1, the next two from head 2.
+Rows are still token positions; columns are now feature dimensions. The first $d_v = 2$ columns of `Concat` come from head 1, the next two from head 2. The two pipeline stages are shown in consecutive figures.
 
 ```rustlab
+% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 positions2 = {"t1", "t2", "t3", "t4"};
 concat_cols = {"h1.1", "h1.2", "h2.1", "h2.2"};
 out_cols    = {"d1", "d2", "d3", "d4"};
 
-figure()
-subplot(1, 2, 1)
+figure();
 heatmap(concat_cols, positions2, O_concat, "Concat = [O_1, O_2]  (T × H*d_v)", "viridis")
+```
 
-subplot(1, 2, 2)
+```rustlab
+figure();
 heatmap(out_cols, positions2, O, "Final MHA output O = Concat * W_O", "viridis")
 ```
 
@@ -252,7 +265,7 @@ Pack the per-head projections into three combined $d_{\text{model}} \times d_{\t
 
 $$\underbrace{3 d_{\text{model}}^2}_{\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V} + \underbrace{d_{\text{model}}^2}_{\mathbf{W}_O} \;=\; 4 d_{\text{model}}^2.$$
 
-For the toy $d_{\text{model}} = 4$ that is $3 \cdot 16 + 16 = ${n_tot}$ parameters.
+For the toy $d_{\text{model}} = 4$ that is $3 \cdot 16 + 16 = ${n_tot}$ parameters. This counts weight matrices only; a GPT-2-style block also carries $4 d_{\text{model}}$ bias parameters (one bias per $\mathbf{Q}, \mathbf{K}, \mathbf{V}, \mathbf{O}$ projection), ignored here as in [Lesson 11](11-feed-forward-block.md).
 
 **$H$ does not appear.** More heads at fixed $d_{\text{model}}$ means narrower heads ($d_k = d_{\text{model}}/H$), not more parameters. Head *count* is an architectural choice; head *width* is what determines capacity.
 
@@ -260,9 +273,9 @@ For the toy $d_{\text{model}} = 4$ that is $3 \cdot 16 + 16 = ${n_tot}$ paramete
 
 ### Theory
 
-Each head sees the full input $\mathbf{X}$ but projects it down to a $d_k$-dimensional subspace before computing attention. Different projections emphasise different features of $\mathbf{X}$, so each head sees a different "view" of the sequence. With enough heads and sufficient training, the heads specialise — some learn positional patterns, some learn semantic patterns, some learn long-range structure. Specialisation is not engineered: because all heads share the same input and loss, gradient descent finds projections that cover *complementary* patterns (two heads learning the same thing would waste capacity).
+Each head sees the full input $\mathbf{X}$ but projects it down to a $d_k$-dimensional subspace before computing attention. Different projections emphasise different features of $\mathbf{X}$, so each head sees a different "view" of the sequence. With enough heads and sufficient training, the heads *tend* to specialise — some learn positional patterns, some learn semantic patterns, some learn long-range structure. Specialisation is not engineered: because all heads share the same input and loss, training *tends* to find projections that cover somewhat complementary patterns (two heads learning exactly the same thing would waste capacity). The tendency is only partial, though — head-pruning studies on trained models (e.g. Michel et al., 2019, "Are Sixteen Heads Really Better than One?") remove a large fraction of heads with little loss in quality, so real models carry substantial head redundancy.
 
-**Information-theoretic framing.** Each head extracts a fragment of the mutual information $I(X_{t+1} ; X_{1..t})$ that the [Lesson 08](08-scaled-dot-product-attention.md) "Information-Theoretic View" section identified as attention's prediction signal. Two heads that recover the *same* fragment are redundant — the joint extracted information $I(X_{t+1} ; \mathbf{o}_t^{(h_1)}, \mathbf{o}_t^{(h_2)})$ would equal each head's individual contribution, and the second head buys nothing. Two heads recovering *different* fragments add up: a syntactic head and a coreference head together carry more information about $X_{t+1}$ than either does alone. Cross-entropy training pushes heads toward orthogonal information streams because that is the configuration that minimises loss given the parameter budget. The output projection $\mathbf{W}_O$ then re-mixes those fragments into a single dense representation the next layer can use.
+**Information-theoretic framing.** Each head extracts a fragment of the mutual information $I(X_{t+1} ; X_{1..t})$ that the [Lesson 08](08-scaled-dot-product-attention.md) "Information-Theoretic View" section identified as attention's prediction signal. Two heads that recover the *same* fragment are redundant — the joint extracted information $I(X_{t+1} ; \mathbf{o}_t^{(h_1)}, \mathbf{o}_t^{(h_2)})$ would equal each head's individual contribution, and the second head buys nothing. Two heads recovering *different* fragments add up: a syntactic head and a coreference head together carry more information about $X_{t+1}$ than either does alone. Cross-entropy training therefore rewards heads that recover *different* fragments, since a redundant head buys no loss reduction for its parameters — though, as the pruning results above show, this pressure is weak enough that trained models still end up with many near-redundant heads. The output projection $\mathbf{W}_O$ then re-mixes those fragments into a single dense representation the next layer can use.
 
 ## Key Takeaways
 
