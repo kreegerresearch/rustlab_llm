@@ -2,14 +2,14 @@
 
 # Lesson 23: Modern Architectural Variants
 
-The architecture you built in Lessons 08–14 is the **2017 Vaswani / 2019 GPT-2** transformer. Every major open LLM trained since 2022 — LLaMA, Mistral, Qwen, Falcon, GPT-NeoX-style models — has swapped out four of those components for variants that improve quality, speed, or memory while preserving the overall shape of the stack. This lesson covers the four:
+The architecture you built in Lessons 08–14 is the **2017 Vaswani / 2019 GPT-2** transformer. Most major open LLMs trained since 2022 — LLaMA, Mistral, Qwen, Falcon — swap out several of those components for variants that improve quality, speed, or memory while preserving the overall shape of the stack. There are four common swaps, and a given model adopts a subset: the LLaMA family uses all four, while GPT-NeoX-20B, for example, took only rotary embeddings and kept LayerNorm + GELU. This lesson covers all four:
 
 | Component | Lesson built | Modern variant | Used in |
 |---|---|---|---|
-| Sinusoidal / learned positional encoding | [10-positional-encoding](10-positional-encoding.md) | **RoPE** (rotary) | LLaMA, Mistral, Qwen, Claude, Falcon |
+| Sinusoidal / learned positional encoding | [10-positional-encoding](10-positional-encoding.md) | **RoPE** (rotary) | LLaMA, Mistral, Qwen, Falcon, GPT-NeoX |
 | LayerNorm | [12-layer-norm-and-residuals](12-layer-norm-and-residuals.md) | **RMSNorm** | LLaMA, Mistral, T5, Qwen |
 | GELU + 2-matrix FFN | [11-feed-forward-block](11-feed-forward-block.md) | **SwiGLU** | LLaMA, Mistral, PaLM, Qwen |
-| Multi-head attention | [09-multi-head-attention](09-multi-head-attention.md) | **GQA / MQA** | LLaMA 2/3, Mistral, Claude |
+| Multi-head attention | [09-multi-head-attention](09-multi-head-attention.md) | **GQA / MQA** | LLaMA 2/3, Mistral, Qwen |
 
 Each is a surgical swap against the baseline — no other layers change. Read this lesson as four self-contained deltas.
 
@@ -134,7 +134,7 @@ print("(Both have relative offset 3; should match.)");
 The dot products are equal to ~15 decimal places — the rotation algebra is exact, only floating-point round-off remains.
 
 > [!IMPORTANT]
-> RoPE's relative-position property is **algebraic**, not learned. The model doesn't have to discover it during training; it is wired into how Q and K are produced. Combined with the fact that no PE is added to the embeddings (so the residual stream is purely token information), this is why RoPE-based models extrapolate to context lengths beyond what they saw during training more gracefully than sinusoidal-PE models.
+> RoPE's relative-position property is **algebraic**, not learned. The model doesn't have to discover it during training; it is wired into how Q and K are produced, and no PE is added to the embeddings (so the residual stream is purely token information). What this buys is *relative* position encoding and — crucially — a cheap path to **context extension**: because position enters only through the rotation frequencies, you can stretch a trained model to longer contexts by interpolating positions or rescaling the base frequency (position interpolation, NTK-aware scaling, YaRN). Vanilla RoPE does **not** extrapolate zero-shot — attention scores degrade sharply once the relative offsets exceed those seen in training — which is exactly why those base-frequency tricks (see [What's next](#whats-next)) exist.
 
 ## RMSNorm
 
@@ -157,7 +157,7 @@ When the input row is already zero-mean, RMSNorm and LayerNorm are **identical**
 
 ### Why it's used
 
-- **~2× fewer ops per row.** LayerNorm needs two reductions (mean, then variance); RMSNorm needs one (the RMS itself). At $d_{\text{model}} = 4096$, that's $\sim 16389$ ops vs $\sim 8195$ ops per row — about a $2\times$ FLOP reduction in the normalisation layer. Real implementations measure ~1.4× wall-clock speedup including memory traffic.
+- **~2× fewer ops per row.** LayerNorm needs two reductions (mean, then variance); RMSNorm needs one (the RMS itself). Counting $4d + 5$ ops for LayerNorm (two reductions, a subtraction, a sqrt, a divide, a scale, and a bias-add) versus $2d + 3$ for RMSNorm's single reduction, at $d_{\text{model}} = 4096$ that is $\sim 16389$ ops vs $\sim 8195$ ops per row — about a $2\times$ FLOP reduction in the normalisation layer. Real implementations measure ~1.4× wall-clock speedup including memory traffic.
 - **Same numerical stability.** $\sqrt{\text{mean}(x^2) + \varepsilon}$ never goes near zero on a non-trivial signal; the $\varepsilon$ floor is sufficient.
 - **No measurable quality loss.** Several papers (T5, LLaMA-1 ablations) report no perplexity difference between LayerNorm and RMSNorm at the same parameter count.
 
@@ -302,7 +302,7 @@ $$\text{cache size} = 2 \cdot L \cdot H \cdot T \cdot d_{\text{head}} \quad \tex
 
 For LLaMA-2-70B-shaped numbers ($L = 80$, $H = 64$, $d_{\text{head}} = 128$, $T = 8192$, fp16), that's about **20 GB per request**. This is the dominant cost at inference time — bigger than the weights at long contexts.
 
-**Grouped-query attention** notes that the $H$ Q heads do not actually need $H$ distinct K and V heads. Pick a smaller number $H_{\text{kv}} < H$, split the query heads into $H_{\text{kv}}$ groups, and let each group share one $(K, V)$ pair. With $H = 32$ and $H_{\text{kv}} = 8$ (LLaMA-2 70B's ratio), each KV head is shared across 4 query heads — and the cache shrinks by a factor of $H / H_{\text{kv}} = 4$ in this example, $H / H_{\text{kv}} = 8$ in LLaMA-2-70B's actual config.
+**Grouped-query attention** notes that the $H$ Q heads do not actually need $H$ distinct K and V heads. Pick a smaller number $H_{\text{kv}} < H$, split the query heads into $H_{\text{kv}}$ groups, and let each group share one $(K, V)$ pair. With $H = 32$ and $H_{\text{kv}} = 8$ (Mistral-7B's config), each KV head is shared across 4 query heads — and the cache shrinks by a factor of $H / H_{\text{kv}} = 4$. LLaMA-2-70B uses $H = 64$, $H_{\text{kv}} = 8$, an $H / H_{\text{kv}} = 8$ reduction.
 
 The two extreme points have names: $H_{\text{kv}} = H$ is standard MHA; $H_{\text{kv}} = 1$ is **multi-query attention** (MQA). GQA spans the middle.
 
@@ -321,6 +321,61 @@ For LLaMA-2-70B at $T = 8192$ in fp16:
 Halving or quartering the cache lets you fit longer context or more concurrent requests on the same hardware, and it speeds up generation linearly because every step's attention loads less data from memory.
 
 Empirical quality cost: GQA at $H_{\text{kv}} = H/4$ to $H/8$ loses 0–0.5% perplexity vs MHA on the same training budget. MQA at $H_{\text{kv}} = 1$ loses ~1% — too much for production, which is why GQA is the modern default.
+
+### Example — GQA forward: group map + one head
+
+A compact 4-query-head, 2-KV-head forward pass mirroring `gqa.rlab`'s core. There is one $W_Q$ per query head but only $H_{\text{kv}} = 2$ $(K, V)$ projections; the group map $g(h) = \lceil h \cdot H_{\text{kv}} / H \rceil$ sends query heads 1–2 to KV group 1 and heads 3–4 to KV group 2.
+
+```rustlab
+seed(23);
+T = 4; d_model = 8; n_heads = 4; n_kv = 2;
+d_head = d_model / n_heads;                 % = 2
+X = randn(T, d_model);
+
+% One Q projection per query head; one K/V projection per KV group.
+W_Q = randn(d_model, n_heads * d_head) * 0.3;
+W_K = randn(d_model, n_kv * d_head) * 0.3;
+W_V = randn(d_model, n_kv * d_head) * 0.3;
+Q_all = X * W_Q;
+K_all = X * W_K;
+V_all = X * W_V;
+
+% Group map: query head h shares KV group ceil(h * n_kv / n_heads).
+print("=== GQA group map (n_heads = 4, n_kv = 2) ===");
+for h = 1:n_heads
+  g = ceil(h * n_kv / n_heads);
+  print("  query head", h, "-> KV group", g);
+end
+
+% Forward query head 1 (KV group 1) with a causal mask.
+scale = 1.0 / sqrt(d_head);
+Q1 = Q_all(:, 1:d_head);
+K1 = K_all(:, 1:d_head);
+V1 = V_all(:, 1:d_head);
+S = (Q1 * K1') * scale;
+for i = 1:T
+  for j = (i + 1):T
+    S(i, j) = -1e9;
+  end
+end
+A = softmax(S);
+head1 = A * V1;
+print("head 1 (group 1) attention output, last row:", head1(T, :));
+```
+
+<!-- rustlab:output-start -->
+```text
+=== GQA group map (n_heads = 4, n_kv = 2) ===
+  query head 1 -> KV group 1
+  query head 2 -> KV group 1
+  query head 3 -> KV group 2
+  query head 4 -> KV group 2
+head 1 (group 1) attention output, last row: [1×2]  0.308288  0.109539
+```
+
+<!-- rustlab:output-end -->
+
+Heads 1 and 2 read from the same cached $(K, V)$, as do heads 3 and 4 — so the KV cache stores 2 heads' worth of keys/values instead of 4, the $H / H_{\text{kv}} = 2\times$ saving. The per-head attention math is exactly the standard causal softmax attention from [09-multi-head-attention](09-multi-head-attention.md); only *which* K/V a head reads changes.
 
 ### Example — 4-head model with three $H_{\text{kv}}$ configurations
 

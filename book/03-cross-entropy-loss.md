@@ -51,10 +51,18 @@ p_hat = linspace(0.01, 1.0, 200);
 loss  = -log(p_hat);
 ```
 
+```rustlab
+L_50k   = -log(1.0 / 50000.0);
+L_4     = -log(0.25);
+L_half  = -log(0.5);
+L_high  = -log(0.9);
+L_vhigh = -log(0.99);
+```
+
 Reference points in nats: $p{=}1/50000 \Rightarrow L = 10.820$ (the uniform-over-50k-tokens baseline), $p{=}0.25 \Rightarrow L = 1.386$ ($= \log 4$), $p{=}0.5 \Rightarrow L = 0.693$, $p{=}0.9 \Rightarrow L = 0.105$, $p{=}0.99 \Rightarrow L = 0.0101$.
 
 ```rustlab
-figure()
+figure();
 hold("on")
 plot(p_hat, loss, "color", "blue", "label", "L = -log(p)")
 hline(L_4, "gray", "baseline = log(4)")
@@ -67,10 +75,6 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-```text
-6
-```
-
 ![plot 1](plots/03-cross-entropy-loss/plot-1-8d6022f8.svg)
 
 <!-- rustlab:output-end -->
@@ -126,7 +130,7 @@ L_surface = -Z1 + log(exp(Z1) + exp(Z2) + 1.0);
 Range on the grid: loss spans $[0.007, 8.007]$ nats — near-zero when $z_1$ dominates, linearly large when the distractor $z_2$ wins.
 
 ```rustlab
-figure()
+figure();
 surf(Z1, Z2, L_surface, "viridis")
 title("CE Loss over logit space (z3=0, correct=class 1)")
 xlabel("z1 (correct)")
@@ -134,10 +138,6 @@ ylabel("z2 (distractor)")
 ```
 
 <!-- rustlab:output-start -->
-```text
-7
-```
-
 ![plot 2](plots/03-cross-entropy-loss/plot-2-a62afeb5.svg)
 
 <!-- rustlab:output-end -->
@@ -167,7 +167,7 @@ In other words, **the training loss is literally the average number of bits (or 
 
 $$\mathcal{L}_{\text{bits}} = \mathcal{L}_{\text{nats}} \,/\, \ln 2.$$
 
-Modern language modelling reports **bits per byte** (BPB) or **bits per character** (BPC) for cross-corpus comparison. State-of-the-art LLMs reach ~0.6 BPB on English; estimates of English's true entropy sit around 0.5–0.6 BPB — current models are within an information-theoretic stone's throw of the floor.
+Modern language modelling reports **bits per byte** (BPB) or **bits per character** (BPC) for cross-corpus comparison. State-of-the-art LLMs reach ~0.6 BPB on English; Shannon-style estimates put English's true entropy at roughly 0.6–1.3 bits per character, with recent LLM-based estimates favouring the low end of that range — so current models are already close to the information-theoretic floor.
 
 **Maximum likelihood is minimum description length.** Minimising $-\sum_t \log \hat p_{x_t}$ is equivalent to minimising the total number of bits needed to transmit the corpus under the model. The "best" model in this framework is the one that compresses the data the most — and **better language models are, by definition, better text compressors**. This isn't a metaphor; teams have used trained transformers as drop-in arithmetic coders for general-purpose compression and beat gzip on text by a wide margin.
 
@@ -191,15 +191,15 @@ where the second term penalises the cross-entropy against a uniform distribution
 
 - **Calibration.** Without smoothing, well-trained models become overconfident — they assign 0.999+ to whichever token they pick, even on inputs where they should be uncertain. Smoothing keeps probabilities calibrated.
 - **Generalisation.** The smoothed target acts as a mild regulariser; it discourages extreme logits and reduces overfitting on small datasets.
-- **Beam search compatibility.** The original *Attention Is All You Need* paper used $\varepsilon = 0.1$ specifically because beam search over an overconfident model fails to explore — a 0.999-vs-0.001 gap dominates the beam score.
+- **Beam search compatibility.** The original *Attention Is All You Need* paper trained with $\varepsilon = 0.1$ and reported only that it *hurt* perplexity while *improving* accuracy and BLEU. A common interpretation is that smoothing helps beam search explore — an overconfident model whose top token sits at 0.999-vs-0.001 lets a single hypothesis dominate the beam score — but the paper does not state this as its reason.
 
 Modern GPT-style models (including [nanoGPT](https://github.com/karpathy/nanoGPT)) **do not use label smoothing** — open-ended text generation cares about ranking, not calibration, and large-scale training has its own regularisation effects (data scale, dropout, weight decay). It is still standard in machine translation and any task where calibrated probabilities matter.
 
 ## Key Takeaways
 
 - Cross-entropy loss $\mathcal{L} = -\log \hat{p}_c$ is the standard training objective for language models.
-- The loss is convex and unbounded as $\hat{p}_c \to 0$ — the model is penalised exponentially for near-zero probability on the correct token.
-- Cross-entropy $\neq$ accuracy. A model can be 51% accurate while having high loss if the remaining 49% concentrates on one wrong token.
+- The loss is convex and unbounded as $\hat{p}_c \to 0$ — the penalty has no ceiling, growing like $\log(1/\hat{p}_c)$ as the correct-token probability $\hat{p}_c \to 0$.
+- Cross-entropy $\neq$ accuracy. A model that assigns $\hat{p}_c = 0.51$ to the correct token at *every* position wins the $\arg\max$ every time — 100% accuracy — yet still carries a loss of $-\ln 0.51 \approx 0.67$ nats. Loss measures *confidence* in the correct token; accuracy measures only whether it tops the $\arg\max$.
 - Training a language model *is* maximum likelihood estimation.
 
 ## Standalone Scripts
@@ -221,7 +221,7 @@ Run with `make lesson-03` (or `rustlab run lessons/03-cross-entropy-loss/cross_e
 | `L_vhigh` ($-\log 0.99$) | ≈ `0.0101` nats |
 | `grad_at_low` ($1/0.01$) | `100` |
 | `grad_at_high` ($1/0.99$) | ≈ `1.0101` |
-| `L_surface` minimum | ≈ `0.041` nats (corner where $z_1$ dominates) |
+| `L_surface` minimum | ≈ `0.007` nats (corner where $z_1$ dominates) |
 | `L_surface` maximum | ≈ `8.0` nats (corner where $z_2$ dominates) |
 
 ## Exercises

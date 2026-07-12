@@ -249,7 +249,7 @@ q_p09 = topp_dist(logits, 0.9);
 Compare visually:
 
 ```rustlab
-figure()
+figure();
 subplot(2, 2, 1)
 bar(q_t05)
 title("Temperature T=0.5 (sharpened)")
@@ -269,10 +269,6 @@ xlabel("token"); ylabel("probability"); ylim([0, 1])
 ```
 
 <!-- rustlab:output-start -->
-```text
-40
-```
-
 ![plot 1](plots/21-sampling-and-generation/plot-1-2bb22086.svg)
 
 <!-- rustlab:output-end -->
@@ -352,7 +348,7 @@ T=2.0: abababcbcbcba
 
 <!-- rustlab:output-end -->
 
-At $T=1.0$ the model alternates `a, b` and `c, b` with roughly the right frequencies — it recovers the period-4 structure. At $T=0.5$ the draws are sharper, closer to greedy. At $T=2.0$ the distribution is so flat the output looks nearly random over `{a, b, c}`.
+At $T=1.0$ the model alternates `a, b` and `c, b` with roughly the right frequencies — it produces tokens consistent with the period-4 corpus. (A bigram model conditions only on the current token, so it cannot track the exact phase of `abcb abcb…`; what it captures is the local transition statistics, which is enough for the sampled text to *look* like the corpus.) At $T=0.5$ the draws are sharper, closer to greedy. At $T=2.0$ the distribution is so flat the output looks nearly random over `{a, b, c}`.
 
 > [!TIP]
 > A common practitioner rule: **temperature controls confidence, top-P controls truncation**. Tune temperature first; use top-P to suppress the long tail of pathological tokens once you've picked a temperature.
@@ -363,7 +359,7 @@ At $T=1.0$ the model alternates `a, b` and `c, b` with roughly the right frequen
 
 Sampling strategies operate on the distribution. **Logit-level controls** operate on the logits *before* the strategy and let you express constraints that don't fit naturally into a probability transform:
 
-- **Repetition penalty $\rho > 1$.** For each token $i$ emitted in the last $w$ steps, divide its logit: $z_i \to z_i / \rho$. This makes recent tokens proportionally less likely without forbidding them outright. Greedy without penalty mode-collapses to `abababab…`; with $\rho = 2$ over a window of 4, the suppression of recent `a`s lets `c` win occasionally and the output looks more like the corpus.
+- **Repetition penalty $\rho > 1$.** For each token $i$ emitted in the last $w$ steps, push its logit toward $-\infty$: $z_i \to z_i / \rho$ **if $z_i > 0$**, else $z_i \to z_i \cdot \rho$. The sign split is essential — dividing a *negative* logit by $\rho$ would move it *closer to zero* and make the token **more** likely, the opposite of the intent; multiplying instead guarantees every penalised token becomes less likely. This is exactly HuggingFace's `RepetitionPenaltyLogitsProcessor`. (Most implementations penalise each *unique* recent token once; the demo below divides per occurrence, so a token seen twice in the window is penalised twice.) Greedy without penalty mode-collapses to `abababab…`; with $\rho = 2$ over a window of 4, suppressing recent `a`s lets `c` win occasionally and the output tracks the corpus.
 - **Banned tokens / hard masking.** Set $z_i = -\infty$ for any forbidden token. After softmax, $q_i = 0$. Use for: filtering profanity, enforcing JSON schema constraints, removing tokens that are never valid (e.g. the EOS during forced-continuation).
 - **Logit bias.** Add a constant $b_i$ to $z_i$. Positive bias upweights, negative downweights. The OpenAI API exposes this directly.
 - **Stop conditions.** The loop terminates on (a) max length, (b) emitting a designated EOS token, (c) emitting a stop string, or (d) some external signal. Without one of these the loop runs forever.
@@ -377,7 +373,13 @@ function z_out = apply_repetition_penalty(z, recent, penalty)
   z_out = z;
   for i = 1:length(recent)
     tok = recent(i);
-    z_out(tok) = z_out(tok) / penalty;
+    % Sign-aware: divide positive logits, multiply negative ones — both
+    % move the token toward less-likely (HF RepetitionPenaltyLogitsProcessor).
+    if z_out(tok) > 0
+      z_out(tok) = z_out(tok) / penalty;
+    else
+      z_out(tok) = z_out(tok) * penalty;
+    end
   end
 end
 
@@ -398,7 +400,7 @@ penalty=2 on 'a' (x2)   : [1×3]  0.001845  0.000000  0.998155
 
 <!-- rustlab:output-end -->
 
-Two recent emissions of `a` cause `a`'s logit to be divided twice. After softmax, the mass shifts from the split (0.5, 0, 0.5) toward (≈0.27, 0, ≈0.73). That bias is exactly enough to keep greedy from collapsing.
+Two recent emissions of `a` cause `a`'s logit to be divided twice. Because the trained logits are large and positive (≈8.4 for both `a` and `c`), halving `a`'s logit twice — down to ≈2.1 — leaves `c` towering over it, so the softmax nearly *inverts* rather than gently nudging: the mass swings from the even split (0.5, 0, 0.5) to almost entirely on `c`, $(0.0018, 0, 0.9982)$. A repetition penalty applied to a confident, near-saturated logit is not a subtle bias — it is enough to make greedy pick `c` instead of `a`, which is exactly what breaks the `abab…` cycle.
 
 ## The KV Cache
 
@@ -430,20 +432,32 @@ The cached step costs $O(t d + d^2)$. Cumulative cost over $T$ steps: $\sum_{t=1
 Build a tiny single-head attention block ($d = 4$, $T_{\max} = 8$, random weights) and run generation both ways over the same 8-token sequence. The standalone script `kv_cache.rlab` is the place to read the full implementation; here we summarise the result:
 
 ```rustlab
-% --- See lessons/21-sampling-and-generation/kv_cache.rlab for the full
-%     implementation.  Below is the headline number from running it. ---
-naive_flops_at_T  = 3564;   % cumulative FLOPs through step T=8
-cached_flops_at_T = 708;
-print("cumulative FLOPs at T=8 — naive:", naive_flops_at_T, "  cached:", cached_flops_at_T);
-print("speedup ratio:", naive_flops_at_T / cached_flops_at_T);
-print("max | naive_out - cached_out | (per step) ~ 5e-17 — machine epsilon.");
+% --- FLOP formulas from lessons/21-sampling-and-generation/kv_cache.rlab,
+%     computed live so the totals below cannot drift from the script.
+%       naive step t : 3 t d^2 + 2 t^2 d + t^2  (recompute Q,K,V for all 1..t)
+%       cached step t: 3 d^2   + 2 t d   + t     (project only the current row)
+d = 4;
+T = 8;
+naive_cum  = 0;
+cached_cum = 0;
+for t = 1:T
+  naive_step  = 3 * t * d * d + 2 * t * t * d + t * t;
+  cached_step = 3 * d * d + 2 * t * d + t;
+  naive_cum   = naive_cum  + naive_step;
+  cached_cum  = cached_cum + cached_step;
+end
+print("cumulative FLOPs at T=8 — naive:", naive_cum, "  cached:", cached_cum);
+print("speedup ratio:", naive_cum / cached_cum);
+print("(equivalence: max | naive_out - cached_out | per step ~ 5e-17 — machine");
+print(" epsilon; the full naive-vs-cached forward lives in kv_cache.rlab.)");
 ```
 
 <!-- rustlab:output-start -->
 ```text
 cumulative FLOPs at T=8 — naive: 3564   cached: 708
 speedup ratio: 5.033898305084746
-max | naive_out - cached_out | (per step) ~ 5e-17 — machine epsilon.
+(equivalence: max | naive_out - cached_out | per step ~ 5e-17 — machine
+ epsilon; the full naive-vs-cached forward lives in kv_cache.rlab.)
 ```
 
 <!-- rustlab:output-end -->
@@ -451,11 +465,11 @@ max | naive_out - cached_out | (per step) ~ 5e-17 — machine epsilon.
 Two diagnostics matter:
 
 1. **Equivalence.** The maximum elementwise difference between naive and cached outputs is bounded by floating-point round-off ($\sim 10^{-16}$). Not a numerical approximation — a different ordering of the same arithmetic.
-2. **Speedup ratio at step $t$.** The per-step FLOPs ratio is $\approx t$ — at step 8 the cached version does about 8× less work; at step 1024 it would do ~1024× less. The cumulative ratio at $T$ is roughly $T/3$ for this configuration (the projections dominate at small $t$, the attention quadratic dominates at large $t$).
+2. **Speedup ratio at step $t$.** The per-step FLOPs ratio is $\approx t$ — at step 8 the cached version does about 8× less work; at step 1024 it would do ~1024× less. The cumulative ratio at $T$ is roughly $2T/3$ for this configuration (at $T=8$ it is $5.03$; the projections dominate at small $t$, the attention quadratic dominates at large $t$).
 
 ### Connection to real systems
 
-Production transformer inference uses one KV cache **per layer per head**. For a model with $L = 32$ layers, $H = 32$ heads, $d_k = 128$, and context length $T = 8192$, the cache holds $2 \cdot L \cdot H \cdot T \cdot d_k = 2 \cdot 32 \cdot 32 \cdot 8192 \cdot 128 \approx 2$ GB in fp16 per request. This is why **KV cache size is the dominant memory cost** at long contexts — not the model weights, not the activations. Optimisations like grouped-query attention (GQA, shared K/V across multiple query heads) target the cache directly.
+Production transformer inference uses one KV cache **per layer per head**. For a model with $L = 32$ layers, $H = 32$ heads, $d_k = 128$, and context length $T = 8192$, the cache holds $2 \cdot L \cdot H \cdot T \cdot d_k = 2 \cdot 32 \cdot 32 \cdot 8192 \cdot 128 \approx 2.15 \times 10^9$ elements — at 2 bytes each in fp16 that is $\approx 4.3$ GB per request. This is why **KV cache size is the dominant memory cost** at long contexts — not the model weights, not the activations. Optimisations like grouped-query attention (GQA, shared K/V across multiple query heads) target the cache directly.
 
 ## Putting It All Together
 

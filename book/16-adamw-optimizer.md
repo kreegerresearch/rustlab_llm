@@ -37,19 +37,19 @@ Plain SGD applies $\theta_t = \theta_{t-1} - \eta \mathbf{g}_t$. On an isotropic
 
 ### Example — SGD on an elongated bowl
 
-Define $L(\theta_1, \theta_2) = \tfrac{1}{2}(20\theta_1^2 + \theta_2^2)$ (condition number 20) and run SGD from $(-2, 4)$ with $\eta = 0.09$ for 60 steps.
+Define $L(\theta_1, \theta_2) = \tfrac{1}{2}(200\theta_1^2 + \theta_2^2)$ (condition number 200) and run SGD from $(-2, 4)$ with $\eta = 0.009$ for 60 steps. The steep direction $\theta_1$ caps the stable learning rate at $\eta < 2/200 = 0.01$; anything larger oscillates and diverges.
 
 ```rustlab
 % Loss and analytic gradient
 function L = loss(theta)
-  L = 0.5 * (20.0 * theta(1) ^ 2 + theta(2) ^ 2);
+  L = 0.5 * (200.0 * theta(1) ^ 2 + theta(2) ^ 2);
 end
 function g = grad(theta)
-  g = [20.0 * theta(1), theta(2)];
+  g = [200.0 * theta(1), theta(2)];
 end
 
 theta_sgd = [-2.0, 4.0];
-eta = 0.09;
+eta = 0.009;
 n_steps = 60;
 path_sgd = zeros(n_steps + 1, 2);
 path_sgd(1, 1) = theta_sgd(1);
@@ -68,13 +68,13 @@ print("SGD final theta:", theta_sgd);
 
 <!-- rustlab:output-start -->
 ```text
-SGD final loss: 0.00009728759888484672
-SGD final theta: [1×2]  -0.000003  0.013949
+SGD final loss: 2.7035133929815935
+SGD final theta: [1×2]  -0.000003  2.325301
 ```
 
 <!-- rustlab:output-end -->
 
-After 60 steps SGD loss is $0.0001$ — we are barely off the start in $\theta_2$ because $\eta = 0.09$ shrinks $\theta_2$ by only 9 % per step.
+After 60 steps SGD loss is $2.7035$. The steep coordinate $\theta_1$ has converged (it started at $-2$ and is now $\approx 0$), but $\theta_2$ is stuck: $\eta = 0.009$ shrinks it by only $0.9\%$ per step, so after 60 steps it has fallen only from $4$ to $2.325$ — a bit over half its starting value. Almost all of the residual loss is this un-converged flat direction, and no larger $\eta$ is available because the steep direction would blow up.
 
 ## Momentum: An EMA of the Gradient
 
@@ -84,7 +84,72 @@ Add a velocity buffer $\mathbf{v}_t$ that accumulates past gradients with expone
 
 $$\mathbf{v}_t = \mu \mathbf{v}_{t-1} + \mathbf{g}_t, \qquad \theta_t = \theta_{t-1} - \eta \mathbf{v}_t.$$
 
-With $\mu \in [0, 1)$ (often 0.9), the buffer averages roughly the last $1/(1-\mu) \approx 10$ gradients. In the steep direction the gradient oscillates sign and the EMA cancels itself; in the flat direction the gradient has a consistent sign and the EMA *grows*, multiplying the effective step size. SGD-with-momentum drives along the ravine floor instead of bouncing off the walls.
+With $\mu \in [0, 1)$ (often 0.9), the recursion $\mathbf{v}_t = \mu \mathbf{v}_{t-1} + \mathbf{g}_t$ *accumulates* past gradients with a steady-state gain of $1/(1-\mu) \approx 10$ (it sums them, weighted by $\mu^k$, rather than averaging to a mean). In the steep direction the gradient oscillates sign and the buffer cancels itself; in the flat direction the gradient has a consistent sign and the buffer grows toward that $\approx 10\times$ gain, multiplying the effective step size. SGD-with-momentum drives along the ravine floor instead of bouncing off the walls.
+
+### Example — Momentum vs plain SGD at a small learning rate
+
+The payoff shows up precisely at a small, safe learning rate, where plain SGD's flat direction crawls. Run both on $L = \tfrac{1}{2}(20\theta_1^2 + \theta_2^2)$ from $(-2, 4)$ with $\eta = 0.01$ and $\mu = 0.9$ for 60 steps.
+
+```rustlab
+function Lm = loss20(th)
+  Lm = 0.5 * (20.0 * th(1) ^ 2 + th(2) ^ 2);
+end
+function gm = grad20(th)
+  gm = [20.0 * th(1), th(2)];
+end
+
+mu    = 0.9;
+eta_m = 0.01;
+nm    = 60;
+
+% Plain SGD
+th_s   = [-2.0, 4.0];
+loss_s = zeros(nm + 1);
+loss_s(1) = loss20(th_s);
+for k = 1:nm
+  th_s = th_s - eta_m * grad20(th_s);
+  loss_s(k + 1) = loss20(th_s);
+end
+
+% SGD + heavy-ball momentum
+th_m   = [-2.0, 4.0];
+vel    = [0.0, 0.0];
+loss_v = zeros(nm + 1);
+loss_v(1) = loss20(th_m);
+for k = 1:nm
+  vel  = mu * vel + grad20(th_m);
+  th_m = th_m - eta_m * vel;
+  loss_v(k + 1) = loss20(th_m);
+end
+
+print("SGD      final loss:", loss_s(nm + 1));
+print("Momentum final loss:", loss_v(nm + 1));
+print("SGD / momentum ratio:", loss_s(nm + 1) / loss_v(nm + 1));
+
+figure();
+steps_m = 0:nm;
+plot(steps_m, log10(loss_s + 1e-12), "color", "red",  "label", "SGD")
+hold("on")
+plot(steps_m, log10(loss_v + 1e-12), "color", "blue", "label", "SGD+momentum")
+hold("off")
+title("log10 loss: SGD vs momentum (eta=0.01, mu=0.9)")
+xlabel("step")
+ylabel("log10 L")
+legend("SGD", "SGD+momentum")
+```
+
+<!-- rustlab:output-start -->
+```text
+SGD      final loss: 2.3950431305925957
+Momentum final loss: 0.05334797454199918
+SGD / momentum ratio: 44.8947340766809
+```
+
+![plot 1](plots/16-adamw-optimizer/plot-1-1f638a06.svg)
+
+<!-- rustlab:output-end -->
+
+Plain SGD ends at loss $2.3950$ — the flat direction has barely moved — while momentum reaches $0.0533$, about 45× lower. The velocity buffer turns the small, consistent $\theta_2$ gradient into a step roughly $1/(1-\mu) = 10\times$ larger, so the flat direction finally makes progress; meanwhile the sign-flipping steep-direction gradient averages toward zero and the oscillation damps. This is the same demo as `sgd_vs_momentum.rlab`.
 
 ## Adam: Per-Parameter Adaptive Learning Rates
 
@@ -99,7 +164,7 @@ A parameter whose gradient has been large recently will have a large $v_t$ in th
 
 $$\hat{\mathbf{m}}_t = \mathbf{m}_t / (1 - \beta_1^t), \qquad \hat{\mathbf{v}}_t = \mathbf{v}_t / (1 - \beta_2^t), \qquad \theta_t = \theta_{t-1} - \eta\,\frac{\hat{\mathbf{m}}_t}{\sqrt{\hat{\mathbf{v}}_t} + \varepsilon}.$$
 
-The hats are **bias correction**: at $t = 1$, $\mathbf{m}_1 = (1-\beta_1)\mathbf{g}_1$ would be heavily biased toward zero; dividing by $1 - \beta_1^t$ undoes that. After ~50 steps the correction is negligible.
+The hats are **bias correction**: at $t = 1$, $\mathbf{m}_1 = (1-\beta_1)\mathbf{g}_1$ is heavily biased toward zero and $\mathbf{v}_1 = (1-\beta_2)\mathbf{g}_1^2$ even more so; dividing by $1 - \beta_1^t$ and $1 - \beta_2^t$ removes the bias exactly at $t = 1$ (the hats recover $\mathbf{g}_1$ and $\mathbf{g}_1^2$). The first-moment correction fades fast — $1 - \beta_1^{50} \approx 0.995$ — but the second-moment correction does **not**: $1 - \beta_2^{50} \approx 0.049$ is still a $\sim 20\times$ rescale, because $\beta_2 = 0.999$ has a half-life of about 693 steps. The $\hat{\mathbf{v}}_t$ correction stays material for hundreds of steps.
 
 ### Example — Adam step on the same anisotropic bowl
 
@@ -107,7 +172,7 @@ The hats are **bias correction**: at $t = 1$, $\mathbf{m}_1 = (1-\beta_1)\mathbf
 beta1 = 0.9;
 beta2 = 0.999;
 eps   = 1e-8;
-eta_a = 0.5;
+eta_a = 0.09;
 
 theta_adam = [-2.0, 4.0];
 m = [0.0, 0.0];
@@ -132,30 +197,32 @@ print("Adam final loss:", loss(theta_adam));
 
 <!-- rustlab:output-start -->
 ```text
-Adam final loss: 0.02318514321637464
+Adam final loss: 0.01694228895693814
 ```
 
 <!-- rustlab:output-end -->
 
-Adam's per-coordinate rescaling makes both directions advance at similar speeds — final loss is now $2.3185e-02$, several orders below SGD.
+Adam's per-coordinate rescaling lets both directions advance at similar speeds. It drives $\theta_2$ down to $0.165$ and $\theta_1$ to $0.006$, so the final loss is $1.6942e-02$ — roughly two orders of magnitude below SGD's $2.7035$ on the identical 60-step budget. Dividing each coordinate's step by $\sqrt{\hat{v}_t}$ is what breaks the condition-number bottleneck that traps SGD: the flat coordinate, whose gradient is small but consistent, gets a full-sized step instead of a $0.9\%$ nudge.
 
 ## Coupled vs Decoupled Weight Decay
 
 ### Theory
 
-**L2 regularisation**, also called weight decay, adds a penalty $\tfrac{\lambda}{2}\|\theta\|^2$ to the loss. With *vanilla* SGD this is equivalent to subtracting $\eta\lambda\theta$ from each parameter:
+**L2 regularisation** and **weight decay** are two names for the same operation — but *only under plain SGD*. L2 regularisation adds a penalty $\tfrac{\lambda}{2}\|\theta\|^2$ to the loss; its gradient contributes $\lambda\theta$, so vanilla SGD becomes
 
-$$\theta_t = \theta_{t-1} - \eta(\mathbf{g}_t + \lambda\theta_{t-1}).$$
+$$\theta_t = \theta_{t-1} - \eta(\mathbf{g}_t + \lambda\theta_{t-1}) = (1 - \eta\lambda)\,\theta_{t-1} - \eta\,\mathbf{g}_t.$$
 
-Plug the same recipe into Adam and the regularisation gradient $\lambda\theta$ flows into the second-moment estimate $\mathbf{v}_t$. Parameters with large magnitude end up with large $v_t$, which *shrinks* their decay rate — exactly the opposite of what regularisation should do. Loshchilov & Hutter (2017) noticed the bug and decoupled the two:
+The refactored right-hand side shows the equivalence: adding $\lambda\theta$ to the gradient *is* multiplying $\theta$ by $(1 - \eta\lambda)$ each step.
+
+Under **Adam** the two part ways. Fold $\lambda\theta$ into the gradient — call this **Adam-with-L2** — and it flows through both moment estimates. A large-magnitude parameter picks up a large $\lambda\theta$ in its $\mathbf{v}_t$, so its whole update is divided by a correspondingly larger $\sqrt{\hat{v}_t}$: the decay it feels is *rescaled per coordinate* by the same $1/\sqrt{\hat{v}_t}$ that scales the gradient. Loshchilov & Hutter (2017) argued this coupling is the bug — a regulariser ought to shrink every coordinate by the same fraction, not one modulated by each coordinate's gradient history. Their fix **decouples** the decay, applying it straight to the parameter, *outside* the moment machinery:
 
 $$\boxed{\text{AdamW: } \theta_t = \theta_{t-1} - \eta\left(\frac{\hat{\mathbf{m}}_t}{\sqrt{\hat{\mathbf{v}}_t} + \varepsilon} + \lambda\theta_{t-1}\right).}$$
 
-The decay term is applied to the parameter directly, *outside* the moment estimates. AdamW recovers the textbook behaviour of L2 regularisation in the presence of an adaptive optimiser. Every published GPT (and most modern transformers) uses AdamW.
+So AdamW is **not** "L2 regularisation done right under Adam." It is a genuinely *different* update from Adam-with-L2 — one that applies a uniform fractional shrinkage $\eta\lambda$ to every coordinate, whatever its curvature. The two agree only in the plain-SGD limit. Every published GPT (and most modern transformers) uses AdamW.
 
 ### Example — Adam vs AdamW with weight decay
 
-A 2D problem where the true minimum is at the origin and weight decay tries to pull us there. Different parameters experience different effective decays under coupled vs decoupled implementations.
+A 2D problem whose *data* loss is minimised at $(1, 5)$, with weight decay pulling back toward the origin. The high-curvature coordinate $\theta_1$ and the low-curvature $\theta_2$ experience different effective decays under the coupled vs decoupled implementations, so the two settle at different points.
 
 ```rustlab
 function g = grad_wd_demo(theta)
@@ -209,13 +276,13 @@ Decoupled (AdamW)  final theta: [1×2]  0.967226  4.740061
 
 <!-- rustlab:output-end -->
 
-The coupled and decoupled variants converge to different points: the L2-coupled version effectively penalises high-curvature parameters less than low-curvature ones; AdamW applies the same fractional shrinkage to every parameter as the textbook L2 says it should.
+The two variants land at different points. The **coupled** run converges to $(0.909, 2.500)$ — essentially the textbook L2 optimum $\arg\min\!\big(L + \tfrac{\lambda}{2}\|\theta\|^2\big) = (10/11,\ 5/2) \approx (0.909, 2.500)$. Measured against the data optimum $(1, 5)$, that is a $9\%$ shrink on the high-curvature $\theta_1$ but a full $50\%$ shrink on the low-curvature $\theta_2$: coupled L2 pulls the low-curvature coordinate far harder, because there the data gradient is too weak to resist the penalty. **AdamW** instead lands at $(0.967, 4.740)$ — a near-uniform $3\%$ / $5\%$ shrink across the two coordinates. That curvature-independent per-step fractional decay is exactly what decoupling buys; it is a *different* endpoint from coupled L2, not the same one reached more accurately.
 
 ## Three Trajectories on One Surface
 
 ### Theory
 
-Plot SGD, Adam, and AdamW paths over the same anisotropic bowl. SGD zigzags, Adam glides, and AdamW glides toward a slightly more shrunk minimum because of its weight-decay pull.
+Plot SGD, Adam, and AdamW paths over the same anisotropic bowl. SGD zigzags across the steep axis while crawling along the flat one; Adam glides down the ravine floor; AdamW glides the same way but its weight-decay term adds a constant pull toward the origin, so it settles even closer to it. (The bowl's minimum is itself the origin here, so that pull costs no extra loss.)
 
 ### Example — Optimiser-trajectory overlay
 
@@ -240,28 +307,24 @@ for k = 1:n_steps
   path_adamw(k + 1, 2) = theta_aw(2);
 end
 
-figure()
+figure();
 plot(path_sgd(:, 1),   path_sgd(:, 2),   "color", "red",   "label", "SGD")
 hold("on")
 plot(path_adam(:, 1),  path_adam(:, 2),  "color", "blue",  "label", "Adam")
 plot(path_adamw(:, 1), path_adamw(:, 2), "color", "green", "label", "AdamW (λ=0.05)")
 hold("off")
-title("Optimiser trajectories on  L = ½(20 θ₁² + θ₂²)")
+title("Optimiser trajectories on  L = ½(200 θ₁² + θ₂²)")
 xlabel("θ₁  (steep direction)")
 ylabel("θ₂  (flat direction)")
 legend("SGD", "Adam", "AdamW")
 ```
 
 <!-- rustlab:output-start -->
-```text
-36
-```
-
-![plot 1](plots/16-adamw-optimizer/plot-1-6dd19569.svg)
+![plot 2](plots/16-adamw-optimizer/plot-2-abc75ae7.svg)
 
 <!-- rustlab:output-end -->
 
-SGD's path looks like a saw blade: large $\theta_1$ overshoots cause oscillation. Adam and AdamW both glide smoothly down the floor of the ravine. AdamW lands slightly inside the origin because of the constant pull from weight decay.
+SGD's path looks like a saw blade: with $\eta = 0.009$ the steep coordinate $\theta_1$ flips sign every step ($1 - \eta \cdot 200 = -0.8$), so it zigzags while $\theta_2$ barely drifts. Adam and AdamW both glide smoothly down the floor of the ravine. AdamW ends closer to the origin ($\|\theta\| \approx 0.024$) than Adam ($\|\theta\| \approx 0.165$) because of the constant pull from weight decay — and since the origin is also the loss minimum here, that extra shrinkage costs nothing.
 
 ## Choosing the Hyperparameters
 
@@ -270,7 +333,7 @@ SGD's path looks like a saw blade: large $\theta_1$ overshoots cause oscillation
 Three numbers dominate the optimiser's behaviour and they have surprisingly stable defaults across LLM training:
 
 - $\beta_1 = 0.9$. Half-life $\log(1/2)/\log(\beta_1) \approx 6.6$ steps. Captures short-term momentum without going stale.
-- $\beta_2 = 0.999$. Half-life $\approx 693$ steps. Tracks per-parameter scale over a long horizon — important because a parameter's typical gradient magnitude is roughly stationary across many minibatches, even if individual gradients are noisy.
+- $\beta_2 = 0.999$ is the generic Adam default (half-life $\approx 693$ steps). It tracks per-parameter scale over a long horizon — a parameter's typical gradient magnitude is roughly stationary across many minibatches even when individual gradients are noisy. Large-scale **LLM** training usually lowers it to $\beta_2 = 0.95$ (GPT-3, OPT, LLaMA, nanoGPT): at very large batch sizes the long-memory $0.999$ can destabilise, and $0.95$ (half-life $\approx 14$ steps) reacts faster to shifts in gradient scale.
 - $\varepsilon = 10^{-8}$. Prevents division by zero on parameters that have never received a non-trivial gradient (e.g. unused embedding rows for rare tokens).
 
 The learning rate $\eta$ is the only hyperparameter that requires per-task tuning — and even that is constrained by the warmup-and-decay *schedule* covered in [Lesson 17](17-learning-rate-scheduling.md). Weight decay $\lambda$ is typically $0.1$ for transformer language models (small but non-zero — it does real regularisation work on the embedding and projection matrices).
@@ -281,7 +344,7 @@ The learning rate $\eta$ is the only hyperparameter that requires per-task tunin
 
 The optimiser is the credit-assignment loop: backprop measures how each parameter contributed to the bit overshoot in [Lesson 03](03-cross-entropy-loss.md)'s cross-entropy, and the optimiser turns those measurements into parameter updates. Two questions to keep in mind:
 
-- **Adam's per-parameter learning rate is a maximum-likelihood estimate of the gradient's signal-to-noise ratio.** Dividing by $\sqrt{v_t}$ effectively says "trust the sign of $m_t$ proportional to how reliably it has been the sign of recent gradients." Parameters whose minibatch gradients are noisy (high variance / low signal) are updated cautiously; parameters whose gradients are consistent are updated boldly.
+- **Adam's per-parameter learning rate behaves like a signal-to-noise ratio of the gradient** — an SNR-*like* quantity in Kingma & Ba's framing, not a formal maximum-likelihood estimate. Dividing by $\sqrt{v_t}$ effectively says "trust the sign of $m_t$ in proportion to how reliably it has been the sign of recent gradients." Parameters whose minibatch gradients are noisy (high variance / low signal) are updated cautiously; parameters whose gradients are consistent are updated boldly.
 - **Decoupled weight decay is a uniform prior on parameter magnitudes.** It corresponds to a Gaussian prior $\mathcal{N}(0, 1/\lambda)$ over $\theta$, applied identically to every coordinate. Coupled L2 inside Adam corrupts that prior — the per-parameter $1/\sqrt{v_t}$ term changes how strongly each coordinate is pulled toward zero. AdamW cleanly separates "what does the data want?" (the gradient) from "what does the prior want?" (uniform shrinkage).
 
 ## Key Takeaways
@@ -290,14 +353,14 @@ The optimiser is the credit-assignment loop: backprop measures how each paramete
 - **Momentum** smooths sign-flipping gradients along steep axes and accumulates them along flat axes.
 - **Adam** maintains a first-moment EMA $\mathbf{m}_t$ (momentum) and a second-moment EMA $\mathbf{v}_t$ (per-parameter scale), with **bias correction** for the early steps.
 - **AdamW** decouples weight decay from the moment estimates: $\lambda\theta$ is subtracted directly from the parameter, not folded into $\mathbf{v}_t$. This restores the textbook behaviour of L2 regularisation under an adaptive optimiser.
-- The hyperparameters $\beta_1 = 0.9, \beta_2 = 0.999, \varepsilon = 10^{-8}, \lambda = 0.1$ are the de-facto defaults for every published GPT.
+- The hyperparameters $\beta_1 = 0.9$, $\varepsilon = 10^{-8}$, $\lambda = 0.1$ are stable defaults across transformer training. $\beta_2 = 0.999$ is the *generic* Adam default, but published large-scale LLM training (GPT-3, OPT, LLaMA, nanoGPT) uses $\beta_2 = 0.95$ for stability at large batch sizes.
 
 ## Standalone Scripts
 
 | Script | What it computes |
 |---|---|
 | `sgd_vs_momentum.rlab` | SGD vs SGD-with-momentum on the elongated bowl; loss curves and trajectories |
-| `adam_step.rlab` | one Adam step in detail with bias correction; verifies that $\hat{\mathbf{m}} \to \mathbf{m}$ as $t$ grows |
+| `adam_step.rlab` | one Adam step in detail with bias correction; shows the $\hat{\mathbf{m}}$ factor reaching $\approx 1$ within a few steps while the $\hat{\mathbf{v}}$ factor lags ($\beta_2$ half-life $\approx 693$ steps) |
 | `optimizer_comparison.rlab` | full SGD vs Adam vs AdamW trajectory overlay on the anisotropic loss surface |
 
 Run all with `make lesson-16` (or `rustlab run lessons/16-adamw-optimizer/<name>.rlab`).
@@ -306,19 +369,19 @@ Run all with `make lesson-16` (or `rustlab run lessons/16-adamw-optimizer/<name>
 
 | Variable | Expected Value |
 |---|---|
-| `loss(theta_sgd)` after 60 SGD steps | ~$0.5 \cdot \theta_2^2$ (slow $\theta_2$ decay, small $\theta_1$) |
-| `loss(theta_adam)` after 60 Adam steps | $< 10^{-3}$ (well below SGD) |
+| `loss(theta_sgd)` after 60 SGD steps | ≈ `2.70` ($\theta_2$ stuck near `2.33`; $\theta_1$ converged) |
+| `loss(theta_adam)` after 60 Adam steps | ≈ `0.017` (~160× below SGD) |
 | Bias correction at $t = 1$ ($1 - \beta_1$) | `0.1` (big correction) |
 | Bias correction at $t = 100$ | $\approx 1$ (negligible) |
 | Decoupled vs coupled `theta_d - theta_c` | non-zero, especially in the small-curvature direction |
 
 ## Exercises
 
-1. **Why bias correction matters.** At $t = 1$, what does $\mathbf{m}_1$ equal in terms of $\mathbf{g}_1$? What does $\hat{\mathbf{m}}_1$ equal? Why would Adam underestimate the first step's update without the correction?
+1. **Why bias correction matters.** At $t = 1$, write $\mathbf{m}_1$ and $\mathbf{v}_1$ in terms of $\mathbf{g}_1$ and confirm $\hat{\mathbf{m}}_1 = \mathbf{g}_1$, $\hat{\mathbf{v}}_1 = \mathbf{g}_1^2$. Now suppose you skipped **both** corrections: show that the raw first step $\mathbf{m}_1 / \sqrt{\mathbf{v}_1}$ exceeds the corrected step $\hat{\mathbf{m}}_1 / \sqrt{\hat{\mathbf{v}}_1}$ by a factor $(1 - \beta_1)/\sqrt{1 - \beta_2}$. Evaluate it at $(\beta_1, \beta_2) = (0.9, 0.999)$ — is the uncorrected first step too large or too small, and by how much?
 2. **Tuning $\beta_2$.** Re-run `adam_step.rlab` with $\beta_2 = 0.9$. Does the optimiser still converge as quickly? Why is a long second-moment horizon important for stable training?
 3. **Why $\varepsilon$ inside the square root vs outside.** The original Adam paper uses $\hat{\mathbf{m}} / (\sqrt{\hat{\mathbf{v}}} + \varepsilon)$. What changes if you write $\hat{\mathbf{m}} / \sqrt{\hat{\mathbf{v}} + \varepsilon}$? On parameters with $\hat{v} \to 0$, which version gives a saner step size?
 4. **Coupled vs decoupled, by hand.** Write out one AdamW step and one Adam-with-L2 step for a single parameter $\theta = 2.0$ with gradient $g = 1.0$ and $\lambda = 0.1$. Where exactly do the two formulas diverge?
-5. **Loss surface intuition.** On `optimizer_comparison.rlab`, change the bowl to $L = 0.5 (200\theta_1^2 + \theta_2^2)$ (condition number 200). What learning rate keeps SGD stable now? What does Adam need?
+5. **Loss surface intuition.** `optimizer_comparison.rlab` already runs at condition number 200. Push it further to $L = 0.5(1000\theta_1^2 + \theta_2^2)$: what is the new SGD stability bound $2/a$, and what learning rate must SGD use? Does Adam's $\eta$ need to change at all? Re-run and compare the final losses.
 
 ## What's next
 

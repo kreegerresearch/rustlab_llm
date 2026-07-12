@@ -17,13 +17,13 @@ step 600 K=3    : ' the cat sat on the mat the cat sat on the mat the c '
 step 600 P=0.9  : ' the cat sat on the mat the cat sat on the mat the c '
 ```
 
-Three things to read from that gallery. First, **training is essentially perfect**: final PPL is $\approx 1.00008$ — practically the lower bound. Second, **attention beats bigram by construction**: the original Lesson 22 used an embedding-only bigram model and floored at PPL $\approx 1.5$ with greedy collapsing to `"the cat the cat"` because it could not tell the two `"the "` contexts apart. The single-block transformer here uses attention to look at *which* `"the "` it is, and reproduces the full corpus. Third, **every sampling strategy converges to the same output** — once the model is this confident, temperature, top-K, and top-P all leave the argmax untouched.
+Three things to read from that gallery. First, **training is essentially perfect**: final PPL is $\approx 1.00008$ — practically the lower bound. Second, **context beats a bigram on this corpus**: the best any context-1 (bigram) model can do here is PPL $\approx 1.47$, because after the token `"at "` the next token is genuinely ambiguous — it is `"s"`, `"o"`, or `"the c"` depending on whether this is `"cat"`, `"sat"`, or `"mat"`, and a bigram cannot tell them apart. The single-block transformer looks one token back to see which `"at "` it is and reproduces the full corpus. (On a *fixed* corpus the transformer actually has two routes to that answer — attention over the previous token, and the fixed positional embedding, which by itself makes every position distinguishable; Exercise 3 pulls them apart.) Third, **every sampling strategy converges to the same output** — once the model is this confident, temperature, top-K, and top-P all leave the argmax untouched.
 
 ## Learning Objectives
 
 - See **every component from Lessons 01–24 composed in one script** — tokens, BPE, transformer block forward + backward, AdamW with warmup+cosine, perplexity, all four sampling strategies.
 - Watch a single-block transformer **learn to reproduce a periodic corpus** that a bigram model cannot solve.
-- Verify the **attention-beats-bigram** claim quantitatively: full transformer reaches $\mathrm{PPL} \approx 1.0001$ vs bigram-only's $\approx 1.5$ on the same corpus and same BPE tokenisation.
+- Verify the **context-beats-bigram** claim quantitatively: the full transformer reaches $\mathrm{PPL} \approx 1.00008$, versus the optimal-bigram floor of $\approx 1.47$ on the same corpus and the same BPE tokenisation.
 - Recognise the **mode-collapse → resolution** pattern: bigram greedy collapses to a 2-cycle (Lesson 21 demo); attention resolves it (this lesson).
 
 ## Background
@@ -60,7 +60,7 @@ The capstone script `capstone.rlab` references each by section header. The forwa
 
 The capstone trains the **full single-block transformer** end-to-end with analytical gradients — 300 parameters total: token embedding $\mathbf{E}$ ($18 \times 4 = 72$), Pre-LN scales and biases ($4 \times 4 = 16$), Q/K/V/O projections ($4 \times 16 = 64$), FFN $\mathbf{W}_1, \mathbf{b}_1, \mathbf{W}_2, \mathbf{b}_2$ ($32 + 8 + 32 + 4 = 76$), and LM head $\mathbf{W}_U$ ($4 \times 18 = 72$). Sinusoidal positional embeddings are fixed (not trainable). The model is small because rustlab is an interpreter; the recipe scales transparently to LLaMA dimensions.
 
-The OLD lesson 22 capstone (prior to [24-full-backprop-and-fine-tuning](24-full-backprop-and-fine-tuning.md)) trained only the embeddings and LM head — a bigram surrogate — because backprop through attention had been derived in Lesson 15 but not wired into a training script. That surrogate floored at $\mathrm{PPL} \approx 1.51$ on this same corpus, with greedy collapsing to the 2-cycle `"the cat the cat"` because $P(\text{"cat"} \mid \text{"the "}) = P(\text{"mat"} \mid \text{"the "}) = 0.5$ under bigram. **Adding attention removes that ambiguity.** The full transformer can look at *which* `"the "` is being predicted from (the one preceded by `"on "` predicts `"mat"`; the one preceded by the sequence end predicts `"cat"`) and assigns probability 1 to the right next token. The PPL drops from 1.51 to 1.00008.
+The OLD lesson 22 capstone (prior to [24-full-backprop-and-fine-tuning](24-full-backprop-and-fine-tuning.md)) trained only the embeddings and LM head — a bigram surrogate — because backprop through attention had been derived in Lesson 15 but not yet wired into a training script. On this corpus and tokenisation the best any context-1 model can reach is the optimal-bigram floor $\mathrm{PPL} \approx 1.47$ (computed live in the block above), and the old surrogate landed near there. The irreducible ambiguity is the token `"at "`: it is followed by `"s"`, `"o"`, or `"the c"` — the continuations of `"cat"`, `"sat"`, and `"mat"` — and a bigram, conditioning only on the current token, cannot tell the three apart. **Attention removes that ambiguity.** The full transformer looks one token back — each `"at "` is immediately preceded by `"the c"`, `"s"`, or `"the m"` — and assigns probability $\approx 1$ to the correct next token. The PPL drops from the $\approx 1.47$ floor to 1.00008.
 
 > [!IMPORTANT]
 > "Mini-GPT" here means **the full GPT recipe applied to a small model**. Every component — char tokens, BPE, embeddings, attention, FFN, LN, residuals, AdamW, warmup+cosine, PPL, sampling, full backprop — is from the curriculum, with no black boxes. Every choice scales transparently to a real LLM. Only the numbers change.
@@ -86,6 +86,47 @@ Merge 8  pair (15, m) count = 4   new_id = 18      % "the m"
 
 After 8 merges the sequence is 32 tokens long (down from 92 chars), and the vocabulary contains word-fragment tokens like `"the c"` and `"the m"` — the model now operates at a subword level.
 
+### Example — The bigram floor these tokens impose
+
+Before we train anything, we can compute the best score any *context-1* (bigram) model could achieve on this exact 32-token sequence. That number is the bar the full transformer has to clear. The sequence below is the output of the 8 BPE merges above (`tokens` in `capstone.rlab`); ids follow the merge table — `12 = "at "`, `17 = "the c"`, `18 = "the m"`, `16 = "n "`, `9 = "s"`, `8 = "o"`.
+
+```rustlab
+% 32-token BPE sequence from capstone.rlab: phrase [17 12 9 12 8 16 18 12] x4.
+tokens = [17, 12, 9, 12, 8, 16, 18, 12, 17, 12, 9, 12, 8, 16, 18, 12, ...
+          17, 12, 9, 12, 8, 16, 18, 12, 17, 12, 9, 12, 8, 16, 18, 12];
+vocab_bg = 18;
+T_bg = length(tokens);
+
+% Count every bigram transition count(curr, next).
+counts = zeros(vocab_bg, vocab_bg);
+for t = 1:(T_bg - 1)
+  counts(tokens(t), tokens(t + 1)) = counts(tokens(t), tokens(t + 1)) + 1;
+end
+
+% Optimal bigram assigns P(next | curr) = count(curr, next) / row-sum.
+% Its cross-entropy is -mean log P(next | curr) over all T-1 transitions.
+ce_floor = 0.0;
+for t = 1:(T_bg - 1)
+  curr = tokens(t); nxt = tokens(t + 1);
+  p_bigram = counts(curr, nxt) / sum(counts(curr, :));
+  ce_floor = ce_floor - log(p_bigram);
+end
+ce_floor = ce_floor / (T_bg - 1);
+ppl_floor = exp(ce_floor);
+print("optimal-bigram CE (nats):", ce_floor);
+print("optimal-bigram PPL floor:", ppl_floor);
+```
+
+<!-- rustlab:output-start -->
+```text
+optimal-bigram CE (nats): 0.38679536276834264
+optimal-bigram PPL floor: 1.4722551822198788
+```
+
+<!-- rustlab:output-end -->
+
+Every current token predicts its successor deterministically **except token 12 (`"at "`)**, which is followed by three different tokens across the corpus: `"s"` (in `"sat"`, 4 times), `"o"` (in `"on"`, 4 times), and `"the c"` (wrapping into the next phrase, 3 times). A bigram conditions only on the current token, so it cannot see *which* `"at "` it is looking at; the best it can do is hedge with $P = (4/11,\, 4/11,\, 3/11)$. Those 11 ambiguous transitions cost $H(4/11, 4/11, 3/11) \approx 1.09$ nats each; the other 20 are free, so the mean cross-entropy is $\tfrac{11}{31} \cdot 1.09 = 0.3868$ nats, giving $\mathrm{PPL}_{\text{floor}} = 1.4723$. **That is the number attention has to beat** — and the trained transformer reaches PPL 1.00008 by looking one token back to disambiguate the three `"at "` contexts.
+
 ### 2. Train
 
 The capstone runs 600 AdamW steps with warmup+cosine LR schedule ([17-learning-rate-scheduling](17-learning-rate-scheduling.md)) on the **full transformer forward pass** from [14-full-gpt-architecture](14-full-gpt-architecture.md) and the **analytical backward pass** from [24-full-backprop-and-fine-tuning](24-full-backprop-and-fine-tuning.md). Every parameter receives a gradient: token embedding $\mathbf{E}$, both LayerNorm scales/biases, the four attention projections $\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V, \mathbf{W}_O$, FFN weights and biases, and the LM head $\mathbf{W}_U$.
@@ -100,7 +141,7 @@ Final   L = 0.0000817  PPL = 1.00008
 Loss drops from ~$\log |\mathcal{V}|$ (uniform-random baseline) to **0.0000817**, equivalently PPL = **1.00008**. The model has learned to assign probability $\approx 1$ to the correct next token at every position — perfect except for floating-point noise.
 
 > [!NOTE]
-> The original lesson 22 (pre-Lesson-24) used an embedding-only model and floored at PPL = 1.51, which is exactly $\exp(\tfrac{1}{8} \cdot 4 \log 2)$ from the four 50/50 ambiguities per phrase. Adding attention closes that gap because attention can distinguish *which* `"the "` is being predicted from. **The PPL ratio 1.51 / 1.00008 ≈ 1.5 is the price the bigram model paid for being unable to look at context.**
+> The best a context-1 (bigram) model can do on this corpus is **not** a clean closed form. On the capstone's own 32-token BPE sequence the optimal-bigram cross-entropy is $\mathrm{CE} = 0.3868$ nats, i.e. $\mathrm{PPL}_{\text{floor}} = 1.4723$ (the block above computes both). The often-quoted 1.51 was the *empirical* train-split PPL of the pre-rewrite embedding-only capstone — an artefact of that particular run, not a derived bound (and it is not $\exp(\tfrac{1}{8}\cdot 4\log 2) = \sqrt2 \approx 1.414$ either). Either way, attention closes the gap by looking one token back to disambiguate the three `"at "` continuations; the full transformer reaches PPL 1.00008.
 
 There is no train/val split in this capstone — the corpus is periodic with period 8 tokens, and once positional embeddings are involved, any held-out positions are PE-out-of-distribution, not a useful overfitting signal. Lessons 18, 20, and 22-bigram demonstrate the train/val pattern at appropriate scale; here we train on every prediction position.
 
@@ -115,7 +156,7 @@ step 300 greedy : ' the cat sat on the mat the cat sat on the mat the c '
 step 600 greedy : ' the cat sat on the mat the cat sat on the mat the c '
 ```
 
-By **step 100** the model has already learned the full corpus structure. Greedy decoding now reproduces the corpus exactly — there is no mode collapse to a 2-cycle because attention resolves the `"the "` ambiguity from context. This is the headline contrast with the old bigram capstone: same corpus, same BPE, same training loop, attention added — and `"sat on the mat"` now appears under *greedy* decoding, not only under sampling.
+By **step 100** the model has already learned the full corpus structure. Greedy decoding now reproduces the corpus exactly — there is no mode collapse, because the model resolves the `"at "` ambiguity from context (it reads the token immediately before each `"at "`). This is the headline contrast with the old bigram surrogate: same corpus, same BPE, same training loop, attention added — and `"sat on the mat"` now appears under *greedy* decoding, not only under sampling.
 
 Sampling strategies behave identically at step 600 because the model is so confident:
 
@@ -161,7 +202,7 @@ Every one of those is an engineering or substitution layer over the math the cap
 
 - The capstone composes **Lessons 01–24** into a single script that trains a single-block transformer end-to-end with analytical gradients.
 - Loss drops from $\approx 2.87$ (uniform over 18 tokens) to $\approx 8 \times 10^{-5}$ — **PPL = 1.00008**, essentially the lower bound.
-- **Attention beats bigram by construction** on this corpus: the bigram-only surrogate (old Lesson 22) floors at PPL = 1.51 because $P(\text{cat} \mid \text{the }) = P(\text{mat} \mid \text{the }) = 0.5$; attention resolves the ambiguity by looking at the preceding `"on "` / sequence-start.
+- **Context beats a bigram on this corpus**: the optimal-bigram floor is PPL $\approx 1.47$ (CE $= 0.3868$ nats) because `"at "` is followed by three different tokens (`"s"`, `"o"`, `"the c"`) and a bigram cannot tell them apart; the transformer resolves it by looking one token back. On a *fixed* corpus the positional embedding provides a second, independent route to the same disambiguation — see Exercise 3.
 - **Greedy decoding now reproduces the corpus** — no mode collapse — because the model's distribution is essentially one-hot at every position. All sampling strategies (temperature, top-K, top-P) converge to the same output for the same reason.
 - The four diagnostic plots (loss, PPL, gradient norm, LR) are exactly what a production run reports.
 - Scaling to a real LLM swaps the model size, the corpus, the precision, and the training scale — not the underlying math.
@@ -187,15 +228,15 @@ Run with `make lesson-22` (or `rustlab run lessons/22-putting-it-all-together/ca
 | Initial loss | $\approx 2.87$ (≈ $\log 18 = 2.89$ uniform baseline) |
 | Final loss | $\approx 8 \times 10^{-5}$ |
 | Final PPL | $\approx 1.00008$ |
-| Bigram-surrogate floor (for reference) | PPL $\approx 1.51$ |
+| Optimal-bigram floor on the 32-token BPE sequence | PPL $\approx 1.4723$ (CE $= 0.3868$ nats) |
 | step-100 greedy from `"the c"` | `"the cat sat on the mat the cat sat on the mat the c"` (corpus reproduced) |
 | step-600 greedy / T=0.7 / T=1.0 / K=3 / P=0.9 | all identical — corpus reproduced exactly |
 
 ## Exercises
 
-1. **Why no mode collapse?** Examine the trained attention pattern $\mathbf{A}$ at position $t$ where the model must decide between `"the cat"` and `"the mat"`. Which prior position carries the disambiguating information, and is it attended to with high weight? Hint: it should be the token roughly two positions back.
-2. **Bigram floor analytically.** Show by hand that an embedding-only (context-1) model on this corpus is forced to assign $P(\text{cat} \mid \text{the }) = 0.5$ and similarly for `"mat"`, and derive the resulting PPL = $\sqrt{2} \cdot \text{(rest of PPL terms)} \approx 1.51$.
-3. **Disable attention.** Replace the line `H_mid = H_in + proj` with `H_mid = H_in` so the attention path contributes nothing. Re-train. What is the new floor? It should match the old bigram capstone (PPL ≈ 1.5).
+1. **Why no mode collapse?** Examine the trained attention pattern $\mathbf{A}$ at a position whose current token is `"at "` (id 12) — the only token with an ambiguous successor. Which earlier position carries the disambiguating information, and is it attended to with high weight? Hint: it is the token *immediately before* `"at "` (one position back) — `"the c"`, `"s"`, or `"the m"` — which uniquely determines the continuation.
+2. **Bigram floor analytically.** Using the transition counts from the block in §1, show by hand that a context-1 model must assign $P(\cdot \mid \text{"at "}) = (4/11, 4/11, 3/11)$ over $(\text{"s"}, \text{"o"}, \text{"the c"})$, that every other current token has a deterministic successor, and that the mean cross-entropy over all 31 transitions is therefore $\tfrac{11}{31}\,H(4/11, 4/11, 3/11) = 0.3868$ nats — i.e. $\mathrm{PPL}_{\text{floor}} = 1.4723$. Confirm against the printed value.
+3. **What actually forces the bigram floor?** Disabling attention alone — replace `H_mid = H_in + proj` with `H_mid = H_in` and re-train — does *not* recover the bigram floor: the model still drives to PPL $\approx 1.0$. The reason is the fixed sinusoidal positional embedding, which makes all 32 positions distinct, so the FFN can memorise a position→next-token map on this fixed corpus — a route that has nothing to do with attention. To genuinely reduce the model to context-1, ablate **both** attention and the positional embedding (also set `PE = zeros(T_max, d_model)`). Now the model sees only the current token embedding, is architecturally bigram-limited, and should floor near PPL $\approx 1.47$. Extension: ablate attention *only* and watch PPL still fall toward 1 — direct evidence that on a fixed corpus positional encoding is a second, independent route to the answer.
 4. **More merges.** Re-run with $n_{\text{merges}} = 20$ instead of 8. The vocabulary grows; what happens to the sequence length and the final PPL? Past how many merges does PPL stop improving?
 5. **Longer corpus.** Change `n_reps` from 4 to 10. Does the loss curve shape change? With more training pairs but the same parameter count, does the model still memorise perfectly?
 6. **Different prompt.** Generate from prompt = 12 (= `"at "`), which appears 12 times in the corpus. Does greedy produce a coherent continuation? Hint: position-in-corpus matters — the model uses positional embeddings, so the same input token at different positions may continue differently.

@@ -72,12 +72,13 @@ L     = sum(0.5 * (y_hat - t) .^ 2);
 ```
 
 ```rustlab
-% Backward (right to left).  dL_da1_m is a 1xN matrix; M(1) extracts row 1
-% as a vector, restoring the type that 1 - a1.^2 carries.
+% Backward (right to left).  dL_da1_m is a 1×d_h matrix; M(1, :) extracts the
+% whole first row as a length-d_h vector.  (M(1) alone would grab only the
+% first scalar element and silently broadcast it — a common trap.)
 dL_dy    = sum(y_hat - t);            % scalar
 dL_dW2   = a1' * dL_dy;               % d_h × 1
 dL_da1_m = dL_dy * W2';               % 1 × d_h matrix
-dL_da1   = dL_da1_m(1);                % vector of length d_h
+dL_da1   = dL_da1_m(1, :);             % row 1 -> vector of length d_h
 dL_dz1   = dL_da1 .* (1 - a1 .^ 2);    % tanh'(z) = 1 - tanh(z)^2
 dL_dW1   = x' * dL_dz1;                % d_in × d_h
 dL_dx    = dL_dz1 * W1';               % 1 × d_in
@@ -226,7 +227,7 @@ The dot product $\bar{\mathbf{a}} \cdot \mathbf{a}$ is the row-wise expectation 
 
 $$\bar{\mathbf{Q}} = \frac{1}{\sqrt{d_k}} \bar{\mathbf{S}} \mathbf{K}, \qquad \bar{\mathbf{K}} = \frac{1}{\sqrt{d_k}} \bar{\mathbf{S}}^\top \mathbf{Q}.$$
 
-The mask $\mathbf{M}$ has zero gradient: it is a constant added pre-softmax, and softmax already zeroes its impact on attention weights at masked positions, so $\bar{\mathbf{M}}$ never has to be computed — but $\bar{\mathbf{S}}$ above is automatically zero on the upper triangle because $\mathbf{A}$ is zero there.
+Two facts about the mask, kept distinct. First, $\bar{\mathbf{S}}$ is exactly zero on the **upper triangle** — the masked $i < j$ entries — because $\mathbf{A}$ is zero there and the softmax Jacobian kills those components; on the *unmasked* lower triangle $\bar{\mathbf{S}}$ is generally nonzero, and that is where the real gradient signal lives. Second, $\mathbf{M}$ itself carries **no** gradient — not because $\bar{\mathbf{S}}$ vanishes but because $\mathbf{M}$ is a fixed constant, never a learnable parameter, so there is nothing to update and $\bar{\mathbf{M}}$ is simply never formed.
 
 **Step 4 — through the projections $\mathbf{Q} = \mathbf{X}\mathbf{W}_Q$ etc.:** plain linear layers.
 
@@ -290,6 +291,40 @@ dL/dX shape  : [1×2]  4.000000  4.000000
 
 <!-- rustlab:output-end -->
 
+Analytical gradients are only trustworthy once a finite-difference check confirms them. Perturb a single weight, $\mathbf{W}_Q(2, 1)$, by $\pm\varepsilon$, recompute the scalar loss $L = \sum \bar{\mathbf{O}} \odot \mathbf{O}$ (whose gradient w.r.t. $\mathbf{O}$ is exactly $\bar{\mathbf{O}}$ by construction), and compare the centred difference to the analytic entry:
+
+```rustlab
+% Recompute the head's scalar loss as a function of W_Q for the FD check.
+function Lval = head_loss(X, W_Q, W_K, W_V, Mmat, scale2, dL_dO)
+  Q = X * W_Q;
+  K = X * W_K;
+  V = X * W_V;
+  S = Q * K' * scale2 + Mmat;
+  O = softmax(S) * V;
+  Lval = sum(reshape(dL_dO .* O, 1, size(O, 1) * size(O, 2)));
+end
+
+eps = 1e-5;
+WQp = W_Q; WQp(2, 1) = W_Q(2, 1) + eps;
+WQm = W_Q; WQm(2, 1) = W_Q(2, 1) - eps;
+fd_wq  = (head_loss(X, WQp, W_K, W_V, Mmat, scale2, dL_dO) - head_loss(X, WQm, W_K, W_V, Mmat, scale2, dL_dO)) / (2 * eps);
+err_wq = abs(fd_wq - dL_dWQ(2, 1));
+print("analytic  dL/dW_Q(2,1):", dL_dWQ(2, 1));
+print("finite-diff          :", fd_wq);
+print("error                :", err_wq);
+```
+
+<!-- rustlab:output-start -->
+```text
+analytic  dL/dW_Q(2,1): -0.013339717537696234
+finite-diff          : -0.013339717536142713
+error                : 0.0000000000015535212005701737
+```
+
+<!-- rustlab:output-end -->
+
+Finite-difference check at $\mathbf{W}_Q(2, 1)$: analytic $-0.013340$ vs finite-difference $-0.013340$ — error $1.55e-12$, far below $\varepsilon$ and exactly what a correct backward pass through the softmax Jacobian, the scaled dot product, and the three projections should produce.
+
 The shared-input accumulation $\bar{\mathbf{X}} = \bar{\mathbf{X}}_Q + \bar{\mathbf{X}}_K + \bar{\mathbf{X}}_V$ is the multivariate analogue of the chain rule's product over branches — every place the same variable feeds the graph, gradients add.
 
 ## Gradient Flow Through a Stack
@@ -330,20 +365,20 @@ end
 regimes = {"rho=0.7  (vanish)", "rho=1.0  (stable)", "rho=1.3  (explode)"};
 layers  = {"L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12"};
 
-figure()
-heatmap(layers, regimes, log10(G_norms + 1e-12), "log10(||grad||) per layer (rows: regime, cols: depth)", "viridis")
+% Plot log10(||g|| / min ||g||): the ratio is >= 0 everywhere, which keeps the
+% heatmap rows in label order (the renderer flips rows when data goes negative).
+g_min = min(min(G_norms));
+
+figure();
+heatmap(layers, regimes, log10(G_norms / g_min), "log10(||grad|| / min) per layer (rows: regime, cols: depth)", "viridis")
 ```
 
 <!-- rustlab:output-start -->
-```text
-35
-```
-
-![plot 1](plots/15-backpropagation/plot-1-e907b777.svg)
+![plot 1](plots/15-backpropagation/plot-1-db9d312c.svg)
 
 <!-- rustlab:output-end -->
 
-Bottom row glows brightest at L12 and dims toward L1 — the gradient vanishes by the time it reaches the input. The top row is uniformly dim. The middle row stays roughly constant across depth: the recipe transformer training actually uses.
+Read the heatmap top to bottom, next to the per-layer norms the loop just recorded. The **vanishing** row ($\rho = 0.7$, top) *dims* toward L1: the gradient norm collapses as it flows down toward the input, from $0.320$ at L12 to $0.0118$ at L1 — a $27$× attenuation over twelve layers, so the first layer sees a far weaker signal than the last and trains much more slowly. The **exploding** row ($\rho = 1.3$, bottom) *brightens* toward L1 and holds the single brightest cell in the plot: the norm grows from $0.723$ at L12 to $18.7$ at L1 — the recipe for divergence in one or two steps. The **stable** row ($\rho = 1.0$, middle) barely changes with depth: $0.53$ at L1 against $0.59$ at L12. That flat middle row is exactly what LayerNorm + residual connections buy you, and the regime transformer training actually targets.
 
 ## Connection to Earlier Lessons
 
@@ -353,7 +388,7 @@ Three threads from earlier in the series come together here.
 
 **Lesson 06 used a closed-form gradient.** The MSE loss for a 1D linear model has gradient $\nabla_\theta L = 2 \mathbf{X}^\top (\mathbf{X}\theta - \mathbf{y}) / N$ — derived by hand. Backprop is the same chain rule generalised to *any* differentiable composition, computed mechanically.
 
-**Lesson 12 motivated residuals via forward-magnitude collapse.** The same argument runs in reverse for gradients: $\partial \mathbf{x}' / \partial \mathbf{x} = \mathbf{I} + \partial f / \partial \mathbf{x}$, so the gradient at layer $\ell-1$ is at least $\bar{\mathbf{x}}_\ell$, never zero. Without residuals a 12-layer stack of softmaxes-and-tanhs would lose roughly $0.9^{12} \approx 0.28$ of its gradient per pass; with them it loses none from the identity branch.
+**Lesson 12 motivated residuals via forward-magnitude collapse.** The same argument runs in reverse for gradients: $\partial \mathbf{x}' / \partial \mathbf{x} = \mathbf{I} + \partial f / \partial \mathbf{x}$, so the gradient at layer $\ell-1$ is at least $\bar{\mathbf{x}}_\ell$, never zero. Without residuals a 12-layer stack whose layers each retain a fraction $0.9$ of the gradient keeps only $0.9^{12} \approx 0.28$ of it per pass — i.e. it *loses* about 72% by the time it reaches the input; with residuals the identity branch loses none.
 
 **Information theory framing.** The cross-entropy loss measures bits of disagreement with the target distribution; the gradient measures the steepest direction of agreement. Backprop is the *credit assignment* mechanism — it tells every parameter how it contributed to the bit-budget overshoot, in proportion. Each gradient component is a Shannon-like quantity: large where the parameter has high mutual information with the loss, small where it has none.
 
@@ -380,8 +415,8 @@ Run all with `make lesson-15` (or `rustlab run lessons/15-backpropagation/<name>
 
 | Variable | Expected Value |
 |---|---|
-| `L` (two-layer MLP loss) | ≈ `0.502` (depends on seed) |
-| `err` (FD check on `dL_dW1`) | ≈ `1e-9` or smaller |
+| `L` (two-layer MLP loss) | ≈ `1.1655` (depends on seed) |
+| `err` (FD check on `dL_dW1`) | ≈ `1e-11` (well under $\varepsilon^2$) |
 | `dL_dz_analytic - fd` (softmax+CE) | ≈ `1e-7` or smaller |
 | Shapes of `dL_dW{Q,K,V}` | `[d_model × d_k]` or `[d_model × d_v]` |
 | `G_norms(1, 1) / G_norms(1, 12)` (rho=0.7) | $\ll 1$ (vanish) |
