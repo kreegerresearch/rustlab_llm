@@ -1,4 +1,4 @@
-# Lesson 23: Modern Architectural Variants
+# Lesson 24: Modern Architectural Variants
 
 The architecture you built in Lessons 08–14 is the **2017 Vaswani / 2019 GPT-2** transformer. Most major open LLMs trained since 2022 — LLaMA, Mistral, Qwen, Falcon — swap out several of those components for variants that improve quality, speed, or memory while preserving the overall shape of the stack. There are four common swaps, and a given model adopts a subset: the LLaMA family uses all four, while GPT-NeoX-20B, for example, took only rotary embeddings and kept LayerNorm + GELU. This lesson covers all four:
 
@@ -362,7 +362,7 @@ ids → embed → for each of N blocks:
            → final RMSNorm → LM head (often weight-tied)
 ```
 
-Every change is local. The training loop ([[18-training-loop]]) is unchanged. The KV cache derivation ([[21-sampling-and-generation]]) is unchanged in shape — only its size is smaller because of GQA. The sampling strategies ([[21-sampling-and-generation]]) are unchanged. The capstone framework ([[22-putting-it-all-together]]) would run the same way with the new components.
+Every change is local. The training loop ([[18-training-loop]]) is unchanged. The KV cache derivation ([[21-sampling-and-generation]]) is unchanged in shape — only its size is smaller because of GQA. The sampling strategies ([[21-sampling-and-generation]]) are unchanged. The capstone framework ([[23-putting-it-all-together]]) would run the same way with the new components.
 
 ## Key Takeaways
 
@@ -381,7 +381,7 @@ Every change is local. The training loop ([[18-training-loop]]) is unchanged. Th
 | `swiglu.rlab` | SwiGLU vs GELU FFN forward; parameter parity at $d_{\text{ff}} = \frac{8}{3} d_{\text{model}}$; toy gate demo |
 | `gqa.rlab` | $H = 4$ attention with $H_{\text{kv}} \in \{4, 2, 1\}$; output equivalence (shape); KV cache scaling to LLaMA-2-70B numbers |
 
-Run all with `make lesson-23` (or `rustlab run lessons/23-modern-architectural-variants/<name>.rlab`).
+Run all with `make lesson-24` (or `rustlab run lessons/24-modern-architectural-variants/<name>.rlab`).
 
 ## Expected Numerical Outputs Summary
 
@@ -408,9 +408,9 @@ Run all with `make lesson-23` (or `rustlab run lessons/23-modern-architectural-v
 
 ## What's next
 
-Lesson 22 was the capstone of the original curriculum. With Lesson 23 you have the **deltas needed to read any open LLM source** — LLaMA, Mistral, Qwen, the various forks. The math in this curriculum applied to the new components produces a faithful re-implementation of any of those models, up to the engineering layer.
+Lesson 23 was the capstone. With Lesson 24 you have the **deltas needed to read any open LLM source** — LLaMA, Mistral, Qwen, the various forks. The math in this curriculum applied to the new components produces a faithful re-implementation of any of those models, up to the engineering layer.
 
-Natural extensions beyond Lesson 23:
+Natural extensions beyond Lesson 24:
 
 - **Fine-tuning.** Supervised fine-tuning (same loss, instruction-formatted data); direct preference optimisation (DPO, a contrastive loss that closes the alignment gap without RLHF's complexity).
 - **Inference scaling.** Quantisation (int8, int4, GPTQ, AWQ); speculative decoding (draft-and-verify); continuous batching.
