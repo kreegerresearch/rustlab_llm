@@ -17,7 +17,7 @@ This file guides AI coding tools working in this repository.
 
 Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts and integrated notebooks that produce visualisations. The series builds from raw probability and linear algebra to a complete GPT-style decoder — nothing is a black box.
 
-**Curriculum status:** 25 lessons. Phases 1–8 (Lessons 01–23) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end: Lesson 22 derives the full analytical backward pass through the Lesson 13 block (the shared `lib/transformer.rlab`), and the Lesson 23 capstone trains the full architecture end-to-end (PPL → 1.00008 on a corpus whose optimal-bigram floor is ≈ 1.47). Phase 9 (Lesson 24) covers post-2020 architectural variants — RoPE, RMSNorm, SwiGLU, GQA — as drop-in swaps. Phase 10 (Lesson 25) applies the backward pass to SFT and DPO. Phase 11 (2026-09-27) moved the toolchain to rustlab 0.3.7, introduced `lib/`, and renumbered 22–25. Phases 12–15 — the re-centring of every lesson on the Signals / Systems / Information lenses plus new lessons 00 and 26 — are specified in `docs/proposal-2026-09-27-ee-controls-it-revision.md` and tracked in `PLAN.md`.
+**Curriculum status:** 27 notebooks (Lessons 00–26), all complete. Lesson 00 is the course map. Phases 1–8 (Lessons 01–23) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end: Lesson 22 derives the full analytical backward pass through the Lesson 13 block (the shared `lib/transformer.rlab`), and the Lesson 23 capstone trains the full architecture end-to-end (PPL → 1.00008 on a corpus whose optimal-bigram floor is ≈ 1.47). Phase 9 (Lesson 24) covers RoPE, RMSNorm, SwiGLU, GQA; Phase 10 (Lesson 25) SFT and DPO; Lesson 26 quantisation and fixed-point inference. Phases 11–15 (2026-09-27) moved the toolchain to rustlab 0.3.7, introduced `lib/`, renumbered 22–25, and re-centred every lesson on the **Engineering Lenses** (Signals / Systems / Information, see below) per `docs/proposal-2026-09-27-ee-controls-it-revision.md`; the record is in `PLAN.md`.
 
 **Learning goal:** Derive every core LLM algorithm — tokenisation, attention, transformer blocks, training, fine-tuning, and inference — with working code and plots at each step. Follows the architecture of [nanoGPT](https://github.com/karpathy/nanoGPT) through Phase 8 and extends it through Phases 9–10.
 
@@ -76,7 +76,7 @@ make notebooks          # render book/<slug>.md from notebooks/<slug>.md (markdo
 make html               # render book/index.html + per-notebook html (gitignored)
 make notebooks-check    # CI drift guard: fails if book/ is out of sync with sources
 make validate           # lint rendered markdown via `rustlab-notebook validate` (markdownlint-cli2)
-make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–25; fails on the first script error)
+make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–26; fails on the first script error)
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
@@ -369,6 +369,20 @@ When a needed function is missing from rustlab, record it here with the format:
 
 ### `<!-- solution -->` directive breaks markdown output
 **Current state (0.3.7):** emits an unclosed and duplicated `<details>` in `-f markdown` (rustlab roadmap A9). Exercises stay plain numbered lists; use hand-written `<details><summary>` HTML only for derivation-type solutions until fixed.
+
+### Plotting and language quirks found during the 2026-09-27 rewrite (0.3.7)
+- `hline`/`yline` called after `plot`/`bar`/`semilogy` **replaces** the series unless `hold("on")` is active — always `hold("on")` before adding reference lines (this had blanked `gqa.rlab`'s curve).
+- The SVG backend drops `plot`/`scatter` series overlaid on `contour`/`contourf`/`imagesc` (all call orders); draw level sets as `plot` lines or use two figures.
+- `quiver` needs gridded origins and rescales shaft lengths to the grid; one or two arrows at a point render wrong. Arrows are drawn as short `plot` polylines.
+- `hold("on")` must be re-issued after each `subplot(...)`.
+- `svd` has an absolute floor ≈ 1e-8 (`svd(diag([1, 1e-9, 1e-12]))` → `[1, 0, 0]`); do not report σ_min below it.
+- `V(:, i)'` does not transpose a column slice (it stays a vector); `M(:, j)'` likewise; use `reshape` or `dot`. `diag(D)` returns a row.
+- Indexed compound assignment `C(i, j) += 1` does not parse — write it out.
+- Integer-class matrix `*` is element-wise (`int32(A) * int32(B)` = `A .* B`).
+- `snr` and `histogram` reject 1×n matrices — pass `randn(n)` vectors or `reshape`.
+- `print` accepts at most 16 arguments; there is no `vline` (draw a two-point series).
+- Template interpolation: `${expr}` immediately followed by `\times$` or `> 1$`, and the `$${expr}$$` form, are not expanded — put a space or reword.
+- Wikilinks inside `> [!NOTE]`/`[!TIP]` callouts are **not** transformed by the markdown renderer — use plain `[text](NN-slug.md)` links there.
 
 ### `run` path handling
 **Current state (0.3.7):** an unquoted `run ../x.rlab` fails to lex (`invalid number: ..`); the quoted form works. A `run` nested inside a script that a notebook runs resolves relative to the notebook directory, not the script. Both are worked around by convention (quoted paths; notebooks never `run` lesson scripts).
