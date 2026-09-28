@@ -47,6 +47,7 @@ lib/
                          # transformer_forward/backward + AdamW + schedule (L22/23/25)
   sampling.rlab          # sample_categorical, topk_mass, topp_mass (L21/23)
   bigram_lm.rlab         # train_bigram_lm — the Lesson 18 model used by L20/21
+  info.rlab              # entropy_bits/nats, cross_entropy_bits, kl_bits, row_entropies_bits, ppl_from_nats
 
 book/                    # rendered output for GitHub display
   README.md              # hand-written GitHub landing page
@@ -146,6 +147,61 @@ Use GitHub-flavored Markdown with LaTeX math: `$inline$` and `$$block$$`. Each n
 - Name every variable and state units explicitly.
 - Connect math to intuition: explain *why* the result looks the way it does.
 - Call out common misconceptions explicitly.
+
+---
+
+## Engineering Lenses (the course's organising device, Phases 12–15)
+
+The course teaches LLM design from **signals and systems**, **modern control / dynamical systems**, and **information theory**. Every lesson 01–26 therefore closes its concept content with one fixed H2, placed before `## Key Takeaways`:
+
+```
+## Engineering Lenses
+### Signals
+### Systems
+### Information
+```
+
+Rules:
+
+- **Each H3 answers a fixed question.** *Signals*: what is the signal (its axis, units, scale) and what operation acts on it (filter, transform, modulation, normalisation) — with a frequency-domain view when that is meaningful. *Systems*: what is the state, what is the update law, is it stable and what sets its time constant or damping, where is the feedback. *Information*: what bits are created, moved, or destroyed here; what is the floor, bound, or budget — **computed on the lesson's own data**.
+- **Every claim opens with a bold honesty label**: `**Exact.**` (a formal equivalence), `**Model.**` (a faithful simplification), or `**Analogy.**` (intuition only, not an identity). Never let an analogy read as an identity.
+- **Every H3 that is present contains at least one executed rustlab block** (a computation or a figure). Prose-only lenses are not allowed. A lens with nothing exact or model-grade to say is omitted, and the H2 carries one sentence saying so (e.g. "No signals reading adds to this lesson.").
+- The former `## Connection to Information Theory` sections migrate into `### Information`, converted from assertion to computation.
+- **Budget:** the lenses add at most one H2 per lesson (typically 40–120 lines); anything larger becomes an exercise or a forward reference. A rewritten lesson should not grow by more than about 40 % in lines.
+- **Figures:** under every figure, one `> [!TIP]` line saying what to look for. Side-by-side panels use `subplot` in one block (one captured plot per block). Signed data is plotted signed.
+- **Diagrams:** architectural lessons carry a ```` ```mermaid ```` signal-flow / block diagram with tensor shapes on the edges. Use `flowchart LR` or `TD`, short node labels, and quote any label containing parentheses, `|`, or `#` (`A["H (T × d)"]`). The markdown renderer passes the fence through to GitHub; the HTML renderer draws it offline.
+- **Demonstrations must demonstrate:** a hand-built "interpretable" matrix is printed and the prose names the entry that proves the claim; a figure described in prose exists in the notebook.
+- **Shared helpers:** `lib/info.rlab` (`entropy_bits`, `entropy_nats`, `cross_entropy_bits`, `kl_bits`, `row_entropies_bits`, `ppl_from_nats`) — include with the hidden `run "../lib/info.rlab"` block once the concept has been derived in that lesson (Lesson 02 derives entropy inline first).
+
+### Notation (fixed in Lesson 00 — every lesson follows it)
+
+| Symbol | Meaning |
+|---|---|
+| $T$ | sequence length; tokens index discrete time $t = 1, \dots, T$ and are the **rows** of every token matrix |
+| $d$, $d_{\text{model}}$, $d_k$, $d_{\text{ff}}$ | feature widths; features are the **columns** (channels) |
+| $\mathbf{X}, \mathbf{H} \in \mathbb{R}^{T \times d}$ | token / residual-stream matrix; row $t$ is token $t$; layers act by right-multiplication $\mathbf{X}\mathbf{W}$ with $\mathbf{W} \in \mathbb{R}^{d_{\text{in}} \times d_{\text{out}}}$ — math and code agree |
+| $\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V, \mathbf{W}_O, \mathbf{W}_1, \mathbf{W}_2, \mathbf{W}_U, \mathbf{E}$ | learned projections, FFN weights, LM head, embedding |
+| $\mathbf{A}$ | attention / mixing matrix: rows = query time $t$, columns = key time $i \le t$ (Lesson 07's uniform version is the special case $\mathbf{A} = \mathbf{W}_{\text{avg}}$) |
+| $\tau$ | softmax temperature — never $T$ |
+| $\mathbf{P}$ | bigram transition matrix (row-stochastic); $\boldsymbol{\Pi}$ a permutation matrix |
+| $\mathcal{L}$ | loss, computed in **nats** in code; prose may report **bits** ($\div \ln 2$) when labelled; perplexity $= e^{\mathcal{L}_{\text{nats}}} = 2^{\mathcal{L}_{\text{bits}}}$ — state the base once per lesson |
+| $\bar{\mathbf{x}} = \partial \mathcal{L} / \partial \mathbf{x}$ | adjoint (= the costate $\boldsymbol{\lambda}$ of optimal control; Lesson 15 says so once) |
+| $\eta$, $\beta_1$, $\beta_2$, $\mu$ | learning rate, Adam moment decays, heavy-ball momentum |
+| indices | 1-based in prose, tables, and code; categorical plot axes carry 1-based labels |
+
+### Exercise solutions
+
+Exercises stay plain numbered lists. For derivation-type exercises only, a hand-written HTML block follows the item (GitHub renders it collapsed):
+
+```
+<details><summary>Solution</summary>
+
+…markdown…
+
+</details>
+```
+
+Do not use the `<!-- solution -->` directive — it is broken in markdown output (rustlab roadmap A9).
 
 ---
 
