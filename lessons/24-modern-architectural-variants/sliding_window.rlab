@@ -1,0 +1,62 @@
+# Script:  sliding_window.rlab
+# System:  Sliding-window (banded) causal attention, Mistral-style, on a
+#          T = 12 toy with window W = 4, compared with full causal attention.
+# Concept: Each query attends only to the most recent W keys.  In the mask
+#          this is one extra condition, j <= i - W, on top of the causal
+#          j > i.  The per-layer KV cache is then bounded by W rows (a ring
+#          buffer) instead of growing with T, and each attention row has at
+#          most W non-zero taps, so its entropy is at most log2(W) bits.
+#          Information still travels N * W tokens after N layers.
+# Equations:
+#   allowed(i, j)  iff  i - W < j <= i
+#   M_band(i, j)   = -1e9 if j > i or j <= i - W, else 0
+#   A = softmax(S + M_band)       row-wise
+#   H(A(i, :)) <= log2(min(i, W)) bits
+# Units:   scores dimensionless; entropies in bits.
+
+run "../../lib/info.rlab"
+
+# === 1. Masks ===
+seed(23);
+T = 12;
+W = 4;
+M_causal = zeros(T, T);
+M_band   = zeros(T, T);
+for i = 1:T
+  for j = 1:T
+    if j > i
+      M_causal(i, j) = -1e9;
+    end
+    if j > i || j <= i - W
+      M_band(i, j) = -1e9;
+    end
+  end
+end
+
+# === 2. Attention under random scores ===
+S = randn(T, T);
+A_full = softmax(S + M_causal);
+A_band = softmax(S + M_band);
+print("non-zero taps in row", T, ":  causal", sum(A_full(T, :) > 0), "  banded", sum(A_band(T, :) > 0));
+print("cache rows a layer must keep:  causal T =", T, "  banded W =", W);
+
+# === 3. Row entropies against the log2(W) bound ===
+H_full = row_entropies_bits(A_full);
+H_band = row_entropies_bits(A_band);
+print("row entropies (bits), causal:", H_full);
+print("row entropies (bits), W = 4: ", H_band);
+print("max row entropy under the window:", max(H_band), "bits  <=  log2(W) =", log2(W));
+print("max row entropy, full causal:    ", max(H_full), "bits  (bound log2(T) =", log2(T), ")");
+
+# === 4. Figure ===
+figure();
+subplot(1, 2, 1)
+imagesc(A_full, "viridis")
+title("causal attention A (T = 12)")
+xlabel("key position"); ylabel("query position")
+subplot(1, 2, 2)
+imagesc(A_band, "viridis")
+title("sliding-window attention A (W = 4)")
+xlabel("key position"); ylabel("query position")
+savefig("sliding_window.svg")
+print("Saved sliding_window.svg");

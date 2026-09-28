@@ -1,0 +1,171 @@
+# Script:  ppl_vs_bits.rlab
+# System:  The trained Lesson 23 capstone transformer, run with its eight
+#          weight matrices quantised to b = 2..8 bits (per-tensor and
+#          per-row scales) on its own 32-token corpus.
+# Concept: The rate-distortion curve of a language model — weight SNR,
+#          perplexity, and KL(p || p_q) of the next-token distribution
+#          versus bits per weight — and the two-part (MDL) code length.
+# Equations: SNR_dB ~ 6.02 b + 4.77 - 20 log10(max|W| / rms W)
+#            D(b) = mean_t KL(softmax(z_t) || softmax(z_t^(b)))  [bits]
+#            two-part code = 272 b + T * L_q / ln 2               [bits]
+# Units:   weights dimensionless; SNR in dB; loss in nats; KL and code lengths in bits.
+
+run "../../lib/transformer.rlab"
+run "../../lib/info.rlab"
+
+# === 1. Re-train the capstone model (Lesson 23 recipe, seed 22) ===
+# TODO: move the corpus + training recipe to lib/capstone.rlab (shared with
+#       notebooks/26 and weight_quantization.rlab).
+tokens = repmat([17, 12, 9, 12, 8, 16, 18, 12], 1, 4);   # Lesson 23's BPE output
+vocab = 18;
+T = length(tokens);
+seed(22);
+d_model = 4;  d_ff = 8;  T_max = T + 16;
+E = randn(vocab, d_model) * 0.3;
+PE = sinusoidal_pe(T_max, d_model);
+gamma1 = ones(d_model);   beta1 = zeros(d_model);
+gamma2 = ones(d_model);   beta2 = zeros(d_model);
+Wq = randn(d_model, d_model) * 0.3;
+Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;
+Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W_U = randn(d_model, vocab) * 0.3;
+P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
+           "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
+mask_train = ones(T - 1);
+n_train = 600;  T_w = 60;  eta_max = 0.05;  eta_min = 0.005;
+bet1 = 0.9;  bet2 = 0.999;  eps_a = 1e-8;
+[M, V] = adamw_init(P);
+for step = 1:n_train
+  eta_t = warmup_cosine(step, n_train, T_w, eta_max, eta_min);
+  [lo, L, cache] = transformer_forward(tokens, mask_train, P);
+  dl = ce_dlogits(tokens, mask_train, lo, cache.total);
+  G = transformer_backward(tokens, dl, cache, P);
+  [P, M, V] = adamw_step(P, G, M, V, eta_t, step, bet1, bet2, eps_a, 0.0);
+end
+[lo_fp, L_fp, cache_fp] = transformer_forward(tokens, mask_train, P);
+print("=== Re-trained capstone ===");
+print("L =", L_fp, "  PPL =", exp(L_fp));
+
+# === 2. Quantisers ===
+# TODO: move quant_tensor / quant_rows / snr_mat / mat_k / quant_params /
+#       mean_kl to lib/quant.rlab (duplicated in weight_quantization.rlab
+#       and the notebook).
+function [Wq, s] = quant_tensor(W, b)
+  q_max = 2 ^ (b - 1) - 1;
+  s = max(max(abs(W))) / q_max;
+  q = min(max(round(W / s), -q_max), q_max);
+  Wq = q * s;
+end
+function [Wq, s] = quant_rows(W, b)
+  q_max = 2 ^ (b - 1) - 1;
+  s = max(abs(W), [], 2) / q_max;
+  q = min(max(round(W ./ s), -q_max), q_max);
+  Wq = q .* s;
+end
+function d = snr_mat(W, Wq)
+  n = numel(W);
+  d = snr(reshape(W, 1, n), reshape(Wq, 1, n));
+end
+function W = mat_k(P, k)
+  if k == 1;      W = P.E;   elseif k == 2;  W = P.Wq;  elseif k == 3;  W = P.Wk;  elseif k == 4;  W = P.Wv;
+  elseif k == 5;  W = P.Wo;  elseif k == 6;  W = P.W1;  elseif k == 7;  W = P.W2;  else;           W = P.W_U;  end
+end
+function Wq = quant_any(W, b, per_row)
+  if per_row > 0
+    [Wq, s] = quant_rows(W, b);
+  else
+    [Wq, s] = quant_tensor(W, b);
+  end
+end
+# One assignment per matrix: rustlab cannot loop over struct fields.
+function Pq = quant_params(P, b, per_row)
+  Pq = P;
+  Pq.E   = quant_any(P.E, b, per_row);
+  Pq.Wq  = quant_any(P.Wq, b, per_row);
+  Pq.Wk  = quant_any(P.Wk, b, per_row);
+  Pq.Wv  = quant_any(P.Wv, b, per_row);
+  Pq.Wo  = quant_any(P.Wo, b, per_row);
+  Pq.W1  = quant_any(P.W1, b, per_row);
+  Pq.W2  = quant_any(P.W2, b, per_row);
+  Pq.W_U = quant_any(P.W_U, b, per_row);
+end
+function D = mean_kl(lo_ref, lo_q, T)
+  D = 0.0;
+  for t = 1:T
+    D = D + kl_bits(softmax(lo_ref(t, :)), softmax(lo_q(t, :)));
+  end
+  D = D / T;
+end
+
+# === 3. Sweep bits per weight ===
+bits = 2:8;
+n_b = length(bits);
+n_q = 272;                                  # parameters in the eight matrices
+SNR_t = zeros(n_b, 8);  SNR_r = zeros(n_b, 8);
+L_t = zeros(n_b);  L_r = zeros(n_b);  KL_t = zeros(n_b);  KL_r = zeros(n_b);
+for i = 1:n_b
+  for k = 1:8
+    W = mat_k(P, k);
+    [Wt, st] = quant_tensor(W, bits(i));  SNR_t(i, k) = snr_mat(W, Wt);
+    [Wr, sr] = quant_rows(W, bits(i));    SNR_r(i, k) = snr_mat(W, Wr);
+  end
+  Pq = quant_params(P, bits(i), 0);
+  [lo_q, L_q, c] = transformer_forward(tokens, mask_train, Pq);
+  L_t(i) = L_q;  KL_t(i) = mean_kl(lo_fp, lo_q, T);
+  Pq = quant_params(P, bits(i), 1);
+  [lo_q, L_q, c] = transformer_forward(tokens, mask_train, Pq);
+  L_r(i) = L_q;  KL_r(i) = mean_kl(lo_fp, lo_q, T);
+end
+PPL_t = exp(L_t);  PPL_r = exp(L_r);
+two_part = n_q * bits + T * L_t / log(2);
+print("");
+print("=== Rate-distortion sweep (eight matrices quantised, 28 vectors fp64) ===");
+print("bits   SNR_E(t)  SNR_E(r)   PPL(t)       PPL(r)      KL(t) bits  KL(r) bits   two-part bits");
+for i = 1:n_b
+  print(sprintf("%2d   %8.2f  %8.2f  %11.5f  %9.5f   %9.2e   %9.2e   %8.1f", bits(i), SNR_t(i, 1), SNR_r(i, 1), PPL_t(i), PPL_r(i), KL_t(i), KL_r(i), two_part(i)));
+end
+crest_E = max(max(abs(P.E))) / sqrt(mean(mean(P.E .^ 2)));
+model_E = 6.02 * bits + 4.77 - 20 * log10(crest_E);
+b_fine = linspace(2, 8, 61);               # fine grid so the dashed model line draws cleanly
+print("");
+print("crest factor of E:", crest_E, "  -> model SNR = 6.02 b +", 4.77 - 20 * log10(crest_E), "dB");
+print("mean SNR gain per added bit, 5..8 bits (per-tensor):", mean(mean(SNR_t(4:7, :) - SNR_t(3:6, :))), "dB");
+[best_len, best_i] = min(two_part);
+print("knee: per-tensor PPL at 4/5/6 bits =", PPL_t(3), PPL_t(4), PPL_t(5), "   per-row =", PPL_r(3), PPL_r(4), PPL_r(5));
+print("two-part code minimum:", best_len, "bits at b =", bits(best_i), "   raw corpus:", T * log2(vocab), "bits");
+
+# === 4. Figure ===
+figure();
+subplot(2, 2, 1)
+plot(bits, reshape(SNR_t(:, 1), 1, n_b), "color", "blue", "label", "E per-tensor")
+hold("on")
+plot(bits, reshape(SNR_r(:, 1), 1, n_b), "color", "red", "label", "E per-row")
+plot(b_fine, 6.02 * b_fine + 4.77 - 20 * log10(crest_E), "color", "gray", "style", "dashed", "label", "6.02 b + 4.77 - 20 log10(c)")
+hold("off")
+title("SNR of E vs bits"); xlabel("bits per weight b"); ylabel("SNR (dB)")
+subplot(2, 2, 2)
+semilogy(bits, PPL_t, "color", "blue", "label", "per-tensor")
+hold("on")
+semilogy(bits, PPL_r, "color", "red", "label", "per-row")
+yline(exp(L_fp), "gray", "fp64")
+hold("off")
+title("Perplexity vs bits"); xlabel("bits per weight b"); ylabel("PPL")
+subplot(2, 2, 3)
+semilogy(bits, KL_t, "color", "blue", "label", "per-tensor")
+hold("on")
+semilogy(bits, KL_r, "color", "red", "label", "per-row")
+hold("off")
+title("Mean KL(p || p_q) vs bits"); xlabel("bits per weight b"); ylabel("KL (bits)")
+subplot(2, 2, 4)
+plot(bits, two_part, "color", "purple", "label", "272 b + corpus bits")
+hold("on")
+plot(b_fine, n_q * b_fine, "color", "gray", "style", "dashed", "label", "weights only")
+yline(T * log2(vocab), "red", "raw corpus (133 bits)")
+hold("off")
+title("Two-part code length vs bits"); xlabel("bits per weight b"); ylabel("bits")
+savefig("ppl_vs_bits.svg")
+print("");
+print("Saved ppl_vs_bits.svg");

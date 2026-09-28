@@ -1,0 +1,58 @@
+# Script:  decode_bandwidth.rlab
+# System:  Autoregressive decoding of a LLaMA-2-70B-shaped model (L = 80,
+#          H = 64, d_head = 128, T = 8192) on one HBM3 memory system
+#          (3.35 TB/s), with MHA / GQA / MQA KV caches.
+# Concept: Decode is bandwidth-bound.  Every step reads the weights once
+#          and the whole KV cache once, so tokens/s per sequence cannot
+#          exceed BW / (N_weights + B * N_cache) for B concurrent
+#          sequences.  The cache term grows with B and T; the weight term
+#          does not.  GQA shrinks N_cache by H / H_kv and moves the knee of
+#          the curve out by the same factor.  The cache is also a bit
+#          budget: bytes per token at 16 / 8 / 4 bits (Lesson 26).
+# Equations:
+#   N_cache (bytes) = 2 * L * H_kv * d_head * T * b / 8
+#   tok/s per sequence <= BW / (N_weights + B * N_cache)
+# Units:   bytes, bytes/s, tokens/s, GiB = 2^30 bytes.
+
+# === 1. Shape and hardware ===
+L = 80;  H = 64;  d_head = 128;  T = 8192;
+BW = 3.35e12;                       # bytes / s
+W_bytes = 70e9 * 2;                 # 70 B parameters in fp16
+cache_bytes = @(n_kv, bits) 2 * L * n_kv * d_head * T * bits / 8;
+
+# === 2. Cache size and stream time ===
+print("KV cache per request, T = 8192, fp16:");
+print("  MHA (H_kv = 64):", cache_bytes(64, 16) / 2 ^ 30, "GiB   stream time", cache_bytes(64, 16) / BW * 1e3, "ms");
+print("  GQA (H_kv = 8): ", cache_bytes(8, 16) / 2 ^ 30, "GiB   stream time", cache_bytes(8, 16) / BW * 1e3, "ms");
+print("  MQA (H_kv = 1): ", cache_bytes(1, 16) / 2 ^ 30, "GiB   stream time", cache_bytes(1, 16) / BW * 1e3, "ms");
+
+# === 3. The bound vs batch size ===
+B = [1, 2, 4, 8, 16, 32, 64, 128];
+tps_mha = BW ./ (W_bytes + B * cache_bytes(64, 16));
+tps_gqa = BW ./ (W_bytes + B * cache_bytes(8, 16));
+tps_mqa = BW ./ (W_bytes + B * cache_bytes(1, 16));
+print("");
+print("per-sequence tok/s upper bound at B = 1:   MHA", tps_mha(1), "  GQA", tps_gqa(1), "  MQA", tps_mqa(1));
+print("per-sequence tok/s upper bound at B = 32:  MHA", tps_mha(6), "  GQA", tps_gqa(6), "  MQA", tps_mqa(6));
+print("batch at which the cache equals the weights:  MHA", W_bytes / cache_bytes(64, 16), "  GQA", W_bytes / cache_bytes(8, 16));
+
+# === 4. Bytes per cached token at 16 / 8 / 4 bits ===
+print("");
+for bits = [16, 8, 4]
+  print("bits =", bits, ":  bytes/token  MHA", cache_bytes(64, bits) / T, "  GQA", cache_bytes(8, bits) / T, ...
+        "   at T = 8192:  MHA", cache_bytes(64, bits) / 2 ^ 30, "GiB   GQA", cache_bytes(8, bits) / 2 ^ 30, "GiB");
+end
+print("bits per cached token (GQA, 16-bit):", cache_bytes(8, 16) / T * 8, "  vs log2(32000) =", log2(32000), "bits of token id");
+
+# === 5. Figure ===
+figure();
+loglog(B, tps_mha, "color", "red", "label", "MHA (H_kv = 64)")
+hold("on")
+loglog(B, tps_gqa, "color", "blue", "label", "GQA (H_kv = 8)")
+loglog(B, tps_mqa, "color", "green", "label", "MQA (H_kv = 1)")
+hold("off")
+legend("MHA", "GQA", "MQA")
+title("Decode ceiling per sequence vs batch (70B fp16, T = 8192, 3.35 TB/s)")
+xlabel("concurrent sequences B"); ylabel("tokens / s per sequence (upper bound)")
+savefig("decode_bandwidth.svg")
+print("Saved decode_bandwidth.svg");

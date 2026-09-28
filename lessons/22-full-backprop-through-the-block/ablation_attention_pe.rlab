@@ -1,0 +1,97 @@
+# Script:  ablation_attention_pe.rlab
+# System:  Four single-block transformers trained from one random init
+#          (seed 24) on the abb corpus: full / attention off / PE off /
+#          both off, 600 AdamW steps with the Lesson 22 recipe.
+# Concept: Which mechanism beats the bigram floor?  "Attention off" clamps
+#          W_O = 0 after every update, so H_mid = H_in exactly and the chain
+#          rule sends zero gradient into Q, K, V (Lesson 22, piece 6); the
+#          library therefore trains the attention-free model with no second
+#          implementation.  "PE off" zeroes the positional table.  The floors
+#          are the corpus's own conditional entropies: H(next|cur) is the
+#          bigram floor, H(next|cur,prev) the trigram floor.
+# Equations: L = mean_t -log p(ids(t+1) | ids(1..t));
+#            H(next|cur) = sum_c n(c)/N * H(next | cur = c)  (nats).
+# Units:   loss and entropies in nats per prediction pair.
+
+run "../../lib/transformer.rlab"
+run "../../lib/info.rlab"
+
+# === 1. Corpus and initial parameters ===
+seed(24);
+vocab = 2;  d_model = 4;  d_ff = 8;  T_max = 16;
+pat = [1, 2, 2];  T = 12;  ids = zeros(T);
+for i = 1:T
+  ids(i) = pat(mod(i - 1, 3) + 1);
+end
+mask = ones(T - 1);
+E = randn(vocab, d_model) * 0.3;
+PE = sinusoidal_pe(T_max, d_model);
+Wq = randn(d_model, d_model) * 0.3;  Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;  Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;     W2 = randn(d_ff, d_model) * 0.3;
+W_U = randn(d_model, vocab) * 0.3;
+P0 = struct("E", E, "PE", PE, "gamma1", ones(d_model), "beta1", zeros(d_model), ...
+            "gamma2", ones(d_model), "beta2", zeros(d_model), ...
+            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", zeros(d_ff), ...
+            "W2", W2, "b2f", zeros(d_model), "W_U", W_U);
+n_train = 600;  T_w = 60;  eta_max = 0.05;  eta_min = 0.005;
+
+# === 2. One training run, optionally with the attention branch clamped off ===
+function L_final = train_variant(P_start, ids, mask, n_steps, attn_on, T_w, eta_max, eta_min)
+  Pv = P_start;
+  d = size(Pv.E)(2);
+  if attn_on == 0
+    Pv.Wo = zeros(d, d);
+  end
+  [Mv, Vv] = adamw_init(Pv);
+  for step = 1:n_steps
+    eta_t = warmup_cosine(step, n_steps, T_w, eta_max, eta_min);
+    [lo, L, ca] = transformer_forward(ids, mask, Pv);
+    dlv = ce_dlogits(ids, mask, lo, ca.total);
+    Gv = transformer_backward(ids, dlv, ca, Pv);
+    [Pv, Mv, Vv] = adamw_step(Pv, Gv, Mv, Vv, eta_t, step, 0.9, 0.999, 1e-8, 0.0);
+    if attn_on == 0
+      Pv.Wo = zeros(d, d);
+    end
+  end
+  [lo, L_final, ca] = transformer_forward(ids, mask, Pv);
+end
+
+# === 3. Four variants from the same snapshot ===
+P_nope = P0;  P_nope.PE = zeros(T_max, d_model);
+L_abl = zeros(4);
+L_abl(1) = train_variant(P0, ids, mask, n_train, 1, T_w, eta_max, eta_min);
+L_abl(2) = train_variant(P0, ids, mask, n_train, 0, T_w, eta_max, eta_min);
+L_abl(3) = train_variant(P_nope, ids, mask, n_train, 1, T_w, eta_max, eta_min);
+L_abl(4) = train_variant(P_nope, ids, mask, n_train, 0, T_w, eta_max, eta_min);
+print("=== Ablation on the abb corpus (final loss, nats/pair) ===");
+print("full model               L =", L_abl(1));
+print("attention off            L =", L_abl(2));
+print("PE off                   L =", L_abl(3));
+print("attention off and PE off L =", L_abl(4));
+
+# === 4. The floors as conditional entropies of the corpus ===
+function H = cond_entropy_nats(seq, k, V)
+  n = length(seq);
+  C = zeros(V ^ k, V);
+  for t = (k + 1):n
+    key = 0;
+    for j = 1:k
+      key = key * V + (seq(t - j) - 1);
+    end
+    C(key + 1, seq(t)) = C(key + 1, seq(t)) + 1;
+  end
+  H = 0.0;
+  for r = 1:(V ^ k)
+    n_r = sum(C(r, :));
+    if n_r > 0
+      H = H + (n_r / (n - k)) * entropy_nats(C(r, :) / n_r);
+    end
+  end
+end
+H_cur = cond_entropy_nats(ids, 1, vocab);
+H_cur_prev = cond_entropy_nats(ids, 2, vocab);
+print("");
+print("H(next | cur)        =", H_cur, "nats  (bigram floor)");
+print("H(next | cur, prev)  =", H_cur_prev, "nats  (trigram floor)");
+print("I(next ; prev | cur) =", H_cur - H_cur_prev, "nats");
