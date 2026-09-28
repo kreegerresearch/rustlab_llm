@@ -1,0 +1,167 @@
+# Script:  full_backprop.rlab
+# System:  Single-block, single-head transformer trained end-to-end with
+#          analytical gradients on the period-3 corpus "abbabbabbabb".
+#          The corpus is chosen so that a bigram model cannot solve it
+#          (after "b" the next token splits between "a" and "b" depending
+#          on context-2) but a 2-position context CAN: every (curr, prev)
+#          pair determines the next token exactly.  Attention is what
+#          lets the model use the prev-prev token.
+# Concept: Compose Lesson 15's per-layer chain-rule derivations into a
+#          full backward pass through:
+#              embed -> LN1 -> attention -> residual -> LN2 -> FFN
+#                    -> residual -> LM head -> softmax + cross-entropy.
+#          The forward/backward pair lives in lib/transformer.rlab
+#          (transformer_forward / transformer_backward) and is shared with
+#          the capstone (Lesson 23) and fine-tuning (Lesson 25).  Verify it
+#          with a numerical gradient check (central finite-difference,
+#          (L+ - L-)/(2*eps), vs analytical) on chosen scalar parameters.
+#          Then train for 600 steps with AdamW and watch the loss drop
+#          below the analytic bigram floor (~ 0.434 nats / pair) toward 0.
+# Equations:  see notebooks/22-full-backprop-through-the-block.md "Full
+#             Backward Pass" section — every line of the library
+#             corresponds to a named equation there.
+# Units:   activations dimensionless; loss in nats; learning rate, betas
+#          standard AdamW.
+
+run "../../lib/transformer.rlab"
+
+# === 1. Hyperparameters and corpus ===
+seed(24);
+vocab = 2;             # tokens: a=1, b=2
+d_model = 4;
+d_ff = 8;
+T_max = 16;            # max sequence length used for positional embeddings
+n_train = 600;
+
+# Periodic corpus "abbabbabbabb..." — 12 tokens, 11 pairs.
+pat = [1, 2, 2];       # a, b, b
+T = 12;
+ids = zeros(T);
+for i = 1:T
+  ids(i) = pat(mod(i - 1, 3) + 1);
+end
+print("tokens:", ids);
+n_pairs = T - 1;
+mask = ones(n_pairs);  # every prediction position counts
+
+# === 2. Parameters (trainable), packed into one struct P ===
+# Embedding + sinusoidal PE (PE is fixed, not trainable here for clarity).
+E = randn(vocab, d_model) * 0.3;
+PE = sinusoidal_pe(T_max, d_model);
+
+# Block parameters: LN gammas/betas, Q/K/V/O projections, FFN, LM head.
+gamma1 = ones(d_model);   beta1 = zeros(d_model);
+gamma2 = ones(d_model);   beta2 = zeros(d_model);
+Wq = randn(d_model, d_model) * 0.3;
+Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;
+Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;
+b1f = zeros(d_ff);
+W2 = randn(d_ff, d_model) * 0.3;
+b2f = zeros(d_model);
+W_U = randn(d_model, vocab) * 0.3;     # LM head (not weight-tied)
+
+P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
+           "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
+
+# === 3. Gradient check.  Pick one element of W_U, perturb by eps, compare
+# ===  the finite-difference loss change to the analytical gradient there. ===
+function ok = grad_check(ids, mask, P)
+  eps_g = 1e-4;
+  [logits_0, L_0, cache] = transformer_forward(ids, mask, P);
+  dl = ce_dlogits(ids, mask, logits_0, cache.total);
+  G = transformer_backward(ids, dl, cache, P);
+
+  # Perturb W_U(1, 1).
+  W_U_plus = P.W_U;  W_U_plus(1, 1) = W_U_plus(1, 1) + eps_g;
+  P_plus = P;  P_plus.W_U = W_U_plus;
+  [lo, L_plus, ca] = transformer_forward(ids, mask, P_plus);
+  W_U_minus = P.W_U;  W_U_minus(1, 1) = W_U_minus(1, 1) - eps_g;
+  P_minus = P;  P_minus.W_U = W_U_minus;
+  [lo, L_minus, ca] = transformer_forward(ids, mask, P_minus);
+
+  num_grad = (L_plus - L_minus) / (2.0 * eps_g);
+  dW_U = G.W_U;                   # (struct fields cannot be indexed directly)
+  ana_grad = dW_U(1, 1);
+  rel_err = abs(num_grad - ana_grad) / (abs(num_grad) + abs(ana_grad) + 1e-12);
+  print("Gradient check on W_U(1, 1):");
+  print("  numerical  =", num_grad);
+  print("  analytical =", ana_grad);
+  print("  rel error  =", rel_err, "(should be < 1e-5)");
+  ok = rel_err < 1e-5;
+
+  # Also check one Wq element to verify attention backprop.
+  Wq_plus = P.Wq;  Wq_plus(1, 1) = Wq_plus(1, 1) + eps_g;
+  P_plus = P;  P_plus.Wq = Wq_plus;
+  [lo, L_qp, ca] = transformer_forward(ids, mask, P_plus);
+  Wq_minus = P.Wq;  Wq_minus(1, 1) = Wq_minus(1, 1) - eps_g;
+  P_minus = P;  P_minus.Wq = Wq_minus;
+  [lo, L_qm, ca] = transformer_forward(ids, mask, P_minus);
+  num_q = (L_qp - L_qm) / (2.0 * eps_g);
+  dWq = G.Wq;
+  ana_q = dWq(1, 1);
+  rel_q = abs(num_q - ana_q) / (abs(num_q) + abs(ana_q) + 1e-12);
+  print("Gradient check on Wq(1, 1):");
+  print("  numerical  =", num_q);
+  print("  analytical =", ana_q);
+  print("  rel error  =", rel_q, "(should be < 1e-5)");
+  ok = ok && (rel_q < 1e-5);
+end
+
+# === 4. Run the gradient check before training ===
+print("=== Gradient check ===");
+ok = grad_check(ids, mask, P);
+print("Both checks pass:", ok);
+
+# === 5. Bigram-floor reference for the abb corpus ===
+# After 'a': next is 'b' (4 occurrences), loss contribution -log(1) = 0.
+# After 'b': next is 'b' 4 times, 'a' 3 times.  Bigram P(b|b) = 4/7,
+# P(a|b) = 3/7.  Mean loss = (4 * 0 + 4 * -log(4/7) + 3 * -log(3/7)) / 11.
+L_bigram_a = 0.0;
+L_bigram_b = -log(4.0 / 7.0);
+L_bigram_a_after_b = -log(3.0 / 7.0);
+L_bigram = (4 * 0.0 + 4 * L_bigram_b + 3 * L_bigram_a_after_b) / 11;
+print("");
+print("Bigram-floor reference on this corpus: L =", L_bigram, "nats/pair");
+print("(Trigram / context-2 model can achieve L = 0 exactly.)");
+
+# === 6. AdamW training loop (Lessons 16-18) ===
+print("");
+print("=== Training (AdamW, 600 steps) ===");
+[M, V] = adamw_init(P);
+bet1 = 0.9; bet2 = 0.999; eps_a = 1e-8;
+eta_max = 0.05; eta_min = 0.005; T_w = 60;
+
+loss_curve = zeros(n_train + 1);
+[lo, L0, cache] = transformer_forward(ids, mask, P);
+loss_curve(1) = L0;
+print("Step 0    L =", loss_curve(1));
+
+for step = 1:n_train
+  eta_t = warmup_cosine(step, n_train, T_w, eta_max, eta_min);
+
+  # Forward + backward through the shared library.
+  [lo, L, cache] = transformer_forward(ids, mask, P);
+  loss_curve(step + 1) = L;
+  dl = ce_dlogits(ids, mask, lo, cache.total);
+  G = transformer_backward(ids, dl, cache, P);
+
+  # AdamW update of every parameter in P (no weight decay here).
+  [P, M, V] = adamw_step(P, G, M, V, eta_t, step, bet1, bet2, eps_a, 0.0);
+end
+print("Final L =", loss_curve(n_train + 1));
+print("Bigram floor =", L_bigram, "  -- attention model should beat this.");
+
+# === 7. Plot the loss curve against the bigram floor ===
+figure();
+plot(0:n_train, loss_curve, "color", "blue", "label", "train loss")
+hold("on")
+hline(L_bigram, "red", "bigram floor")
+hold("off")
+title("Single-block transformer end-to-end loss vs bigram floor")
+xlabel("step")
+ylabel("L (nats / pair)")
+legend("train loss", "bigram floor")
+savefig("full_backprop.svg")
+print("Saved full_backprop.svg");

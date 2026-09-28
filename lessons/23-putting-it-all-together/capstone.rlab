@@ -1,0 +1,358 @@
+# Script:  capstone.rlab
+# System:  End-to-end mini-GPT on the periodic corpus
+#          "the cat sat on the mat " (repeated 4 times = 92 chars).
+# Concept: Composes every prior lesson:
+#            Lesson 01 — chars -> integer tokens
+#            Lesson 03 — cross-entropy training objective
+#            Lesson 08-13 — single-block transformer forward (attention,
+#                            LN, FFN, residuals)
+#            Lesson 14 — token + sinusoidal PE + block + LM head wiring
+#            Lesson 15 — chain rule per layer
+#            Lesson 16 — AdamW
+#            Lesson 17 — warmup + cosine LR schedule
+#            Lesson 18 — train / val / log diagnostics
+#            Lesson 19 — BPE merges, word-level tokens
+#            Lesson 20 — perplexity per checkpoint
+#            Lesson 21 — autoregressive loop, sampling strategies
+#            Lesson 22 — full transformer backward pass
+#          The forward/backward library (lib/transformer.rlab) and the
+#          sampling helpers (lib/sampling.rlab) are shared with Lessons 21,
+#          22 and 25 and pulled in with `run`.
+# Equations: see notebooks/23-putting-it-all-together.md.
+# Units:   parameters dimensionless; loss in nats; PPL dimensionless.
+
+run "../../lib/transformer.rlab"
+run "../../lib/sampling.rlab"
+
+# === 1. Corpus + character tokenisation (Lesson 01) ===
+# 10 unique chars in "the cat sat on the mat ": space, a, c, e, h, m, n, o, s, t.
+function id = char_id(c)
+  if c == " "
+    id = 1;
+  elseif c == "a"
+    id = 2;
+  elseif c == "c"
+    id = 3;
+  elseif c == "e"
+    id = 4;
+  elseif c == "h"
+    id = 5;
+  elseif c == "m"
+    id = 6;
+  elseif c == "n"
+    id = 7;
+  elseif c == "o"
+    id = 8;
+  elseif c == "s"
+    id = 9;
+  elseif c == "t"
+    id = 10;
+  end
+end
+char_names = {" ", "a", "c", "e", "h", "m", "n", "o", "s", "t"};
+n_base_chars = 10;
+
+phrase = "the cat sat on the mat ";
+n_reps = 4;
+L_total = length(phrase) * n_reps;
+char_seq = zeros(L_total);
+k = 1;
+for r = 1:n_reps
+  for i = 1:length(phrase)
+    char_seq(k) = char_id(phrase(i));
+    k = k + 1;
+  end
+end
+print("=== Corpus ===");
+print("phrase:", phrase, " (length", length(phrase), ")");
+print("repeated", n_reps, "times: total chars =", L_total);
+
+# === 2. BPE tokenisation (Lesson 19) ===
+function r = bpe_step(seq, vocab_size)
+  V = vocab_size;
+  L = length(seq);
+  counts = zeros(V, V);
+  for i = 1:(L - 1)
+    a = seq(i); b = seq(i + 1);
+    counts(a, b) = counts(a, b) + 1;
+  end
+  flat = reshape(counts, 1, V * V);
+  idx = argmax(flat);
+  best_a = mod(idx - 1, V) + 1;
+  best_b = floor((idx - 1) / V) + 1;
+  best_c = counts(best_a, best_b);
+  new_id = V + 1;
+  new_seq = zeros(L);
+  k = 1; i = 1;
+  while i <= L
+    if i < L && seq(i) == best_a && seq(i + 1) == best_b
+      new_seq(k) = new_id;
+      k = k + 1; i = i + 2;
+    else
+      new_seq(k) = seq(i);
+      k = k + 1; i = i + 1;
+    end
+  end
+  trimmed = new_seq(1:(k - 1));
+  r = struct("seq", trimmed, "a", best_a, "b", best_b, "count", best_c, "vocab", new_id);
+end
+
+n_merges = 8;
+cur_seq = char_seq;
+cur_vocab = n_base_chars;
+print("");
+print("=== BPE training (Lesson 19) ===");
+for m = 1:n_merges
+  step = bpe_step(cur_seq, cur_vocab);
+  print("Merge", m, " pair (", step.a, ",", step.b, ") count =", step.count, "  new_id =", step.vocab, " seq len =", length(step.seq));
+  cur_seq = step.seq;
+  cur_vocab = step.vocab;
+end
+tokens = cur_seq;
+vocab = cur_vocab;
+T = length(tokens);
+print("After", n_merges, "merges: vocab =", vocab, "  seq length =", T);
+
+# Parent table for decoding token-ids back to char-id sequences.
+function [left_parent, right_parent] = compute_merge_table(char_seq, n_base, n_merges)
+  total = n_base + n_merges;
+  left_parent = zeros(total);
+  right_parent = zeros(total);
+  cur_seq = char_seq;
+  cur_vocab = n_base;
+  for m = 1:n_merges
+    step = bpe_step(cur_seq, cur_vocab);
+    new_id = step.vocab;
+    left_parent(new_id) = step.a;
+    right_parent(new_id) = step.b;
+    cur_seq = step.seq;
+    cur_vocab = new_id;
+  end
+end
+
+function chars_out = expand_token(id, left_parent, right_parent)
+  # Wrap the terminal case in [id] so the result is always a 1xN matrix:
+  # length(scalar) = 1 but scalar(j) errors, and the caller indexes it.
+  if left_parent(id) == 0
+    chars_out = [id];
+  else
+    L = expand_token(left_parent(id), left_parent, right_parent);
+    R = expand_token(right_parent(id), left_parent, right_parent);
+    chars_out = [L, R];
+  end
+end
+
+function s = decode_seq(tok_seq, left_parent, right_parent, char_names)
+  s = "";
+  for i = 1:length(tok_seq)
+    chars_i = expand_token(tok_seq(i), left_parent, right_parent);
+    for j = 1:length(chars_i)
+      s = s + char_names(chars_i(j));
+    end
+  end
+end
+
+# === 3. Train on the full sequence (Lesson 18) ===
+# No train/val split: once positional embeddings are involved, held-out
+# positions are PE-out-of-distribution from the training positions
+# (PE(25) is a different sinusoidal vector than PE(1..24) ever saw), so a
+# val PPL spike does not signal overfitting — it just shows the model
+# cannot extrapolate to position indices it has never trained on.  For
+# the capstone we train on every prediction position.
+n_pairs = T - 1;
+print("");
+print("training pairs (full corpus):", n_pairs);
+
+# === 4. Model: full Lesson-14 architecture, single block, single head ===
+seed(22);
+d_model = 4;
+d_ff = 8;
+T_max = T + 16;     # PE table large enough for any generation prefix.
+
+E = randn(vocab, d_model) * 0.3;
+PE = sinusoidal_pe(T_max, d_model);
+gamma1 = ones(d_model);   beta1 = zeros(d_model);
+gamma2 = ones(d_model);   beta2 = zeros(d_model);
+Wq = randn(d_model, d_model) * 0.3;
+Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;
+Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W_U = randn(d_model, vocab) * 0.3;
+P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
+           "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
+n_params = vocab * d_model + 4 * d_model + 4 * d_model * d_model + 2 * d_model * d_ff + d_ff + d_model + d_model * vocab;
+print("");
+print("=== Model (single-block transformer) ===");
+print("vocab:", vocab, "  d_model:", d_model, "  d_ff:", d_ff, "  params:", n_params);
+
+# === 5. Mean-loss / PPL helper (Lesson 20).  Reuses transformer_forward
+# === with a mask selecting the prediction positions start_idx .. end. ===
+function L = mean_loss(start_idx, n_pairs, ids, P)
+  T_full = start_idx + n_pairs;
+  ids_slice = ids(1:T_full);
+  T_slice = length(ids_slice);
+  mask = zeros(T_slice - 1);
+  for t = start_idx:(T_slice - 1)
+    mask(t) = 1;
+  end
+  [lo, L, cache] = transformer_forward(ids_slice, mask, P);
+end
+
+# === 6. Training (Lessons 16, 17, 18, 22) ===
+[M, V] = adamw_init(P);
+bet1 = 0.9; bet2 = 0.999; eps_a = 1e-8;
+n_train = 600;
+eta_max = 0.05; eta_min = 0.005; T_w = 60;
+
+# Full-sequence training mask — every prediction position contributes.
+mask_train = ones(T - 1);
+
+loss_curve = zeros(n_train + 1);
+ppl_curve  = zeros(n_train + 1);
+gnorm      = zeros(n_train + 1);
+lr_curve   = zeros(n_train + 1);
+loss_curve(1) = mean_loss(1, n_pairs, tokens, P);
+ppl_curve(1) = exp(loss_curve(1));
+print("");
+print("=== Training (full transformer, 600 steps) ===");
+print("Initial L =", loss_curve(1), "  PPL =", ppl_curve(1));
+print("(log(vocab) =", log(vocab), "is the uniform baseline.)");
+
+# Checkpoint storage — copy the whole parameter struct at step 0, 100, 300, 600.
+P_ck0 = P;
+
+for step = 1:n_train
+  eta_t = warmup_cosine(step, n_train, T_w, eta_max, eta_min);
+  lr_curve(step + 1) = eta_t;
+
+  [lo, L, cache] = transformer_forward(tokens, mask_train, P);
+  dl = ce_dlogits(tokens, mask_train, lo, cache.total);
+  G = transformer_backward(tokens, dl, cache, P);
+  gnorm(step + 1) = grad_norm(G);
+
+  [P, M, V] = adamw_step(P, G, M, V, eta_t, step, bet1, bet2, eps_a, 0.0);
+
+  loss_curve(step + 1) = mean_loss(1, n_pairs, tokens, P);
+  ppl_curve(step + 1) = exp(loss_curve(step + 1));
+
+  if step == 100
+    P_ck1 = P;
+  elseif step == 300
+    P_ck2 = P;
+  elseif step == 600
+    P_ck3 = P;
+  end
+end
+print("Final L =", loss_curve(n_train + 1), "  PPL =", ppl_curve(n_train + 1));
+print("(For reference: the optimal context-1 (bigram) model on this exact");
+print(" 32-token BPE sequence floors at PPL ~ 1.4723 (CE 0.3868 nats). The");
+print(" irreducible ambiguity is token 'at ', followed by 's', 'o', or 'the c'");
+print(" with counts 4/11, 4/11, 3/11; a bigram cannot tell the three apart.");
+print(" The full transformer looks one token back to resolve which 'at ' it is.)");
+
+# === 7. Generation (Lesson 21).  Each step runs a full forward pass on
+# === the growing prefix — no KV cache here for capstone simplicity.
+# === The KV-cache version is the kv_cache.rlab demo from Lesson 21. ===
+function seq = greedy_gen(x0, n_new, P)
+  seq = zeros(n_new + 1);
+  seq(1) = x0;
+  for t = 1:n_new
+    p = next_token_dist(seq(1:t), P);
+    seq(t + 1) = argmax(p);
+  end
+end
+
+function seq = temp_gen(x0, n_new, T_temp, P)
+  seq = zeros(n_new + 1);
+  seq(1) = x0;
+  for t = 1:n_new
+    prefix = seq(1:t);
+    T_pref = length(prefix);
+    zero_mask = zeros(T_pref - 1);
+    [logits, lo, cache] = transformer_forward(prefix, zero_mask, P);
+    p = softmax(logits(T_pref, :) / T_temp);
+    seq(t + 1) = sample_categorical(p);
+  end
+end
+
+function seq = topk_gen(x0, n_new, K_top, T_temp, P)
+  seq = zeros(n_new + 1);
+  seq(1) = x0;
+  for t = 1:n_new
+    prefix = seq(1:t);
+    T_pref = length(prefix);
+    zero_mask = zeros(T_pref - 1);
+    [logits, lo, cache] = transformer_forward(prefix, zero_mask, P);
+    p = softmax(logits(T_pref, :) / T_temp);
+    q = topk_mass(p, K_top);
+    seq(t + 1) = sample_categorical(q);
+  end
+end
+
+function seq = topp_gen(x0, n_new, P_top, T_temp, P)
+  seq = zeros(n_new + 1);
+  seq(1) = x0;
+  for t = 1:n_new
+    prefix = seq(1:t);
+    T_pref = length(prefix);
+    zero_mask = zeros(T_pref - 1);
+    [logits, lo, cache] = transformer_forward(prefix, zero_mask, P);
+    p = softmax(logits(T_pref, :) / T_temp);
+    q = topp_mass(p, P_top);
+    seq(t + 1) = sample_categorical(q);
+  end
+end
+
+# === 8. Checkpoint gallery ===
+[lp, rp] = compute_merge_table(char_seq, n_base_chars, n_merges);
+# The natural corpus start: every phrase of the tokenised sequence begins
+# with token 17 = "the c".  Starting from anywhere else is technically
+# out-of-distribution — every space char in the corpus was absorbed into
+# a multi-char BPE token, so the bare space token (id 1) never appears as
+# an input during training.
+prompt_id = 17;
+n_gen = 16;
+
+print("");
+print("=== Checkpoint gallery (16 tokens from prompt token 17 = 'the c') ===");
+print("step   0 greedy : '", decode_seq(greedy_gen(prompt_id, n_gen, P_ck0), lp, rp, char_names), "'");
+print("step 100 greedy : '", decode_seq(greedy_gen(prompt_id, n_gen, P_ck1), lp, rp, char_names), "'");
+print("step 300 greedy : '", decode_seq(greedy_gen(prompt_id, n_gen, P_ck2), lp, rp, char_names), "'");
+print("step 600 greedy : '", decode_seq(greedy_gen(prompt_id, n_gen, P_ck3), lp, rp, char_names), "'");
+
+seed(101);
+print("step 600 T=0.7  : '", decode_seq(temp_gen(prompt_id, n_gen, 0.7, P_ck3), lp, rp, char_names), "'");
+print("step 600 T=1.0  : '", decode_seq(temp_gen(prompt_id, n_gen, 1.0, P_ck3), lp, rp, char_names), "'");
+print("step 600 K=3    : '", decode_seq(topk_gen(prompt_id, n_gen, 3, 1.0, P_ck3), lp, rp, char_names), "'");
+print("step 600 P=0.9  : '", decode_seq(topp_gen(prompt_id, n_gen, 0.9, 1.0, P_ck3), lp, rp, char_names), "'");
+
+# === 9. Trained attention pattern (Lessons 08, 21 exercise 1) ===
+# Row t = query position, column i = key position.  The "at " positions
+# (token 12) should put their weight on the token immediately before them.
+[logits_final, L_final, cache_final] = transformer_forward(tokens, mask_train, P_ck3);
+A_trained = cache_final.A;
+
+# === 10. Diagnostic plots ===
+steps_axis = 0:n_train;
+figure();
+subplot(2, 2, 1)
+plot(steps_axis, loss_curve, "color", "red")
+title("Loss vs step (full transformer, nats)")
+xlabel("step"); ylabel("L")
+subplot(2, 2, 2)
+plot(steps_axis, ppl_curve, "color", "blue")
+title("PPL vs step (PPL = 1 is perfect)")
+xlabel("step"); ylabel("PPL")
+subplot(2, 2, 3)
+plot(steps_axis, log10(gnorm + 1e-12), "color", "green")
+title("log10 || grad || over training")
+xlabel("step"); ylabel("log10 ||grad||")
+subplot(2, 2, 4)
+plot(steps_axis, lr_curve, "color", "purple")
+title("Learning-rate schedule (warmup + cosine)")
+xlabel("step"); ylabel("eta")
+savefig("capstone.svg")
+print("");
+print("Saved capstone.svg");

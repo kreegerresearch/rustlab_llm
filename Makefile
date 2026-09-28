@@ -2,6 +2,7 @@
 #
 #   notebooks/<slug>.md                   editable source notebook (committed)
 #   lessons/<slug>/*.rlab                 standalone shell scripts (committed)
+#   lib/*.rlab                            shared code pulled in with `run "../lib/<name>.rlab"` (committed)
 #   book/<slug>.md                        rendered for GitHub (committed)
 #   book/plots/<slug>/plot-N.svg          captured figures (committed)
 #   book/index.html, book/<slug>.html     interactive Plotly build (gitignored)
@@ -16,15 +17,15 @@ BOOK := book
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
-	@echo "  lesson-NN          Run .rlab scripts for one lesson (e.g. make lesson-01)"
+	@echo "  lesson-NN          Run .rlab scripts for one lesson (e.g. make lesson-01; 01–25)"
 
 all: notebooks html ## Regenerate the rendered book/ and the interactive HTML build
 
 notebooks: ## Render book/<slug>.md from notebooks/<slug>.md
-	rustlab-notebook render notebooks --format markdown --output $(abspath $(BOOK))
+	rustlab-notebook render notebooks --format markdown --output $(abspath $(BOOK)) --jail-root .
 
 html: ## Build interactive HTML at book/index.html (auto-generated entry page + per-notebook html)
-	rustlab-notebook render notebooks --format html --output $(abspath $(BOOK)) --title "rustlab_llm"
+	rustlab-notebook render notebooks --format html --output $(abspath $(BOOK)) --title "rustlab_llm" --jail-root .
 
 notebooks-check: notebooks ## Fail if book/ drifted from sources
 	@if [ -n "$$(git status --porcelain -- $(BOOK)/)" ]; then \
@@ -36,8 +37,9 @@ validate: ## Lint rendered notebooks against markdownlint-cli2 (install: npm i -
 	rustlab-notebook validate -f markdown notebooks
 
 lesson-%:
-	@for f in lessons/$*-*/*.rlab; do echo "=== $$f ==="; rustlab run "$$f" || true; done
+	@for f in lessons/$*-*/*.rlab; do echo "=== $$f ==="; rustlab run "$$f" --plot none || exit 1; done
 
 clean: ## Delete the interactive HTML build and .rlab script artefacts
 	rm -f $(BOOK)/*.html
-	rm -f lessons/*/*.svg lessons/*/*.html lessons/*/*.png
+	rm -f lessons/*/*.svg lessons/*/*.html lessons/*/*.png lessons/*/*.gif
+	rm -f notebooks/*.svg notebooks/*.html notebooks/*.png notebooks/*.gif

@@ -31,7 +31,7 @@ print("==== Input ====");
 print("H_in shape:                      ", size(H_in));
 
 # === Sublayer 1: Pre-LN MHA ===
-% layernorm(M) standardises each row independently — rustlab 0.3 matrix overload.
+# layernorm(M) standardises each row (one token) independently.
 H_norm1 = layernorm(H_in);
 print("LN1(H_in) shape:                 ", size(H_norm1));
 
@@ -50,26 +50,16 @@ scale = 1.0 / sqrt(d_k);
 out_concat = zeros(T, d_model);
 
 for h = 1:H_heads
-  c_lo = (h - 1) * d_k + 1;
-  Q_h = zeros(T, d_k);
-  K_h = zeros(T, d_k);
-  V_h = zeros(T, d_k);
-  for t = 1:T
-    for k = 1:d_k
-      Q_h(t, k) = Q(t, c_lo + k - 1);
-      K_h(t, k) = K(t, c_lo + k - 1);
-      V_h(t, k) = V(t, c_lo + k - 1);
-    end
-  end
+  c_lo = (h - 1) * d_k + 1;     # first column belonging to head h
+  c_hi = h * d_k;               # last column belonging to head h
+  Q_h = Q(:, c_lo:c_hi);
+  K_h = K(:, c_lo:c_hi);
+  V_h = V(:, c_lo:c_hi);
   S = Q_h * K_h' * scale + M_mask;
   # softmax(M) does per-row softmax of the whole T×T block (dim=2 default).
   A_h = softmax(S);
   O_h = A_h * V_h;
-  for t = 1:T
-    for k = 1:d_k
-      out_concat(t, c_lo + k - 1) = O_h(t, k);
-    end
-  end
+  out_concat(:, c_lo:c_hi) = O_h;
 end
 A_out = out_concat * W_O;
 print("MHA output shape:                ", size(A_out));
@@ -95,20 +85,14 @@ print("H_out shape:                     ", size(H_out));
 print("|H_in| =", norm(H_in), "  |H_mid| =", norm(H_mid), "  |H_out| =", norm(H_out));
 
 # === Visualise the residual stream at each stage ===
-# TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
-# rustlab 0.3.6 colormaps by |value|; shift each panel so min = 0 so the render
-# is faithful (see docs/rustlab-issues-2026-07-12.md §6)
 figure();
-imagesc(H_in - min(min(H_in)),  "viridis")
-title("H_in - min (T=4, d_model=8)")
-savefig("block_forward_hin.svg")
-
-figure();
-imagesc(H_mid - min(min(H_mid)), "viridis")
-title("H_mid - min (after MHA + residual)")
-savefig("block_forward_hmid.svg")
-
-figure();
-imagesc(H_out - min(min(H_out)), "viridis")
-title("H_out - min (after FFN + residual)")
-savefig("block_forward_hout.svg")
+subplot(1, 3, 1)
+imagesc(H_in, "viridis")
+title("H_in (T=4, d_model=8)")
+subplot(1, 3, 2)
+imagesc(H_mid, "viridis")
+title("H_mid (after MHA + residual)")
+subplot(1, 3, 3)
+imagesc(H_out, "viridis")
+title("H_out (after FFN + residual)")
+savefig("block_forward.svg")
