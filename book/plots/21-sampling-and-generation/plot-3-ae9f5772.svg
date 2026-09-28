@@ -1,0 +1,99 @@
+<svg width="900" height="500" viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="900" height="500" opacity="1" fill="#1E1E2E" stroke="none"/>
+<text x="450" y="25" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="17.741935483870968" opacity="1" fill="#CDD6F4">
+Output entropy vs temperature: noise power vs the knob
+</text>
+<text x="20" y="238" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4" transform="rotate(270, 20, 238)">
+H [bits]
+</text>
+<text x="485" y="480" dy="-0.5ex" text-anchor="middle" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+tau (log axis)
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="89,47 89,429 "/>
+<text x="80" y="398" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,398 89,398 "/>
+<text x="80" y="350" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.5
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,350 89,350 "/>
+<text x="80" y="302" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+1.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,302 89,302 "/>
+<text x="80" y="254" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+1.5
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,254 89,254 "/>
+<text x="80" y="206" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+2.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,206 89,206 "/>
+<text x="80" y="158" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+2.5
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,158 89,158 "/>
+<text x="80" y="110" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+3.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,110 89,110 "/>
+<text x="80" y="62" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+3.5
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="84,62 89,62 "/>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="90,430 879,430 "/>
+<text x="198" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.1
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="198,430 198,435 "/>
+<text x="415" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+1
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="415,430 415,435 "/>
+<text x="632" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+10
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="632,430 632,435 "/>
+<text x="849" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+100
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="849,430 849,435 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="90,429 879,429 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="90,353 879,353 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="90,277 879,277 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="90,200 879,200 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="90,124 879,124 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="90,47 879,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="247,429 247,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="405,429 405,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="563,429 563,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="721,429 721,47 "/>
+<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="90,398 102,398 115,398 128,398 141,398 154,397 167,397 180,395 193,393 205,390 218,385 231,379 244,370 257,361 270,349 283,336 296,322 308,307 321,291 334,275 347,258 360,240 373,223 386,205 399,188 411,172 424,157 437,144 450,132 463,121 476,113 489,106 502,100 514,95 527,92 540,89 553,87 566,85 579,84 592,83 605,82 617,81 630,81 643,80 656,80 669,80 682,80 695,80 708,80 720,80 733,79 746,79 759,79 772,79 785,79 798,79 811,79 823,79 836,79 849,79 "/>
+<polyline fill="none" opacity="1" stroke="#D62728" stroke-width="2" points="90,302 102,302 115,302 128,302 141,302 154,302 167,302 180,302 193,302 205,302 218,302 231,302 244,302 257,302 270,302 283,302 296,302 308,302 321,302 334,302 347,302 360,302 373,302 386,302 399,302 411,302 424,302 437,302 450,302 463,302 476,302 489,302 502,301 514,301 527,300 540,298 553,295 566,292 579,289 592,285 605,280 617,275 630,271 643,267 656,263 669,260 682,257 695,255 708,253 720,252 733,250 746,249 759,249 772,248 785,247 798,247 811,247 823,247 836,246 849,246 "/>
+<polyline fill="none" opacity="1" stroke="#808080" stroke-width="1" points="90,79 858,79 "/>
+<polyline fill="none" opacity="1" stroke="#808080" stroke-width="1" points="90,246 868,246 "/>
+<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="90,302 879,302 "/>
+<rect x="665" y="52" width="210" height="101" opacity="0.85" fill="#1E1E2E" stroke="none"/>
+<rect x="665" y="52" width="210" height="101" opacity="0.3" fill="none" stroke="#CDD6F4"/>
+<text x="705" y="62" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+10-class logit vector
+</text>
+<text x="705" y="80" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+trained model, P(. | b)
+</text>
+<text x="705" y="97" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+log2 10 = 3.32 (uniform over 10)
+</text>
+<text x="705" y="115" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+log2 3 = 1.58 (uniform over 3)
+</text>
+<text x="705" y="132" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+1 bit: the tie
+</text>
+<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="675,67 695,67 "/>
+<polyline fill="none" opacity="1" stroke="#D62728" stroke-width="2" points="675,85 695,85 "/>
+<polyline fill="none" opacity="1" stroke="#808080" stroke-width="1" points="675,102 695,102 "/>
+<polyline fill="none" opacity="1" stroke="#808080" stroke-width="1" points="675,120 695,120 "/>
+<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="675,137 695,137 "/>
+</svg>
