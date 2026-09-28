@@ -88,13 +88,8 @@ The MHA computation is exactly Lesson 09's: per head, score → mask → softmax
 ### Example — LN1, then per-head Q/K/V, attention, concat, project
 
 ```rustlab
-% Normalise each token's representation independently, row by row, to make
-% the per-token nature of LayerNorm explicit.  (layernorm(M) does all rows in
-% one call — the loop is purely for readability.)
-H_norm1 = zeros(T, d_model);
-for t = 1:T
-  H_norm1(t) = layernorm(H_in(t, :));
-end
+% LN1: layernorm(M) standardises each row — each token — independently.
+H_norm1 = layernorm(H_in);
 
 % Project: same equations as Lesson 08, but applied to the LN'd input
 Q = H_norm1 * W_Q;       % (T, d_model)
@@ -114,18 +109,12 @@ out_concat = zeros(T, d_model);
 
 for h = 1:H_heads
   c_lo = (h - 1) * d_k + 1;     % first column belonging to head h
+  c_hi = h * d_k;               % last column belonging to head h
 
-  % Slice columns out of Q, K, V into per-head matrices.
-  Q_h = zeros(T, d_k);
-  K_h = zeros(T, d_k);
-  V_h = zeros(T, d_k);
-  for t = 1:T
-    for k = 1:d_k
-      Q_h(t, k) = Q(t, c_lo + k - 1);
-      K_h(t, k) = K(t, c_lo + k - 1);
-      V_h(t, k) = V(t, c_lo + k - 1);
-    end
-  end
+  % Slice head h's d_k columns out of Q, K, V.
+  Q_h = Q(:, c_lo:c_hi);
+  K_h = K(:, c_lo:c_hi);
+  V_h = V(:, c_lo:c_hi);
 
   S = Q_h * K_h' * scale + M_mask;
   % softmax(M) softmaxes each row of M independently (dim=2 default).
@@ -133,11 +122,7 @@ for h = 1:H_heads
   O_h = A_h * V_h;
 
   % Write head h's output into its slice of the concat
-  for t = 1:T
-    for k = 1:d_k
-      out_concat(t, c_lo + k - 1) = O_h(t, k);
-    end
-  end
+  out_concat(:, c_lo:c_hi) = O_h;
 end
 
 A_out = out_concat * W_O;     % (T, d_model)
@@ -170,11 +155,8 @@ FFN applies $\mathbf{W}_2 \, \mathrm{GELU}(\mathbf{W}_1 \mathbf{x} + \mathbf{b}_
 ### Example — LN2, FFN, second residual
 
 ```rustlab
-% Row-by-row LayerNorm again — one standardisation per token.
-H_norm2 = zeros(T, d_model);
-for t = 1:T
-  H_norm2(t) = layernorm(H_mid(t, :));
-end
+% LayerNorm again — one standardisation per token.
+H_norm2 = layernorm(H_mid);
 
 F_pre  = H_norm2 * W_ff1;     % (T, d_ff)
 F_post = gelu(F_pre);         % (T, d_ff), still
@@ -205,27 +187,19 @@ At *this* lesson's initialisation the sublayer contributions are **not** small p
 ### Example — Visualise the residual stream at each stage
 
 ```rustlab
-% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
-% rustlab 0.3.6 colormaps by |value|; shift each panel so min = 0 so the render
-% is faithful (see docs/rustlab-issues-2026-07-12.md §6)
 figure();
-imagesc(H_in - min(min(H_in)),  "viridis")
-title("H_in - min (T=4, d_model=8)")
+subplot(1, 3, 1)
+imagesc(H_in, "viridis")
+title("H_in (T=4, d_model=8)")
+subplot(1, 3, 2)
+imagesc(H_mid, "viridis")
+title("H_mid (after MHA + residual)")
+subplot(1, 3, 3)
+imagesc(H_out, "viridis")
+title("H_out (after FFN + residual)")
 ```
 
-```rustlab
-figure();
-imagesc(H_mid - min(min(H_mid)), "viridis")
-title("H_mid - min (after MHA + residual)")
-```
-
-```rustlab
-figure();
-imagesc(H_out - min(min(H_out)), "viridis")
-title("H_out - min (after FFN + residual)")
-```
-
-Each row of each figure is one token's representation; each column is one feature dimension. The structure barely changes between the three figures — that is the residual stream doing its job. Zoom in and you can see the FFN and MHA each nudge specific cells, but the dominant pattern carried by $\mathbf{H}_{\text{in}}$ persists.
+Each row of each panel is one token's representation; each column is one feature dimension. The structure barely changes between the three panels — that is the residual stream doing its job. Zoom in and you can see the FFN and MHA each nudge specific cells, but the dominant pattern carried by $\mathbf{H}_{\text{in}}$ persists.
 
 ## Stacking Two Blocks
 
@@ -234,6 +208,13 @@ Each row of each figure is one token's representation; each column is one featur
 A real GPT stacks $N$ identical blocks. "Identical" means same architecture, **different parameters per block**. Each block has its own $\mathbf{W}_Q^{(\ell)}, \mathbf{W}_K^{(\ell)}, \mathbf{W}_V^{(\ell)}, \mathbf{W}_O^{(\ell)}, \mathbf{W}_1^{(\ell)}, \mathbf{W}_2^{(\ell)}$ for $\ell = 1, \dots, N$. The residual stream threads through every block, so block $\ell$'s output becomes block $\ell+1$'s input — both at width $d_{\text{model}}$.
 
 ### Example — Build a second set of weights and run the stack
+
+Block 2 is the same forward pass as the explicit version above, now as a single call to `mha_block_forward` from the shared library `lib/transformer.rlab` — the same code, so the numbers match running the loops by hand.
+
+<!-- hide -->
+```rustlab
+run "../lib/transformer.rlab"
+```
 
 ```rustlab
 % Block 2 weights — different seed, same architecture
@@ -245,51 +226,9 @@ W_O2 = randn(d_model, d_model) * (1.0 / sqrt(d_model));
 W_ff1_2 = randn(d_model, d_ff) * sqrt(2.0 / d_model);
 W_ff2_2 = randn(d_ff,    d_model) * sqrt(2.0 / d_ff);
 
-% Run the same block forward pass on H_out as input
-H_in2 = H_out;
-% Block 2 re-normalises the residual stream per token, from scratch.
-H_norm1b = zeros(T, d_model);
-for t = 1:T
-  H_norm1b(t) = layernorm(H_in2(t, :));
-end
-
-Q2 = H_norm1b * W_Q2;
-K2 = H_norm1b * W_K2;
-V2 = H_norm1b * W_V2;
-
-out_concat2 = zeros(T, d_model);
-for h = 1:H_heads
-  c_lo = (h - 1) * d_k + 1;
-  Q_h = zeros(T, d_k);
-  K_h = zeros(T, d_k);
-  V_h = zeros(T, d_k);
-  for t = 1:T
-    for k = 1:d_k
-      Q_h(t, k) = Q2(t, c_lo + k - 1);
-      K_h(t, k) = K2(t, c_lo + k - 1);
-      V_h(t, k) = V2(t, c_lo + k - 1);
-    end
-  end
-  S = Q_h * K_h' * scale + M_mask;
-  A_h = softmax(S);             % per-row softmax of the whole T×T block
-  O_h = A_h * V_h;
-  for t = 1:T
-    for k = 1:d_k
-      out_concat2(t, c_lo + k - 1) = O_h(t, k);
-    end
-  end
-end
-A_out2 = out_concat2 * W_O2;
-H_mid2 = H_in2 + A_out2;
-
-H_norm2b = zeros(T, d_model);
-for t = 1:T
-  H_norm2b(t) = layernorm(H_mid2(t, :));
-end
-F_pre2  = H_norm2b * W_ff1_2;
-F_out2  = gelu(F_pre2) * W_ff2_2;
-
-H_out2 = H_mid2 + F_out2;
+% Run the same block forward pass on H_out as input — one call to the shared
+% library function, which is the same code as the explicit version above.
+H_out2 = mha_block_forward(H_out, W_Q2, W_K2, W_V2, W_O2, W_ff1_2, W_ff2_2, H_heads, M_mask);
 
 print("After block 1 |H| =", norm(H_out));
 print("After block 2 |H| =", norm(H_out2));

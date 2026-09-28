@@ -16,7 +16,7 @@ One-hot encoding from [Lesson 01](01-tokens-and-encoding.md) (tokens as sparse i
 
 ## The Problem with One-Hot Vectors
 
-One-hot vectors (Lesson 01) are orthogonal — every pair of tokens is equally "distant". A model operating on one-hot vectors cannot leverage any prior knowledge that `king` and `queen` are semantically closer to each other than to `table`. They also have dimension $|\mathcal{V}|$ (potentially tens of thousands), which is expensive to process. This section is pure motivation — every later H2 pairs `### Theory` with `### Example — <descriptor>`.
+One-hot vectors (Lesson 01) are orthogonal — every pair of tokens is equally "distant". A model operating on one-hot vectors cannot leverage any prior knowledge that `king` and `queen` are semantically closer to each other than to `table`. They also have dimension $|\mathcal{V}|$ (potentially tens of thousands), which is expensive to process.
 
 ## The Embedding Matrix
 
@@ -76,11 +76,11 @@ The one-hot multiply reproduces row 3 bit-for-bit: $\max|h_3 - E_3| = ${diff:%.2
 At random initialisation all rows look similar. After training, semantically related tokens would cluster together:
 
 ```rustlab
-% rustlab 0.3.6 colormaps by |value|; shift so min = 0 so the render is faithful
-% (see docs/rustlab-issues-2026-07-12.md §6)
+tok_labels = {"tok1", "tok2", "tok3", "tok4", "tok5", "tok6", "tok7", "tok8"};
+dim_labels = {"d1", "d2", "d3", "d4", "d5", "d6"};
+
 figure();
-imagesc(E - min(min(E)), "viridis")
-title("Embedding Matrix E - min(E)  (8 tokens x 6 dims)  - random init")
+heatmap(dim_labels, tok_labels, E, "Embedding Matrix E  (8 tokens x 6 dims)  - random init", "viridis")
 ```
 
 ## Cosine Similarity

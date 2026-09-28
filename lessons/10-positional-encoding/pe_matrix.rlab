@@ -45,11 +45,9 @@ print("PE(64, 1) (sin(64)):    ", PE(64, 1));
 print("PE(t, end) ~= cos(0)=1: ", PE(1, d_model), PE(64, d_model));
 
 # === Heatmap ===
-# rustlab 0.3.6 colormaps by |value|; shift to [0,1] so the render is faithful
-# (see docs/rustlab-issues-2026-07-12.md §6)
 figure();
-imagesc((PE + 1) / 2, "viridis")
-title("Sinusoidal Positional Encoding, (PE+1)/2 rescaled (T=64, d=32)")
+imagesc(PE, "viridis")
+title("Sinusoidal Positional Encoding (T=64, d=32)")
 xlabel("Embedding dimension")
 ylabel("Position t")
 savefig("pe_matrix.svg")

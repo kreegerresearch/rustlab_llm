@@ -177,26 +177,19 @@ Token 1 can only attend to itself, so $A_{1,1} = ${A_1_1:%.4f}$. Every row sums 
 Both axes are **token positions**: rows are the query positions $t$ (which token is asking) and columns are the key positions $i$ (which token is being read). With position labels on the axes, the causal structure becomes literally readable — "row $t_3$ only has weight on columns $t_1, t_2, t_3$".
 
 ```rustlab
-% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 positions = {"t1", "t2", "t3", "t4", "t5"};
+M_ind = (M < 0);   % 1 where the causal mask blocks attention, 0 elsewhere
 
 figure();
+subplot(1, 3, 1)
 heatmap(positions, positions, S, "Scaled scores S = Q K^T / sqrt(d_k)", "viridis")
-```
-
-```rustlab
-figure();
-% rustlab 0.3.6 colormaps by |value|; shift by +1e9 so masked cells render dark (min)
-% (see docs/rustlab-issues-2026-07-12.md §6)
-heatmap(positions, positions, S_masked + 1.0e9, "Causal mask pattern (+1e9 shift: masked → dark)", "viridis")
-```
-
-```rustlab
-figure();
+subplot(1, 3, 2)
+heatmap(positions, positions, M_ind, "Causal mask (1 = blocked)", "viridis")
+subplot(1, 3, 3)
 heatmap(positions, positions, A, "Attention weights A = softmax_row(S_masked)", "viridis")
 ```
 
-The second figure's color scale is swamped by the $10^9$ mask offset, so it shows only *where* the mask blocks attention (the dark upper triangle) rather than any score structure — read the actual scaled scores off the first figure instead.
+The middle panel shows *where* the mask blocks attention — every key position $i > t$ in the upper triangle.
 
 The final attention matrix is **lower-triangular** (causality) with **rows summing to 1** (softmax) — exactly the same shape as the Lesson 07 averaging matrix, but now the weights depend on the content of $\mathbf{Q}$ and $\mathbf{K}$.
 
@@ -270,15 +263,12 @@ Row 1 of $\mathbf{O}$ equals row 1 of $\mathbf{V}$ (token 1 only attends to itse
 ### Example — Attention weights and output heatmaps
 
 ```rustlab
-% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 out_dims = {"d1", "d2", "d3", "d4"};
 
 figure();
+subplot(1, 2, 1)
 heatmap(positions, positions, A2, "Attention weights A", "viridis")
-```
-
-```rustlab
-figure();
+subplot(1, 2, 2)
 heatmap(out_dims, positions, O, "Output O = A V  (rows: positions, cols: value dims)", "viridis")
 ```
 

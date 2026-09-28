@@ -92,15 +92,13 @@ title("Causal Averaging Matrix W (T=6) — lower-triangular, row t = 1/t")
 savefig("averaging_matrix.svg")
 print("Saved averaging_matrix.svg");
 
-# === Plot: Input vs Averaged Embeddings ===
-# TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
+# === Plot: Input vs Averaged Embeddings (side by side) ===
 figure();
+subplot(1, 2, 1)
 imagesc(X, "viridis")
 title("Input Embeddings X (distinct per token)")
-savefig("prefix_averages_input.svg")
-
-figure();
+subplot(1, 2, 2)
 imagesc(X_bar_mm, "viridis")
 title("Prefix Averages X̄ = W*X (smoother; each row mixes all earlier tokens)")
-savefig("prefix_averages_averaged.svg")
-print("Saved prefix_averages_input.svg and prefix_averages_averaged.svg");
+savefig("prefix_averages.svg")
+print("Saved prefix_averages.svg");

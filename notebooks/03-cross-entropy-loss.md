@@ -16,7 +16,7 @@ Probability distributions and softmax from [Lesson 02](02-probability-and-softma
 
 ## The Setup
 
-At each position in a sequence the model outputs $\hat{\mathbf{p}} \in \mathbb{R}^{|\mathcal{V}|}$ (a probability distribution from softmax, [Lesson 02](02-probability-and-softmax.md)). The ground truth is the actual next token — a one-hot vector $\mathbf{y}$ ([Lesson 01](01-tokens-and-encoding.md)). This section is pure reference; every later H2 pairs `### Theory` with `### Example — <descriptor>`.
+At each position in a sequence the model outputs $\hat{\mathbf{p}} \in \mathbb{R}^{|\mathcal{V}|}$ (a probability distribution from softmax, [Lesson 02](02-probability-and-softmax.md)). The ground truth is the actual next token — a one-hot vector $\mathbf{y}$ ([Lesson 01](01-tokens-and-encoding.md)).
 
 ## Cross-Entropy
 

@@ -4,7 +4,7 @@
 # Equations: CDF_j = sum_{k=1}^{j} P_ik;  x_{t+1} = sum(CDF < u) + 1,  u ~ Uniform(0,1)
 # Units:     Probabilities in [0,1]; token indices are integers in {1,...,|V|}
 
-# === Probability Matrix (from bigram_counts.r) ===
+# === Probability Matrix (from bigram_counts.rlab) ===
 # Corpus: "abcbabcba"   Vocab: a=1, b=2, c=3
 #        a    b    c
 # a:  [ 0,   1,   0 ]   → a always goes to b
