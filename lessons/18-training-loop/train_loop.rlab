@@ -1,7 +1,8 @@
 # Script:  train_loop.rlab
 # System:  Tiny embedding-then-linear language model on a periodic 60-char
-#          corpus over { a, b, c }.  Trains with AdamW + warmup+cosine LR
-#          schedule.  Saves three diagnostic plots.
+#          corpus over { a, b, c }.  Trains full-batch with Adam (the AdamW
+#          update at lambda = 0) + warmup+cosine LR schedule.  Saves three
+#          diagnostic plots.
 # Concept: Wire forward + backward + optimiser + schedule.  Track train
 #          loss, validation loss, and gradient norm per logged step.
 # Equations:

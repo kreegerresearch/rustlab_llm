@@ -1,0 +1,64 @@
+# Script:  momentum_filter.rlab
+# System:  Adam's first moment m_t = beta m_{t-1} + (1 - beta) g_t, read as a
+#          one-pole IIR low-pass filter acting on each coordinate's gradient
+#          sequence (sample index = training step).
+# Concept: Pole at z = beta, DC gain 1, time constant ~1/(1 - beta) steps,
+#          -3 dB corner at (1 - beta)/(2 pi) cycles per step.  The step
+#          response 1 - beta^t is the deficit that bias correction divides
+#          out.  Heavy-ball momentum u = mu u + g is the same filter without
+#          the (1 - mu) normalisation: DC gain 1/(1 - mu).
+# Equations:
+#   H(z) = (1 - beta) / (1 - beta z^-1),   h_k = (1 - beta) beta^k
+#   step response  m_t / g = 1 - beta^t
+# Units:   frequency in cycles per training step; gain dimensionless (dB in plot).
+
+betas = [0.9, 0.99, 0.999];
+n_h = 10000;  n_f = 2048;          # impulse-response taps, frequency points
+ks = 0:(n_h - 1);  t_st = 1:1000;
+
+# === Frequency response of the EMA for three betas ===
+H_db = zeros(3, n_f - 1);  f3 = zeros(3);
+for i = 1:3
+  b = betas(i);
+  R = freqz((1 - b) * b .^ ks, n_f, 1.0);   # row 1: f (cycles/step); row 2: H(f)
+  f  = R(1, 2:n_f);
+  Hm = abs(R(2, 2:n_f));
+  H_db(i, :) = 20 * log10(Hm);
+  j = 1;
+  while j < n_f - 1 && Hm(j) > 1 / sqrt(2)  # first frequency below -3 dB
+    j = j + 1;
+  end
+  f3(i) = f(j);
+  print(sprintf("beta = %.3f: DC gain %.4f, -3 dB at %.1e cycles/step (predicted %.1e), tau = %g steps", b, abs(R(2, 1)), f3(i), (1 - b) / (2 * pi), 1 / (1 - b)));
+end
+
+# === Heavy ball: same filter, DC gain 1/(1 - mu) ===
+R_hb = freqz(0.9 .^ ks, 64, 1.0);
+print("heavy ball u = 0.9 u + g: DC gain", abs(R_hb(2, 1)), " = 1/(1 - mu)");
+print("bias-correction factor 1 - beta2^t at t = 1, 100, 1000:", 1 - 0.999 ^ 1, 1 - 0.999 ^ 100, 1 - 0.999 ^ 1000);
+
+# === Plot: magnitude in dB beside the step response ===
+figure();
+subplot(1, 2, 1)
+semilogx(f, H_db(1, :), "color", "blue",  "label", "beta = 0.9")
+hold("on")
+semilogx(f, H_db(2, :), "color", "green", "label", "beta = 0.99")
+semilogx(f, H_db(3, :), "color", "red",   "label", "beta = 0.999")
+hline(-3, "gray", "-3 dB")
+hold("off")
+title("|H(f)| of the EMA (pole at beta)")
+xlabel("cycles per step")
+ylabel("dB")
+legend("beta = 0.9", "beta = 0.99", "beta = 0.999", "-3 dB")
+subplot(1, 2, 2)
+plot(t_st, 1 - 0.9 .^ t_st,   "color", "blue",  "label", "beta = 0.9")
+hold("on")
+plot(t_st, 1 - 0.99 .^ t_st,  "color", "green", "label", "beta = 0.99")
+plot(t_st, 1 - 0.999 .^ t_st, "color", "red",   "label", "beta = 0.999")
+hold("off")
+title("step response 1 - beta^t (bias-correction deficit)")
+xlabel("step t")
+ylabel("m_t / g")
+legend("beta = 0.9", "beta = 0.99", "beta = 0.999")
+savefig("momentum_filter.svg")
+print("Saved momentum_filter.svg");

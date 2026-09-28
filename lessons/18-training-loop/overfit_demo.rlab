@@ -7,7 +7,7 @@
 #          held-out pair (1, 3) costs ever more.  Train loss falls to its
 #          empirical floor 2*ln2/5 = 0.277 nats (states 1 and 3 deterministic;
 #          the two pairs from the ambiguous state 2 cost ln2 each).
-#          Visible signature: train falls to the floor, val bottoms then rises.
+#          Visible signature: train falls to the floor, val rises from step 1.
 # Equations: same forward / backward as train_loop.rlab
 # Units:    parameters dimensionless; loss in nats.
 
@@ -119,7 +119,7 @@ plot(steps, loss_train, "color", "red",  "label", "train")
 hold("on")
 plot(steps, loss_val,   "color", "blue", "label", "val")
 hold("off")
-title("Train/val mismatch:  train falls to floor 0.277, val bottoms then rises")
+title("Train/val mismatch:  train falls to floor 0.277, val rises from step 1")
 xlabel("step")
 ylabel("L (nats)")
 legend("train", "val")

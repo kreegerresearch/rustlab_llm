@@ -1,0 +1,76 @@
+# Script:  noise_floor_vs_eta.rlab
+# System:  Noisy gradient descent on the Lesson 17 quadratic surrogate,
+#          L = 0.5 (10 theta1^2 + theta2^2) + 1, gradient noise sigma = 0.3.
+# Concept: Each mode is a one-pole filter driven by white noise, so its
+#          steady-state variance is eta sigma^2 / (lambda (2 - eta lambda)) and
+#          its excess loss eta sigma^2 / (2 (2 - eta lambda)): the noise floor
+#          is proportional to eta, which is what the learning-rate decay buys.
+#          A second block records the per-step gradient SNR of the scheduled
+#          run and the Gaussian-channel bits 0.5 log2(1 + SNR) it can carry.
+# Equations:
+#   e_{t+1} = (1 - eta lambda) e_t - eta xi_t,   Var e = eta sigma^2 / (lambda (2 - eta lambda))
+#   SNR_t = ||grad L(theta_t)||^2 / (2 sigma^2)
+# Units:   theta dimensionless; loss in surrogate units; SNR dimensionless.
+
+function L = sloss(theta)
+  L = 0.5 * (10.0 * theta(1) ^ 2 + theta(2) ^ 2) + 1.0;
+end
+function g = sgrad(theta)
+  g = [10.0 * theta(1), theta(2)];
+end
+function e = warmup_cosine(t, T_w, T_d, eta_p, eta_f)
+  if t <= T_w
+    e = eta_p * (t / T_w);
+  else
+    e = eta_f + 0.5 * (eta_p - eta_f) * (1 + cos(pi * (t - T_w) / (T_d - T_w)));
+  end
+end
+function [L, etas, snr] = run_sgd(eta_of_t, n, sigma, init)
+  theta = init;  L = zeros(n + 1);  etas = zeros(n);  snr = zeros(n);
+  L(1) = sloss(theta);
+  for t = 1:n
+    etas(t) = eta_of_t(t);
+    g_true = sgrad(theta);
+    snr(t) = sum(g_true .^ 2) / (2 * sigma ^ 2);
+    theta = theta - etas(t) * (g_true + sigma * randn(2));
+    L(t + 1) = sloss(theta);
+  end
+end
+
+sigma = 0.3;  init = [-3.0, 2.0];  lam_fast = 10.0;  lam_slow = 1.0;
+
+# === Steady-state excess loss vs constant eta ===
+seed(171);
+etas_sw = logspace(-2, log10(0.19), 6);
+meas = zeros(6);  pred = zeros(6);
+for i = 1:6
+  e = etas_sw(i);
+  [Lc, ec, sc] = run_sgd(@(t) e, 4000, sigma, init);
+  meas(i) = mean(Lc(2002:4001)) - 1.0;
+  pred(i) = e * sigma ^ 2 / (2 * (2 - e * lam_fast)) + e * sigma ^ 2 / (2 * (2 - e * lam_slow));
+end
+print("eta      :", etas_sw);
+print("measured :", meas);
+print("predicted:", pred);
+figure();
+loglog(etas_sw, pred, "color", "gray",  "label", "theory")
+hold("on")
+loglog(etas_sw, meas, "color", "green", "label", "measured")
+hold("off")
+title("steady-state excess loss vs constant eta (sigma = 0.3)")
+xlabel("eta")
+ylabel("E[L] - 1")
+legend("sum over modes of eta sigma^2 / (2 (2 - eta lambda))", "measured, steps 2001-4000")
+savefig("noise_floor_vs_eta.svg")
+print("Saved noise_floor_vs_eta.svg");
+
+# === Per-step gradient SNR of the scheduled run (same seed as the notebook) ===
+seed(17);
+n_train = 300;
+[lh, eh, snr_high]  = run_sgd(@(t) 0.25, n_train, sigma, init);
+[ll, el, snr_low]   = run_sgd(@(t) 0.02, n_train, sigma, init);
+[ls, es, snr_sched] = run_sgd(@(t) warmup_cosine(t, 30, n_train, 0.18, 0.02), n_train, sigma, init);
+bits = @(s) 0.5 * log2(1 + s);
+print("SNR at step 1:", snr_sched(1), " ->", bits(snr_sched(1)), "bits/step");
+print("SNR, mean of steps 271-300:  low", mean(snr_low(271:300)), "  schedule", mean(snr_sched(271:300)));
+print("bits/step at the end      :  low", bits(mean(snr_low(271:300))), "  schedule", bits(mean(snr_sched(271:300))));

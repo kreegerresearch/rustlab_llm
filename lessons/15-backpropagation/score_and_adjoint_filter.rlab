@@ -1,0 +1,49 @@
+# Script:  score_and_adjoint_filter.rlab
+# System:  (1) softmax + cross-entropy over K logits;  (2) a causal FIR filter written as a
+#          lower-triangular Toeplitz matrix W so that y = x W.
+# Concept: (1) p - y is the (negative) score function: E_y~p[p - y] = 0 and
+#          E_y~p[(p - y)^2] = p (1 - p), the diagonal of the Fisher information that Adam's
+#          second moment estimates.  (2) The backward pass xbar = ybar W' is the adjoint
+#          operator; for an LTI filter it is the time-reversed (anti-causal) filter.
+# Equations: E[p - y] = p - p = 0;  Cov(score) = diag(p) - p'p
+#            <x W, ybar> = <x, ybar W'>   (adjoint identity)
+# Units:   logits dimensionless; probabilities dimensionless; filter taps dimensionless.
+
+# === Score function and Fisher diagonal ===
+z_s = [2.0, 1.0, 0.5, -0.5];
+p_s = softmax(z_s);
+K_s = length(z_s);
+E_score  = zeros(K_s);
+E_score2 = zeros(K_s);
+for c = 1:K_s
+  e_c = zeros(K_s); e_c(c) = 1.0;
+  score = p_s - e_c;                          # dL/dz when the target is c
+  E_score  = E_score  + p_s(c) * score;       # E_y~p [p - y]
+  E_score2 = E_score2 + p_s(c) * score .^ 2;  # E_y~p [(p - y)^2]
+end
+print("p            =", p_s);
+print("E[p - y]     =", E_score);
+print("E[(p - y)^2] =", E_score2);
+print("p (1 - p)    =", p_s .* (1 - p_s));
+
+# === Adjoint of a causal FIR filter is the time-reversed filter ===
+h = [1.0, 0.5, 0.25];
+T_len = 6;
+W_conv = zeros(T_len, T_len);              # y = x W_conv:  y_s = sum_k h_k x_{s-k+1}
+for tt = 1:T_len
+  for k = 1:length(h)
+    if tt + k - 1 <= T_len
+      W_conv(tt, tt + k - 1) = h(k);
+    end
+  end
+end
+Wt = W_conv';
+seed(7);
+x_sig = randn(1, T_len);
+y_bar = randn(1, T_len);
+lhs = sum((x_sig * W_conv) .* y_bar);      # <x W, ybar>
+rhs = sum(x_sig .* (y_bar * Wt));          # <x, ybar W'>
+print("W_conv (forward, causal Toeplitz) ="); print(W_conv);
+print("adjoint identity: <xW, ybar> =", lhs, "   <x, ybar W'> =", rhs, "   difference =", lhs - rhs);
+print("taps feeding y_3    (row 3 of W'):", Wt(3, :), "   causal: past x, h reversed");
+print("taps feeding xbar_3 (row 3 of W) :", W_conv(3, :), "   anti-causal: future ybar, h in order");
