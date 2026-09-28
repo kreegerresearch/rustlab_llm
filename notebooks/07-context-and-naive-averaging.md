@@ -164,14 +164,11 @@ Max absolute difference between loop and matrix multiply: ${diff:%.2e}$ — iden
 ### Example — X vs. X̄ side by side
 
 ```rustlab
-% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 figure();
+subplot(1, 2, 1)
 imagesc(X, "viridis")
 title("Input Embeddings X (distinct per token)")
-```
-
-```rustlab
-figure();
+subplot(1, 2, 2)
 imagesc(X_bar_mm, "viridis")
 title("Prefix Averages X̄ = W*X (each row mixes all earlier tokens)")
 ```

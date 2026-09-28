@@ -129,11 +129,9 @@ The vectorized form reads top-to-bottom as the formula does: build the index gri
 ### Example — Heatmap of the full PE matrix
 
 ```rustlab
-% rustlab 0.3.6 colormaps by |value|; shift to [0,1] so the render is faithful
-% (see docs/rustlab-issues-2026-07-12.md §6)
 figure();
-imagesc((PE + 1) / 2, "viridis")
-title("Sinusoidal Positional Encoding, (PE+1)/2 rescaled (T=64, d=32)")
+imagesc(PE, "viridis")
+title("Sinusoidal Positional Encoding (T=64, d=32)")
 xlabel("Embedding dimension")
 ylabel("Position t")
 ```
@@ -206,7 +204,7 @@ for t = 1:T_demo
   X_tok(t, :) = E_pe(ids(t), :);      % assign whole row from the embedding lookup
 end
 
-% Add the first T_demo rows of PE directly — matrix + matrix (verified in rustlab 0.3.6).
+% Add the first T_demo rows of PE directly — matrix + matrix.
 X_pos = X_tok + PE(1:T_demo, :);
 
 % Two positions of the SAME token: are their representations actually distinct?

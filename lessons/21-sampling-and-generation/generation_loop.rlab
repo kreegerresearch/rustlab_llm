@@ -12,12 +12,14 @@
 #       or   = sample_i ~ Categorical(p_t / T)     (temperature T)
 # Units:   parameters dimensionless; loss in nats.
 
-# === 1. Train the Lesson 18 model inline (fast: 24 params, 600 steps) ===
+# Shared code: the Lesson 18 trainer and the Lesson 21 sampling helpers.
+run "../../lib/bigram_lm.rlab"
+run "../../lib/sampling.rlab"
+
+# === 1. Train the Lesson 18 model (fast: 24 params, 600 steps) ===
 seed(18);
 vocab = 3;
 d_emb = 4;
-E = randn(vocab, d_emb) * 0.3;
-W = randn(d_emb, vocab) * 0.3;
 
 function tokens = build_seq(n)
   tokens = zeros(n);
@@ -28,43 +30,10 @@ function tokens = build_seq(n)
 end
 
 corpus = build_seq(60);
-n_pairs = 49;
 
-# AdamW state
-m_E = zeros(vocab, d_emb);  v_E = zeros(vocab, d_emb);
-m_W = zeros(d_emb, vocab);  v_W = zeros(d_emb, vocab);
-beta1 = 0.9;  beta2 = 0.999;  eps_a = 1e-8;
-eta_max = 0.15;  eta_min = 0.015;  n_train = 600;  T_w = 60;
-
-for t = 1:n_train
-  if t <= T_w
-    eta_t = eta_max * (t / T_w);
-  else
-    progress = (t - T_w) / (n_train - T_w);
-    eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * progress));
-  end
-  dE_sum = zeros(vocab, d_emb);
-  dW_sum = zeros(d_emb, vocab);
-  for k = 0:(n_pairs - 1)
-    curr = corpus(1 + k);  nxt = corpus(2 + k);
-    h = E(curr, :);
-    p = softmax(h * W);
-    e_y = zeros(vocab);  e_y(nxt) = 1.0;
-    dlogits = p - e_y;
-    dW_sum = dW_sum + h' * dlogits;
-    dh = dlogits * W';
-    for j = 1:d_emb
-      dE_sum(curr, j) = dE_sum(curr, j) + dh(j);
-    end
-  end
-  dE = dE_sum / n_pairs;  dW = dW_sum / n_pairs;
-  m_E = beta1 * m_E + (1 - beta1) * dE;
-  v_E = beta2 * v_E + (1 - beta2) * (dE .^ 2);
-  E = E - eta_t * ((m_E / (1 - beta1 ^ t)) ./ (sqrt(v_E / (1 - beta2 ^ t)) + eps_a));
-  m_W = beta1 * m_W + (1 - beta1) * dW;
-  v_W = beta2 * v_W + (1 - beta2) * (dW .^ 2);
-  W = W - eta_t * ((m_W / (1 - beta1 ^ t)) ./ (sqrt(v_W / (1 - beta2 ^ t)) + eps_a));
-end
+# AdamW + warmup-cosine on the first 50 tokens (49 pairs), as in Lesson 18.
+# seed(18) immediately above keeps the randn initialisation of E, W unchanged.
+[E, W] = train_bigram_lm(corpus(1:50), vocab, d_emb, 600, 0.15, 0.015, 60);
 
 # === 2. The forward pass becomes a one-liner ===
 function p = next_token_dist(x_curr, E, W)
@@ -104,19 +73,8 @@ print("greedy from 'b':", seq_to_str(greedy_seq_b, names));
 # === 4. Temperature sampling ===
 # Reshape logits by 1/T before softmax.  T=1 is the trained distribution;
 # T<1 sharpens (greedy as T -> 0); T>1 flattens (uniform as T -> infinity).
-function tok = sample_categorical(p)
-  # Inverse-CDF sampling: walk the cumulative distribution until we cross r.
-  # `while c(i) < r` short-circuits at the first crossover; no `break` needed.
-  c = cumsum(p);
-  r = rand();
-  N = length(p);
-  i = 1;
-  while i < N && c(i) < r
-    i = i + 1;
-  end
-  tok = i;
-end
-
+# The draw itself is sample_categorical(p) from lib/sampling.rlab: inverse-CDF
+# sampling that walks the cumulative distribution until it crosses r ~ U[0,1).
 function seq = temperature_generate(x0, n_new, E, W, T_temp)
   seq = zeros(n_new + 1);
   seq(1) = x0;

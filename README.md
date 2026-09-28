@@ -79,29 +79,36 @@ Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts
 | # | Title | Core Concept |
 |---|-------|-------------|
 | 21 | Sampling and Generation | Autoregressive loop; greedy / temperature / top-K / top-P; KV cache; repetition penalty |
-| 22 | Putting It All Together | End-to-end: char tokenize → BPE → train **full transformer** with analytical backprop → sample at checkpoints (PPL → 1.00008, greedy reproduces corpus) |
+| 22 | Full Backprop Through the Block | Analytical gradients through one Pre-LN block + finite-difference gradient check; the shared `lib/transformer.rlab` forward/backward |
+| 23 | Putting It All Together | End-to-end: char tokenize → BPE → train **full transformer** with analytical backprop → sample at checkpoints (PPL → 1.00008, greedy reproduces corpus) |
 
 ### Phase 9 — Modern Architectural Variants (post-curriculum extension) `(Complete)`
 
 | # | Title | Core Concept |
 |---|-------|-------------|
-| 23 | Modern Architectural Variants | RoPE (replaces sinusoidal PE); RMSNorm (replaces LayerNorm); SwiGLU (replaces GELU FFN); GQA / MQA (KV-cache-shrinking MHA variant) |
+| 24 | Modern Architectural Variants | RoPE (replaces sinusoidal PE); RMSNorm (replaces LayerNorm); SwiGLU (replaces GELU FFN); GQA / MQA (KV-cache-shrinking MHA variant) |
 
-### Phase 10 — Full Backprop and Fine-Tuning (post-curriculum extension) `(Complete)`
+### Phase 10 — Fine-Tuning (post-curriculum extension) `(Complete)`
 
 | # | Title | Core Concept |
 |---|-------|-------------|
-| 24 | Full Backprop and Fine-Tuning | End-to-end analytical gradients through one transformer block + gradient check; SFT with prompt-token loss masking; DPO with frozen reference policy |
+| 25 | Fine-Tuning — SFT and DPO | SFT with prompt-token loss masking and its catastrophic forgetting; DPO with a frozen reference policy |
+
+### Phases 11–15 — EE / Controls / Information-Theory revision `(In progress)`
+
+Phase 11 (this toolchain pass: rustlab 0.3.7, shared `lib/`, lesson renumbering, live capstone and fine-tuning notebooks) is complete. Phases 12–15 re-centre every lesson on three engineering lenses — Signals, Systems, Information — and add `00-the-llm-as-a-system` and `26-quantization-and-fixed-point-inference`. The plan is [`docs/proposal-2026-09-27-ee-controls-it-revision.md`](docs/proposal-2026-09-27-ee-controls-it-revision.md).
 
 ---
 
 ## Prerequisites
 
-- Linear algebra (matrix multiply, transpose, eigenvalues)
-- Basic probability and information theory (entropy, cross-entropy)
-- Some signal processing familiarity is helpful but not required
+This course is written for engineers who already own three toolkits and want to see a language model built with them:
 
-No prior deep learning experience is assumed.
+- **Signals and systems** — linear time-invariant and time-varying filters (FIR/IIR, impulse and frequency response), sampling and aliasing, correlation and matched filtering, phasors.
+- **Modern control / dynamical systems** — state-space models, discrete-time stability via eigenvalues, damping, gain scheduling, adjoint (costate) equations.
+- **Information theory** — entropy, cross-entropy, KL divergence, mutual information, source coding.
+
+Plus linear algebra (matrix multiply, transpose, eigen/singular values) and basic probability. No prior deep learning experience is assumed.
 
 ---
 
@@ -117,7 +124,7 @@ make all                # render committed book/<slug>.md + local book/*.html
 make notebooks          # regenerate book/<slug>.md from notebooks/<slug>.md
 make html               # build book/index.html for local Plotly view (gitignored)
 make notebooks-check    # CI drift guard
-make lesson-06          # run lesson 06's .rlab scripts (pattern target: lesson-NN for any 01–24)
+make lesson-06          # run lesson 06's .rlab scripts (pattern target: lesson-NN for any 01–25)
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
@@ -128,7 +135,7 @@ rustlab run lessons/01-tokens-and-encoding/char_frequencies.rlab
 rustlab                 # interactive REPL
 ```
 
-Standalone scripts call `savefig("foo.svg")` next to themselves (gitignored). Each `.rlab` script is self-contained — you can run any single script without running previous ones first.
+Standalone scripts call `savefig("foo.svg")` next to themselves (gitignored). Each `.rlab` script runs on its own — you can run any single script without running previous ones first. Code shared between lessons (the transformer forward/backward, AdamW, sampling helpers, the Lesson 18 bigram trainer) lives in `lib/*.rlab` and is pulled in with `run "../../lib/<name>.rlab"`; notebooks do the same with `run "../lib/<name>.rlab"`.
 
 ---
 
@@ -144,6 +151,10 @@ lessons/
   README.md            # explains the .rlab-script convention
   NN-topic-slug/
     *.rlab                # standalone rustlab scripts paralleling the notebook code blocks
+lib/
+  transformer.rlab     # shared block forward, trainable forward/backward, AdamW, schedule
+  sampling.rlab        # sample_categorical, top-K, top-P
+  bigram_lm.rlab       # the Lesson 18 trainer used by Lessons 20–21
 book/
   README.md            # hand-written GitHub landing page
   NN-topic-slug.md     # rendered notebook with inline SVG plots (committed)
@@ -182,11 +193,12 @@ These are the surface-level differences a MATLAB or Octave user will trip over w
 |---|---|---|
 | Comments | `%` (and `#` in Octave) | `%` or `#` (both work; lessons use `%` in notebook blocks, `#` in `.rlab` scripts) |
 | File extension | `.m` | `.rlab` |
-| Multi-output `function` | `function [a, b] = f(...)` | single output only — `function r = f(...)` returning a struct |
-| Logical `&&` / `\|\|` | short-circuit | **eager** (both operands always evaluated) |
-| Vector vs `1×N` matrix | implicit promotion in arithmetic | distinct types; `vec + 1×N matrix` errors |
-| Row gather `M([3, 1, 2])` | returns a sub-matrix of those rows | not supported (use a permutation matrix; see [`AGENTS.md`](AGENTS.md) Rustlab Recommendations) |
-| `M(i, j)` on a `1×1` matrix | returns the scalar | "undefined function 'M'" — coerce with `sum(M)` first |
+| Multi-output `function` | `function [a, b] = f(...)` | same syntax (0.3.0+); no `~` placeholder to skip an output |
+| `break` / `continue` | supported | **not supported** — encode the exit in a `while` condition |
+| Single-index `M(k)` on a matrix | linear index | linear index too (0.3.0+), so use `M(t, :)` for a row |
+| Struct field indexing `s.M(i, j)` | supported | not supported — copy the field to a local first |
+| `A^k` on a square matrix | matrix power | **element-wise** (use `A*A` or `expm`) |
+| Including another file | `run script` | `run "path.rlab"` — quote the path; relative to the calling script (or to the notebook) |
 | `softmax(x)` / `gelu(x)` / `layernorm(x)` | toolbox functions | rustlab builtins, no toolbox required |
 | `imagesc` / `heatmap` / `surf` / `quiver` / `streamplot` | MATLAB plotting toolkit (figure windows) | rustlab plotting (Plotly / SVG / HTML output) |
 | `seed(N)` for deterministic RNG | `rng(N)` | `seed(N)` — distinct name, same role |

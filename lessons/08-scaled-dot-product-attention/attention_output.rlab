@@ -104,26 +104,20 @@ print("Note: parameter count is independent of sequence length T.");
 positions = {"t1", "t2", "t3", "t4", "t5"};
 qk_dims  = {"d1", "d2", "d3", "d4"};
 
-# TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 figure();
+subplot(1, 3, 1)
 heatmap(qk_dims, positions, Q, "Q = X W_Q (queries)", "viridis")
-savefig("qkv_projections_q.svg")
-
-figure();
+subplot(1, 3, 2)
 heatmap(qk_dims, positions, K, "K = X W_K (keys)", "viridis")
-savefig("qkv_projections_k.svg")
-
-figure();
+subplot(1, 3, 3)
 heatmap(qk_dims, positions, V, "V = X W_V (values)", "viridis")
-savefig("qkv_projections_v.svg")
-print("Saved qkv_projections_q.svg, qkv_projections_k.svg, qkv_projections_v.svg");
+savefig("qkv_projections.svg")
+print("Saved qkv_projections.svg");
 
-# TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 figure();
+subplot(1, 2, 1)
 heatmap(positions, positions, A, "Attention weights A", "viridis")
-savefig("attention_output_weights.svg")
-
-figure();
+subplot(1, 2, 2)
 heatmap(qk_dims, positions, O, "Output O = A V  (rows: positions, cols: value dims)", "viridis")
-savefig("attention_output_output.svg")
-print("Saved attention_output_weights.svg and attention_output_output.svg");
+savefig("attention_output.svg")
+print("Saved attention_output.svg");

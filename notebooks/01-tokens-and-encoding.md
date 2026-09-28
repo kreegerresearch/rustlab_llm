@@ -16,7 +16,7 @@ Vectors (a list of numbers) and matrices (a 2-D grid of numbers). The concept of
 
 ## What is a Token?
 
-A **token** is the basic unit of text a language model operates on. At the character level every character becomes one token. The pipeline has two steps. This section is pure reference — formal definitions and the vocabulary table; every later section pairs `### Theory` with `### Example — <descriptor>`.
+A **token** is the basic unit of text a language model operates on. At the character level every character becomes one token. The pipeline has two steps.
 
 **Step 1 — Collect the vocabulary.** Given a corpus, collect every unique character and sort them. This ordered set is the vocabulary $\mathcal{V}$, with size $|\mathcal{V}|$.
 

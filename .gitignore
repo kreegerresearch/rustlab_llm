@@ -19,3 +19,10 @@ book/*.html
 .vscode/
 .idea/
 *.swp
+
+# Artefacts written by lesson scripts when a notebook `run`s them: savefig
+# inside a run script resolves against the notebook directory.
+notebooks/*.svg
+notebooks/*.png
+notebooks/*.html
+notebooks/*.gif

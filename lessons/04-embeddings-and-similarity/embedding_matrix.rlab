@@ -41,12 +41,11 @@ diff = max(abs(h3 - E(3, :)));
 print("Max difference between lookup and direct row access (should be ~0):", diff);
 
 # === Heatmap of Embedding Matrix ===
-# Rows = tokens (0..vocab_size-1), Columns = embedding dimensions (0..d_embed-1)
+# Rows = tokens (1..vocab_size), Columns = embedding dimensions (1..d_embed)
 # At random init all rows look similar; after training clusters would appear.
-# rustlab 0.3.6 colormaps by |value|; shift so min = 0 so the render is faithful
-# (see docs/rustlab-issues-2026-07-12.md §6)
+tok_labels = {"tok1", "tok2", "tok3", "tok4", "tok5", "tok6", "tok7", "tok8"};
+dim_labels = {"d1", "d2", "d3", "d4", "d5", "d6"};
 figure();
-imagesc(E - min(min(E)), "viridis")
-title("Embedding Matrix E - min(E)  (8 tokens x 6 dims)  — random init")
+heatmap(dim_labels, tok_labels, E, "Embedding Matrix E  (8 tokens x 6 dims)  — random init", "viridis")
 savefig("embedding_matrix.svg")
 print("Saved embedding_matrix.svg")

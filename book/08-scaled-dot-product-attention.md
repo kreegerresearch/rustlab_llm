@@ -180,41 +180,24 @@ Token 1 can only attend to itself, so $A_{1,1} = 1.0000$. Every row sums to 1. T
 Both axes are **token positions**: rows are the query positions $t$ (which token is asking) and columns are the key positions $i$ (which token is being read). With position labels on the axes, the causal structure becomes literally readable — "row $t_3$ only has weight on columns $t_1, t_2, t_3$".
 
 ```rustlab
-% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 positions = {"t1", "t2", "t3", "t4", "t5"};
+M_ind = (M < 0);   % 1 where the causal mask blocks attention, 0 elsewhere
 
 figure();
+subplot(1, 3, 1)
 heatmap(positions, positions, S, "Scaled scores S = Q K^T / sqrt(d_k)", "viridis")
-```
-
-<!-- rustlab:output-start -->
-![plot 1](plots/08-scaled-dot-product-attention/plot-1-f6db0e16.svg)
-
-<!-- rustlab:output-end -->
-
-```rustlab
-figure();
-% rustlab 0.3.6 colormaps by |value|; shift by +1e9 so masked cells render dark (min)
-% (see docs/rustlab-issues-2026-07-12.md §6)
-heatmap(positions, positions, S_masked + 1.0e9, "Causal mask pattern (+1e9 shift: masked → dark)", "viridis")
-```
-
-<!-- rustlab:output-start -->
-![plot 2](plots/08-scaled-dot-product-attention/plot-2-a1965995.svg)
-
-<!-- rustlab:output-end -->
-
-```rustlab
-figure();
+subplot(1, 3, 2)
+heatmap(positions, positions, M_ind, "Causal mask (1 = blocked)", "viridis")
+subplot(1, 3, 3)
 heatmap(positions, positions, A, "Attention weights A = softmax_row(S_masked)", "viridis")
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/08-scaled-dot-product-attention/plot-3-92873dcc.svg)
+![plot 1](plots/08-scaled-dot-product-attention/plot-1-5fe4f13f.svg)
 
 <!-- rustlab:output-end -->
 
-The second figure's color scale is swamped by the $10^9$ mask offset, so it shows only *where* the mask blocks attention (the dark upper triangle) rather than any score structure — read the actual scaled scores off the first figure instead.
+The middle panel shows *where* the mask blocks attention — every key position $i > t$ in the upper triangle.
 
 The final attention matrix is **lower-triangular** (causality) with **rows summing to 1** (softmax) — exactly the same shape as the Lesson 07 averaging matrix, but now the weights depend on the content of $\mathbf{Q}$ and $\mathbf{K}$.
 
@@ -282,25 +265,17 @@ Row 1 of $\mathbf{O}$ equals row 1 of $\mathbf{V}$ (token 1 only attends to itse
 ### Example — Attention weights and output heatmaps
 
 ```rustlab
-% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 out_dims = {"d1", "d2", "d3", "d4"};
 
 figure();
+subplot(1, 2, 1)
 heatmap(positions, positions, A2, "Attention weights A", "viridis")
-```
-
-<!-- rustlab:output-start -->
-![plot 4](plots/08-scaled-dot-product-attention/plot-4-d2c134f0.svg)
-
-<!-- rustlab:output-end -->
-
-```rustlab
-figure();
+subplot(1, 2, 2)
 heatmap(out_dims, positions, O, "Output O = A V  (rows: positions, cols: value dims)", "viridis")
 ```
 
 <!-- rustlab:output-start -->
-![plot 5](plots/08-scaled-dot-product-attention/plot-5-9d35e194.svg)
+![plot 2](plots/08-scaled-dot-product-attention/plot-2-2bef71c5.svg)
 
 <!-- rustlab:output-end -->
 

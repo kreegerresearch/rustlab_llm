@@ -1,0 +1,55 @@
+# Library: sampling.rlab
+# System:  Shared decoding helpers (Lesson 21) used by the capstone
+#          (Lesson 23) and the Lesson 21 scripts.
+# Concept: Turn a next-token distribution p into a token: inverse-CDF
+#          sampling, top-K and top-P (nucleus) truncation.  Temperature is
+#          applied by the caller (softmax(logits / T)) before these run.
+# Usage:   from a lesson script:   run "../../lib/sampling.rlab"
+#          from a notebook block:  run "../lib/sampling.rlab"
+# Units:   p is a probability vector (sums to 1); tokens are 1-based ids.
+
+# Inverse-CDF sample from a categorical distribution p.
+# Walk the cumulative distribution until it crosses r ~ U[0, 1).
+function tok = sample_categorical(p)
+  c = cumsum(p);
+  r = rand();
+  N = length(p);
+  i = 1;
+  while i < N && c(i) < r
+    i = i + 1;
+  end
+  tok = i;
+end
+
+# Keep the K_top largest entries of p, renormalise, zero the rest.
+function q = topk_mass(p, K_top)
+  K = length(p);
+  [s_asc, idx_asc] = sort(p);
+  desc_idx = idx_asc(K:-1:1);
+  keep = desc_idx(1:K_top);
+  q = zeros(K);  mass = 0.0;
+  for j = 1:K_top
+    mass = mass + p(keep(j));
+  end
+  for j = 1:K_top
+    q(keep(j)) = p(keep(j)) / mass;
+  end
+end
+
+# Keep the smallest set of top entries whose mass reaches P, renormalise.
+function q = topp_mass(p, P)
+  K = length(p);
+  [s_asc, idx_asc] = sort(p);
+  desc_idx = idx_asc(K:-1:1);
+  desc_p   = s_asc(K:-1:1);
+  c = cumsum(desc_p);
+  j = 1;
+  while j < K && c(j) < P
+    j = j + 1;
+  end
+  n_keep = j;
+  q = zeros(K);  mass = c(n_keep);
+  for j = 1:n_keep
+    q(desc_idx(j)) = desc_p(j) / mass;
+  end
+end

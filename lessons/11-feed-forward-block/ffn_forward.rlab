@@ -42,11 +42,9 @@ shuffle_err = max(reshape(abs(out_perm - out(perm, :)), 1, T * d_model));
 print("max | FFN(P*H) - P*FFN(H) | =", shuffle_err);
 
 # === Save a plot of input H so the artefact has something visible ===
-# rustlab 0.3.6 colormaps by |value|; shift so min = 0 so the render is faithful
-# (see docs/rustlab-issues-2026-07-12.md §6)
 figure();
-imagesc(H - min(min(H)), "viridis")
-title("Random input H - min(H) (T=5, d_model=4)")
+imagesc(H, "viridis")
+title("Random input H (T=5, d_model=4)")
 xlabel("d_model")
 ylabel("position t")
 savefig("ffn_forward.svg")

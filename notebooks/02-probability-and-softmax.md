@@ -22,8 +22,6 @@ Logits can be any real number, positive or negative. We need a mapping that:
 2. Makes them sum to 1.
 3. Preserves the relative ordering (higher logit $\to$ higher probability).
 
-This section is pure reference — the softmax definition and its numerical-stability shift. Every later section pairs `### Theory` with `### Example — <descriptor>`.
-
 ### The Softmax Function
 
 **Step 1 — Exponentiate.** Apply $e^{z_i}$ to each logit, mapping any real number to a strictly positive one:

@@ -1,0 +1,234 @@
+# Script:  dpo.rlab
+# System:  Direct Preference Optimization (DPO, Rafailov et al. 2023) for
+#          the single-block transformer of Lesson 22 (lib/transformer.rlab).
+#          Phase 1 pre-trains on the abb corpus.  Phase 2 fine-tunes on
+#          preference pairs (prompt, chosen response, rejected response) —
+#          the chosen response is the one the user prefers, the rejected
+#          one is not.  The DPO loss contrasts the policy's log-prob of
+#          (chosen, rejected) against a frozen reference copy of the model.
+# Concept: DPO replaces SFT's "maximise log-prob of the response" with
+#          "increase the policy's preference margin over chosen vs
+#          rejected, RELATIVE to a frozen reference model".  The
+#          reference-model term is what stops the policy from drifting
+#          off-distribution.  No reward model, no RL, no PPO.
+# Equations:
+#   r_theta(x, y) = beta * (log pi_theta(y | x) - log pi_ref(y | x))
+#   L_DPO(theta)  = - log sigmoid(r_theta(x, y_w) - r_theta(x, y_l))
+#   where y_w is the preferred (chosen) response, y_l the rejected one,
+#   and pi_theta is the trainable policy, pi_ref a frozen copy of the
+#   initial (pre-trained) policy.  beta is a temperature controlling how
+#   far the policy can drift from the reference.
+# Units:   log-probs in nats; loss in nats.
+
+run "../../lib/transformer.rlab"
+
+# === 1. Hyperparameters and pre-training corpus (same as sft.rlab) ===
+seed(242);
+vocab = 3;             # a=1, b=2, sep=3
+d_model = 4;
+d_ff = 8;
+T_max = 16;
+pat = [1, 2, 2];
+T_pre = 12;
+ids_pre = zeros(T_pre);
+for i = 1:T_pre
+  ids_pre(i) = pat(mod(i - 1, 3) + 1);
+end
+mask_pre = ones(T_pre - 1);
+
+# === 2. Trainable parameters ===
+E = randn(vocab, d_model) * 0.3;
+PE = sinusoidal_pe(T_max, d_model);
+gamma1 = ones(d_model);   beta1 = zeros(d_model);
+gamma2 = ones(d_model);   beta2 = zeros(d_model);
+Wq = randn(d_model, d_model) * 0.3;
+Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;
+Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W_U = randn(d_model, vocab) * 0.3;
+P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
+           "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
+
+# === 3. DPO helpers ===
+# Log-prob of a response (positions response_start .. response_end of `ids`,
+# each predicted from its prefix) under the model's logits.
+function lp = response_logprob(ids, response_start, response_end, logits)
+  lp = 0.0;
+  for t = (response_start - 1):(response_end - 1)
+    p = softmax(logits(t, :));
+    lp = lp + log(p(ids(t + 1)));
+  end
+end
+
+# Upstream gradient at the policy's logits for the DPO loss, for one
+# response.  The math:
+#   L = -log sigma(beta * (lp_w_pol - lp_w_ref - lp_l_pol + lp_l_ref))
+#   d/dlp_w_pol = -beta * (1 - sigma) = -beta * sigma_neg
+#   d/dlp_l_pol = +beta * (1 - sigma) = +beta * sigma_neg
+#   d/dlogits_w(t, :) = d/dlp_w_pol * d log p_w(t+1) / d logits(t, :)
+#                     = -beta * sigma_neg * (e_{y_w(t+1)} - softmax(logits(t, :)))
+# Each response position contributes one such term; positions outside the
+# response don't appear in lp, so their dlogits are zero.
+function dl = dpo_dlogits(ids, resp_start, resp_end, logits, vocab, sign, weight)
+  T = size(logits)(1);
+  dl = zeros(T, vocab);
+  for t = (resp_start - 1):(resp_end - 1)
+    p = softmax(logits(t, :));
+    e_y = zeros(vocab); e_y(ids(t + 1)) = 1.0;
+    dl(t, :) = sign * weight * (p - e_y);
+  end
+end
+
+# Mean cross-entropy of the policy on the pre-training corpus (forgetting probe).
+function L = abb_loss(ids_pre, mask_pre, P)
+  [lo, L, cache] = transformer_forward(ids_pre, mask_pre, P);
+end
+
+# === 4. Phase 1: pretrain (same recipe as full_backprop.rlab, 400 steps) ===
+[M, V] = adamw_init(P);
+bet1 = 0.9; bet2 = 0.999; eps_a = 1e-8;
+n_pre = 400;  eta_max = 0.05; eta_min = 0.005;  T_w = 40;
+print("=== Pre-training (400 steps) ===");
+for step = 1:n_pre
+  eta_t = warmup_cosine(step, n_pre, T_w, eta_max, eta_min);
+  [lo, L, cache] = transformer_forward(ids_pre, mask_pre, P);
+  dl = ce_dlogits(ids_pre, mask_pre, lo, T_pre - 1);
+  G = transformer_backward(ids_pre, dl, cache, P);
+  [P, M, V] = adamw_step(P, G, M, V, eta_t, step, bet1, bet2, eps_a, 0.0);
+end
+
+# === 5. Freeze the pretrained policy as the reference for DPO. ===
+P_ref = P;             # struct copy — pi_ref never changes from here on
+print("Pretrained policy frozen as reference (pi_ref).");
+
+# === 6. Phase 2: DPO on preference pairs ===
+# Preference dataset: same prompts as sft.rlab, but each prompt has TWO
+# responses — the chosen response is "a a", the rejected is "b b".  The
+# DPO loss pushes the policy to prefer "a a" over "b b".
+# Sequences are stored as full token lists; chosen / rejected differ in
+# the last two positions only.
+chosen   = [1, 2, 3, 1, 1;
+            2, 2, 3, 1, 1;
+            2, 1, 3, 1, 1];
+rejected = [1, 2, 3, 2, 2;
+            2, 2, 3, 2, 2;
+            2, 1, 3, 2, 2];
+n_prefs = size(chosen)(1);
+# Both responses occupy positions 4..5 (predicted from positions 3..4).
+resp_start = 4;
+resp_end   = 5;
+zero_mask = zeros(size(chosen)(2) - 1);   # logits only, no loss accumulation
+
+beta_dpo = 0.5;             # KL temperature: smaller = looser to reference
+
+# Reset AdamW state for the DPO phase.
+[M, V] = adamw_init(P);
+n_dpo = 200;
+eta_dpo = 0.005;
+dpo_loss_curve = zeros(n_dpo + 1);
+abb_loss_curve = zeros(n_dpo + 1);
+
+# Initial logging.
+L0_dpo = 0.0;
+for s = 1:n_prefs
+  [lo_w, l1, c1] = transformer_forward(chosen(s, :), zero_mask, P);
+  [lo_l, l2, c2] = transformer_forward(rejected(s, :), zero_mask, P);
+  [lo_w_ref, l3, c3] = transformer_forward(chosen(s, :), zero_mask, P_ref);
+  [lo_l_ref, l4, c4] = transformer_forward(rejected(s, :), zero_mask, P_ref);
+  lp_w_pol = response_logprob(chosen(s, :), resp_start, resp_end, lo_w);
+  lp_l_pol = response_logprob(rejected(s, :), resp_start, resp_end, lo_l);
+  lp_w_ref = response_logprob(chosen(s, :), resp_start, resp_end, lo_w_ref);
+  lp_l_ref = response_logprob(rejected(s, :), resp_start, resp_end, lo_l_ref);
+  margin = beta_dpo * (lp_w_pol - lp_w_ref - lp_l_pol + lp_l_ref);
+  L0_dpo = L0_dpo - log(1.0 / (1.0 + exp(-margin)));
+end
+L0_dpo = L0_dpo / n_prefs;
+dpo_loss_curve(1) = L0_dpo;
+
+# Abb-corpus loss probe (catastrophic-forgetting check).
+L_abb_pre = abb_loss(ids_pre, mask_pre, P);
+abb_loss_curve(1) = L_abb_pre;
+print("");
+print("=== DPO (200 steps, beta =", beta_dpo, ") ===");
+print("Initial DPO L:", L0_dpo, "   abb-corpus L:", L_abb_pre);
+
+# === 7. DPO loop ===
+for step = 1:n_dpo
+  # Round-robin pick a preference pair.
+  s = mod(step - 1, n_prefs) + 1;
+  ids_w = chosen(s, :);
+  ids_l = rejected(s, :);
+
+  [lo_w, l1, ca_w] = transformer_forward(ids_w, zero_mask, P);
+  [lo_l, l2, ca_l] = transformer_forward(ids_l, zero_mask, P);
+  [lo_w_ref, l3, c3] = transformer_forward(ids_w, zero_mask, P_ref);
+  [lo_l_ref, l4, c4] = transformer_forward(ids_l, zero_mask, P_ref);
+
+  lp_w_pol = response_logprob(ids_w, resp_start, resp_end, lo_w);
+  lp_l_pol = response_logprob(ids_l, resp_start, resp_end, lo_l);
+  lp_w_ref = response_logprob(ids_w, resp_start, resp_end, lo_w_ref);
+  lp_l_ref = response_logprob(ids_l, resp_start, resp_end, lo_l_ref);
+
+  margin = beta_dpo * (lp_w_pol - lp_w_ref - lp_l_pol + lp_l_ref);
+  sig = 1.0 / (1.0 + exp(-margin));
+  L = -log(sig + 1e-12);
+  dpo_loss_curve(step + 1) = L;
+  # Weight on each response's per-token logit gradient.  Derivation in the
+  # equations block above: chosen contributes -beta * (1 - sig); rejected
+  # contributes +beta * (1 - sig).
+  w_grad = beta_dpo * (1.0 - sig);
+
+  # Backward through the chosen sequence.  Gradient direction matches
+  # ordinary cross-entropy (sign = +1) — the chosen response should
+  # become MORE likely under the policy.
+  dl_w = dpo_dlogits(ids_w, resp_start, resp_end, lo_w, vocab, +1.0, w_grad);
+  G_w = transformer_backward(ids_w, dl_w, ca_w, P);
+
+  # Backward through the rejected sequence with the OPPOSITE sign (-1) —
+  # the rejected response should become LESS likely under the policy.
+  dl_l = dpo_dlogits(ids_l, resp_start, resp_end, lo_l, vocab, -1.0, w_grad);
+  G_l = transformer_backward(ids_l, dl_l, ca_l, P);
+
+  # Sum the two gradient contributions, field by field.
+  G = struct("E", G_w.E + G_l.E, "gamma1", G_w.gamma1 + G_l.gamma1, "beta1", G_w.beta1 + G_l.beta1, ...
+             "gamma2", G_w.gamma2 + G_l.gamma2, "beta2", G_w.beta2 + G_l.beta2, ...
+             "Wq", G_w.Wq + G_l.Wq, "Wk", G_w.Wk + G_l.Wk, "Wv", G_w.Wv + G_l.Wv, "Wo", G_w.Wo + G_l.Wo, ...
+             "W1", G_w.W1 + G_l.W1, "b1f", G_w.b1f + G_l.b1f, "W2", G_w.W2 + G_l.W2, "b2f", G_w.b2f + G_l.b2f, ...
+             "W_U", G_w.W_U + G_l.W_U);
+
+  # AdamW update.
+  [P, M, V] = adamw_step(P, G, M, V, eta_dpo, step, bet1, bet2, eps_a, 0.0);
+
+  # Abb-corpus loss probe.
+  abb_loss_curve(step + 1) = abb_loss(ids_pre, mask_pre, P);
+end
+print("Final DPO L:", dpo_loss_curve(n_dpo + 1));
+print("Final abb-corpus L:", abb_loss_curve(n_dpo + 1));
+
+# === 8. Sanity: compare margins under chosen vs rejected per prompt ===
+print("");
+print("=== Per-prompt log-prob margins (lp_w_pol - lp_l_pol) after DPO ===");
+for s = 1:n_prefs
+  [lo_w, l1, c1] = transformer_forward(chosen(s, :), zero_mask, P);
+  [lo_l, l2, c2] = transformer_forward(rejected(s, :), zero_mask, P);
+  lp_w = response_logprob(chosen(s, :), resp_start, resp_end, lo_w);
+  lp_l = response_logprob(rejected(s, :), resp_start, resp_end, lo_l);
+  print("  prompt", s, ":  lp(chosen)=", lp_w, "  lp(rejected)=", lp_l, "  margin=", lp_w - lp_l);
+end
+
+# === 9. Plot DPO and abb-corpus loss curves ===
+figure();
+subplot(1, 2, 1)
+plot(0:n_dpo, dpo_loss_curve, "color", "blue", "label", "DPO loss")
+title("DPO loss (lower = better margin chosen/rejected)")
+xlabel("step")
+ylabel("L_DPO")
+subplot(1, 2, 2)
+plot(0:n_dpo, abb_loss_curve, "color", "red", "label", "abb-corpus L")
+title("Pretraining-distribution loss during DPO")
+xlabel("step")
+ylabel("L (nats / pair)")
+savefig("dpo.svg")
+print("Saved dpo.svg");

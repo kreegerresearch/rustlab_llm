@@ -17,6 +17,15 @@ Subdirectories track the notebook slugs one-for-one. As `.rlab` scripts
 are added or rewritten for a lesson, drop them in the matching
 `lessons/<slug>/` directory.
 
+Code that more than one lesson needs lives in [`../lib/`](../lib/) —
+`transformer.rlab` (block forward, trainable forward/backward, AdamW,
+schedule), `sampling.rlab`, `bigram_lm.rlab` — and is pulled in at the
+top of a script with a quoted, script-relative path:
+
+```
+run "../../lib/transformer.rlab"
+```
+
 ## Running
 
 ```sh

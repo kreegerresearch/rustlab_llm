@@ -1,0 +1,74 @@
+# Library: bigram_lm.rlab
+# System:  The Lesson 18 24-parameter embedding+head language model
+#          (E: vocab x d_emb, W: d_emb x vocab) trained full-batch with
+#          AdamW under a linear-warmup + cosine schedule on a token sequence.
+#          Shared by the Lesson 21 generation scripts and notebook, which
+#          retrain it before decoding from it.
+# Concept: One trainer, many callers.  The forward pass, the analytical
+#          gradient and the AdamW update are derived in Lessons 15-18; this
+#          file only packages them so no lesson carries a second copy.
+# Equations:
+#   h_t     = E(x_t, :)                          (row gather)
+#   p_t     = softmax(h_t * W)                   (next-token distribution)
+#   L       = -log p_t(x_{t+1}), averaged over the training pairs
+#   dlogits = p_t - onehot(x_{t+1});  dW += h_t' * dlogits;  dE(x_t,:) += dlogits * W'
+#   AdamW:  beta1 = 0.9, beta2 = 0.999, eps = 1e-8, no weight decay
+#   eta_t   = eta_max * t / T_w                       for t <= T_w
+#           = eta_min + (eta_max - eta_min)(1 + cos(pi * s)) / 2,
+#             s = (t - T_w) / (n_steps - T_w)          afterwards
+# Usage:   from a lesson script:   run "../../lib/bigram_lm.rlab"
+#          from a notebook block:  run "../lib/bigram_lm.rlab"
+#          (quote the path; notebooks are rendered with --jail-root .)
+#          Call seed(...) immediately before train_bigram_lm: the function
+#          draws E and W with randn first, so the RNG stream is unchanged
+#          from the inline trainers it replaces.
+# Units:   parameters dimensionless; loss in nats; tokens are 1-based ids.
+
+# Train on the consecutive pairs (train_ids(k), train_ids(k+1)),
+# k = 1 .. length(train_ids) - 1.  Returns the trained embedding E and
+# output head W.  Initialisation: E, W ~ 0.3 * randn.
+function [E, W] = train_bigram_lm(train_ids, vocab, d_emb, n_steps, eta_max, eta_min, T_w)
+  E = randn(vocab, d_emb) * 0.3;
+  W = randn(d_emb, vocab) * 0.3;
+  n_pairs = length(train_ids) - 1;
+
+  # AdamW state
+  m_E = zeros(vocab, d_emb);  v_E = zeros(vocab, d_emb);
+  m_W = zeros(d_emb, vocab);  v_W = zeros(d_emb, vocab);
+  beta1 = 0.9;  beta2 = 0.999;  eps_a = 1e-8;
+
+  for t = 1:n_steps
+    # Warmup-cosine schedule (Lesson 17)
+    if t <= T_w
+      eta_t = eta_max * (t / T_w);
+    else
+      progress = (t - T_w) / (n_steps - T_w);
+      eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * progress));
+    end
+
+    # Full-batch gradient over every training pair (Lesson 15)
+    dE = zeros(vocab, d_emb);
+    dW = zeros(d_emb, vocab);
+    for k = 0:(n_pairs - 1)
+      curr = train_ids(1 + k);  nxt = train_ids(2 + k);
+      h = E(curr, :);
+      p = softmax(h * W);
+      e_y = zeros(vocab);  e_y(nxt) = 1.0;
+      dlogits = p - e_y;
+      dW = dW + h' * dlogits;
+      dh = dlogits * W';
+      for j = 1:d_emb
+        dE(curr, j) = dE(curr, j) + dh(j);
+      end
+    end
+    dE = dE / n_pairs;  dW = dW / n_pairs;
+
+    # Bias-corrected AdamW step (Lesson 16)
+    m_E = beta1 * m_E + (1 - beta1) * dE;
+    v_E = beta2 * v_E + (1 - beta2) * (dE .^ 2);
+    E = E - eta_t * ((m_E / (1 - beta1 ^ t)) ./ (sqrt(v_E / (1 - beta2 ^ t)) + eps_a));
+    m_W = beta1 * m_W + (1 - beta1) * dW;
+    v_W = beta2 * v_W + (1 - beta2) * (dW .^ 2);
+    W = W - eta_t * ((m_W / (1 - beta1 ^ t)) ./ (sqrt(v_W / (1 - beta2 ^ t)) + eps_a));
+  end
+end

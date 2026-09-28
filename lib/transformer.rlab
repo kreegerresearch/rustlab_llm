@@ -1,0 +1,426 @@
+# Library: transformer.rlab
+# System:  Shared transformer building blocks used by Lessons 13, 14, 22,
+#          23, and 25.  Two families live here:
+#            (a) mha_block_forward — the inference-only Pre-LN block of
+#                Lessons 13/14 (multi-head, packed d_model x d_model
+#                projections, LayerNorm with gamma = 1 / beta = 0, no biases).
+#            (b) transformer_forward / transformer_backward — the trainable
+#                single-head, single-block model of Lessons 22-25, with
+#                LayerNorm affines, FFN biases, a loss mask, an activation
+#                cache, the analytical backward pass, and an AdamW step.
+# Concept: One implementation, many callers.  Every equation is derived in
+#          the notebooks: block wiring in 13, chain rule in 15, the full
+#          backward pass in 22.
+# Usage:   from a lesson script:   run "../../lib/transformer.rlab"
+#          from a notebook block:  run "../lib/transformer.rlab"
+#          (the Makefile passes --jail-root . so notebooks may reach lib/).
+#          Quote the path — an unquoted leading ".." does not lex.
+# Units:   activations and parameters dimensionless; losses in nats.
+
+# === Causal mask ===
+# Additive mask: 0 on and below the diagonal, -1e9 above.  Add to a T x T
+# score matrix before softmax so no query position can see the future.
+function M = causal_mask(T)
+  M = zeros(T, T);
+  for i = 1:T
+    for j = (i + 1):T
+      M(i, j) = -1.0e9;
+    end
+  end
+end
+
+# === Sinusoidal positional encoding (0-based positions, Lessons 22-25) ===
+# Row t holds PE for position t - 1: sin / cos pairs at geometrically spaced
+# frequencies omega_k = 10000^(-2k / d_model).
+function PE = sinusoidal_pe(T_max, d_model)
+  PE = zeros(T_max, d_model);
+  for t = 1:T_max
+    for k = 0:(d_model / 2 - 1)
+      omega = 10000.0 ^ (-2 * k / d_model);
+      PE(t, 2 * k + 1) = sin((t - 1) * omega);
+      PE(t, 2 * k + 2) = cos((t - 1) * omega);
+    end
+  end
+end
+
+# === (a) Inference-only multi-head Pre-LN block (Lessons 13 / 14) ===
+# H_in      (T, d_model)   residual stream entering the block
+# W_Q..W_O  (d_model, d_model) packed projections; head h reads columns
+#           (h-1)*d_k+1 .. h*d_k with d_k = d_model / H_heads
+# W_ff1     (d_model, d_ff), W_ff2 (d_ff, d_model)   FFN (no biases)
+# M_mask    (T, T) additive causal mask from causal_mask(T)
+# LayerNorm is pure standardisation (gamma = 1, beta = 0).
+function H_out = mha_block_forward(H_in, W_Q, W_K, W_V, W_O, W_ff1, W_ff2, H_heads, M_mask)
+  T = size(H_in)(1);
+  d_model = size(H_in)(2);
+  d_k = d_model / H_heads;
+  scale = 1.0 / sqrt(d_k);
+
+  # Sublayer 1: Pre-LN multi-head self-attention + residual.
+  H_norm1 = layernorm(H_in);
+  Q = H_norm1 * W_Q;
+  K = H_norm1 * W_K;
+  V = H_norm1 * W_V;
+  out_concat = zeros(T, d_model);
+  for h = 1:H_heads
+    c_lo = (h - 1) * d_k + 1;
+    c_hi = h * d_k;
+    Q_h = Q(:, c_lo:c_hi);
+    K_h = K(:, c_lo:c_hi);
+    V_h = V(:, c_lo:c_hi);
+    A_h = softmax(Q_h * K_h' * scale + M_mask);
+    out_concat(:, c_lo:c_hi) = A_h * V_h;
+  end
+  H_mid = H_in + out_concat * W_O;
+
+  # Sublayer 2: Pre-LN feed-forward + residual.
+  H_norm2 = layernorm(H_mid);
+  H_out = H_mid + gelu(H_norm2 * W_ff1) * W_ff2;
+end
+
+# === (b) Trainable single-block model (Lessons 22-25) ===
+# Parameters travel in one struct P with fields
+#   E (vocab, d_model)        token embedding
+#   PE (T_max, d_model)       fixed positional encoding (not trained)
+#   gamma1, beta1, gamma2, beta2 (d_model,)   LayerNorm affines
+#   Wq, Wk, Wv, Wo (d_model, d_model)          single-head attention
+#   W1 (d_model, d_ff), b1f (d_ff,), W2 (d_ff, d_model), b2f (d_model,)
+#   W_U (d_model, vocab)      LM head (not weight-tied)
+# Gradients come back in a struct G with the same field names (minus PE).
+
+# Per-row LayerNorm forward with the per-row statistics the backward needs.
+function [Y, x_norm_M, sigma_v] = layernorm_fwd(X, gamma, beta)
+  T = size(X)(1);
+  d = size(X)(2);
+  eps = 1e-5;
+  Y = zeros(T, d);
+  x_norm_M = zeros(T, d);
+  sigma_v = zeros(T);
+  for t = 1:T
+    x = X(t, :);
+    mu = mean(x);
+    var = mean((x - mu) .^ 2);
+    sigma = sqrt(var + eps);
+    xn = (x - mu) / sigma;
+    sigma_v(t) = sigma;
+    x_norm_M(t, :) = xn;
+    Y(t, :) = xn .* gamma + beta;
+  end
+end
+
+# Per-row LayerNorm backward.
+# Given dY (T, d), x_norm (T, d), sigma (T,), gamma (d,):
+#   dgamma   = sum_t dY(t, :) .* x_norm(t, :)         (d,)
+#   dbeta    = sum_t dY(t, :)                          (d,)
+#   dx_norm  = dY .* gamma                              (T, d)
+#   dx(t, :) = (1/sigma_t) *
+#              (dx_norm(t, :) - mean(dx_norm(t, :))
+#               - x_norm(t, :) * mean(dx_norm(t, :) .* x_norm(t, :)))
+function [dX, dgamma, dbeta] = layernorm_bwd(dY, x_norm_M, sigma_v, gamma)
+  T = size(dY)(1);
+  d = size(dY)(2);
+  dX = zeros(T, d);
+  dgamma = zeros(d);
+  dbeta = zeros(d);
+  for t = 1:T
+    dgamma = dgamma + dY(t, :) .* x_norm_M(t, :);
+    dbeta  = dbeta  + dY(t, :);
+  end
+  for t = 1:T
+    dx_norm = dY(t, :) .* gamma;
+    xn = x_norm_M(t, :);
+    dX(t, :) = (1.0 / sigma_v(t)) * (dx_norm - mean(dx_norm) - xn * mean(dx_norm .* xn));
+  end
+end
+
+# Derivative of the tanh-approximation GELU used by the gelu() builtin.
+#   d/dz [0.5 z (1 + tanh(sqrt(2/pi) (z + 0.044715 z^3)))]
+function y = gelu_grad(z)
+  c = sqrt(2.0 / pi);
+  u = c * (z + 0.044715 * z .^ 3);
+  th = tanh(u);
+  du_dz = c * (1.0 + 0.044715 * 3.0 * z .^ 2);
+  sech2 = 1.0 - th .^ 2;
+  y = 0.5 * (1.0 + th) + 0.5 * z .* sech2 .* du_dz;
+end
+
+# Forward pass.  loss_mask is a row vector of length T-1: position t
+# contributes -log P(ids(t+1) | ids(1..t)) to L only where loss_mask(t) > 0,
+# and L is the mean over the counted positions (0 if none are counted —
+# generation passes an all-zero mask to get logits without a loss).
+# Returns the logits (T, vocab), the scalar loss L, and a cache struct of
+# every intermediate the backward pass reuses.
+function [logits, L, cache] = transformer_forward(ids, loss_mask, P)
+  E = P.E;  PE = P.PE;
+  gamma1 = P.gamma1;  beta1 = P.beta1;  gamma2 = P.gamma2;  beta2 = P.beta2;
+  Wq = P.Wq;  Wk = P.Wk;  Wv = P.Wv;  Wo = P.Wo;
+  W1 = P.W1;  b1f = P.b1f;  W2 = P.W2;  b2f = P.b2f;  W_U = P.W_U;
+
+  T = length(ids);
+  d_model = size(E)(2);
+  vocab = size(E)(1);
+
+  # Token + position embedding.
+  H_in = zeros(T, d_model);
+  for t = 1:T
+    H_in(t, :) = E(ids(t), :) + PE(t, :);
+  end
+
+  # Pre-LN attention sublayer (single head, d_head = d_model).
+  [H_ln1, x_norm1, sigma1] = layernorm_fwd(H_in, gamma1, beta1);
+  Q = H_ln1 * Wq;
+  K = H_ln1 * Wk;
+  V = H_ln1 * Wv;
+  scale = 1.0 / sqrt(d_model);
+  S = (Q * K') * scale;
+  # Causal mask: -1e9 above the diagonal.
+  for i = 1:T
+    for j = (i + 1):T
+      S(i, j) = -1e9;
+    end
+  end
+  A = softmax(S);
+  attn_out = A * V;
+  proj = attn_out * Wo;
+  H_mid = H_in + proj;
+
+  # Pre-LN FFN sublayer.
+  [H_ln2, x_norm2, sigma2] = layernorm_fwd(H_mid, gamma2, beta2);
+  pre_gelu = H_ln2 * W1 + repmat(b1f, T, 1);
+  hidden = gelu(pre_gelu);
+  ffn_out = hidden * W2 + repmat(b2f, T, 1);
+  H_out = H_mid + ffn_out;
+
+  # LM head.
+  logits = H_out * W_U;
+
+  # Masked mean cross-entropy over the counted prediction positions.
+  L = 0.0;
+  total = 0.0;
+  for t = 1:(T - 1)
+    if loss_mask(t) > 0
+      p = softmax(logits(t, :));
+      L = L - log(p(ids(t + 1)));
+      total = total + 1.0;
+    end
+  end
+  if total > 0
+    L = L / total;
+  end
+
+  cache = struct("T", T, "H_in", H_in, "H_ln1", H_ln1, "x_norm1", x_norm1, "sigma1", sigma1, ...
+                 "Q", Q, "K", K, "V", V, "S", S, "A", A, "attn_out", attn_out, "proj", proj, ...
+                 "H_mid", H_mid, "H_ln2", H_ln2, "x_norm2", x_norm2, "sigma2", sigma2, ...
+                 "pre_gelu", pre_gelu, "hidden", hidden, "ffn_out", ffn_out, "H_out", H_out, ...
+                 "logits", logits, "scale", scale, "total", total);
+end
+
+# Upstream gradient at the logits for the masked mean cross-entropy:
+# (softmax(z_t) - e_{y_t}) / total at counted positions, zero elsewhere.
+function dl = ce_dlogits(ids, loss_mask, logits, total)
+  T = size(logits)(1);
+  vocab = size(logits)(2);
+  dl = zeros(T, vocab);
+  if total > 0
+    for t = 1:(T - 1)
+      if loss_mask(t) > 0
+        p = softmax(logits(t, :));
+        e_y = zeros(vocab); e_y(ids(t + 1)) = 1.0;
+        dl(t, :) = (p - e_y) / total;
+      end
+    end
+  end
+end
+
+# Backward pass from an arbitrary upstream gradient dlogits (T, vocab).
+# Every line is the chain rule applied to transformer_forward in reverse;
+# the derivation is Lesson 22.  Returns a struct G of parameter gradients.
+function G = transformer_backward(ids, dlogits, cache, P)
+  E = P.E;  gamma1 = P.gamma1;  gamma2 = P.gamma2;
+  Wq = P.Wq;  Wk = P.Wk;  Wv = P.Wv;  Wo = P.Wo;
+  W1 = P.W1;  W2 = P.W2;  W_U = P.W_U;
+
+  # Pull cache fields into locals (rustlab cannot index a struct field
+  # directly, e.g. cache.A(t, :)).
+  T        = cache.T;
+  H_ln1    = cache.H_ln1;
+  x_norm1  = cache.x_norm1;
+  sigma1   = cache.sigma1;
+  Q        = cache.Q;
+  K        = cache.K;
+  V        = cache.V;
+  A        = cache.A;
+  attn_out = cache.attn_out;
+  H_mid    = cache.H_mid;
+  H_ln2    = cache.H_ln2;
+  x_norm2  = cache.x_norm2;
+  sigma2   = cache.sigma2;
+  pre_gelu = cache.pre_gelu;
+  hidden   = cache.hidden;
+  H_out    = cache.H_out;
+  scale    = cache.scale;
+
+  d_model = size(E)(2);
+  vocab = size(E)(1);
+
+  # LM head.
+  dW_U = H_out' * dlogits;
+  dH_out = dlogits * W_U';
+
+  # FFN residual splits dH_out into the residual path and the FFN path.
+  d_ffn_out = dH_out;
+  dH_mid    = dH_out;
+
+  # FFN backward.
+  dhidden = d_ffn_out * W2';
+  dW2 = hidden' * d_ffn_out;
+  db2f = zeros(d_model);
+  for t = 1:T
+    db2f = db2f + d_ffn_out(t, :);
+  end
+
+  dpre_gelu = dhidden .* gelu_grad(pre_gelu);
+  dH_ln2 = dpre_gelu * W1';
+  dW1 = H_ln2' * dpre_gelu;
+  d_ff = size(W1)(2);
+  db1f = zeros(d_ff);
+  for t = 1:T
+    db1f = db1f + dpre_gelu(t, :);
+  end
+
+  # LayerNorm 2 backward — adds to the residual contribution at H_mid.
+  [dH_mid_from_ln, dgamma2, dbeta2] = layernorm_bwd(dH_ln2, x_norm2, sigma2, gamma2);
+  dH_mid = dH_mid + dH_mid_from_ln;
+
+  # Attention residual splits dH_mid into the residual path and the attention path.
+  dH_in = dH_mid;
+  dproj = dH_mid;
+
+  # Output projection.
+  dattn_out = dproj * Wo';
+  dWo = attn_out' * dproj;
+
+  # Attention backward: dA from dattn_out, dV from A^T @ dattn_out.
+  dA = dattn_out * V';
+  dV = A' * dattn_out;
+
+  # Softmax row-wise backward: dS_row = A_row .* (dA_row - sum(A_row .* dA_row)).
+  dS = zeros(T, T);
+  for t = 1:T
+    a_row = A(t, :);
+    da_row = dA(t, :);
+    dS(t, :) = a_row .* (da_row - sum(a_row .* da_row));
+  end
+
+  # Scaled-dot-product backward.
+  dQ = (dS * K) * scale;
+  dK = (dS' * Q) * scale;
+
+  # Q, K, V projections back through H_ln1.
+  dH_ln1 = dQ * Wq' + dK * Wk' + dV * Wv';
+  dWq = H_ln1' * dQ;
+  dWk = H_ln1' * dK;
+  dWv = H_ln1' * dV;
+
+  # LayerNorm 1 backward — adds to dH_in via the LN1 path.
+  [dH_in_from_ln, dgamma1, dbeta1] = layernorm_bwd(dH_ln1, x_norm1, sigma1, gamma1);
+  dH_in = dH_in + dH_in_from_ln;
+
+  # Embedding gradient: scatter-add.  Positional embeddings are not trainable.
+  dE = zeros(vocab, d_model);
+  for t = 1:T
+    tok = ids(t);
+    dE(tok, :) = dE(tok, :) + dH_in(t, :);
+  end
+
+  G = struct("E", dE, "gamma1", dgamma1, "beta1", dbeta1, "gamma2", dgamma2, "beta2", dbeta2, ...
+             "Wq", dWq, "Wk", dWk, "Wv", dWv, "Wo", dWo, ...
+             "W1", dW1, "b1f", db1f, "W2", dW2, "b2f", db2f, "W_U", dW_U);
+end
+
+# Squared Frobenius norm summed over every gradient in G (for ||grad|| logs).
+function gn = grad_norm(G)
+  gn = sqrt(sum(sum(G.E .^ 2)) + sum(G.gamma1 .^ 2) + sum(G.beta1 .^ 2) + ...
+            sum(G.gamma2 .^ 2) + sum(G.beta2 .^ 2) + ...
+            sum(sum(G.Wq .^ 2)) + sum(sum(G.Wk .^ 2)) + sum(sum(G.Wv .^ 2)) + sum(sum(G.Wo .^ 2)) + ...
+            sum(sum(G.W1 .^ 2)) + sum(G.b1f .^ 2) + sum(sum(G.W2 .^ 2)) + sum(G.b2f .^ 2) + ...
+            sum(sum(G.W_U .^ 2)));
+end
+
+# === AdamW (Lesson 16) on the parameter struct ===
+# Moment buffers are two structs shaped like the trainable part of P.
+function [M, V] = adamw_init(P)
+  M = struct("E", zeros(size(P.E)(1), size(P.E)(2)), ...
+             "gamma1", zeros(length(P.gamma1)), "beta1", zeros(length(P.beta1)), ...
+             "gamma2", zeros(length(P.gamma2)), "beta2", zeros(length(P.beta2)), ...
+             "Wq", zeros(size(P.Wq)(1), size(P.Wq)(2)), "Wk", zeros(size(P.Wk)(1), size(P.Wk)(2)), ...
+             "Wv", zeros(size(P.Wv)(1), size(P.Wv)(2)), "Wo", zeros(size(P.Wo)(1), size(P.Wo)(2)), ...
+             "W1", zeros(size(P.W1)(1), size(P.W1)(2)), "b1f", zeros(length(P.b1f)), ...
+             "W2", zeros(size(P.W2)(1), size(P.W2)(2)), "b2f", zeros(length(P.b2f)), ...
+             "W_U", zeros(size(P.W_U)(1), size(P.W_U)(2)));
+  V = M;
+end
+
+# One AdamW step for a single parameter:
+#   m <- b1 m + (1 - b1) g;  v <- b2 v + (1 - b2) g.^2
+#   p <- p - eta * wd * p                       (decoupled weight decay)
+#   p <- p - eta * (m / (1 - b1^t)) ./ (sqrt(v / (1 - b2^t)) + eps)
+function [p, m, v] = adamw_update(p, g, m, v, eta, step, bet1, bet2, eps_a, wd)
+  m = bet1 * m + (1 - bet1) * g;
+  v = bet2 * v + (1 - bet2) * (g .^ 2);
+  if wd > 0
+    p = p - eta * wd * p;
+  end
+  p = p - eta * ((m / (1 - bet1 ^ step)) ./ (sqrt(v / (1 - bet2 ^ step)) + eps_a));
+end
+
+# Apply adamw_update to every trainable field of P.  (rustlab cannot
+# destructure directly into struct fields, hence the local temporaries.)
+function [P, M, V] = adamw_step(P, G, M, V, eta, step, bet1, bet2, eps_a, wd)
+  [p, m, v] = adamw_update(P.E, G.E, M.E, V.E, eta, step, bet1, bet2, eps_a, wd);
+  P.E = p;  M.E = m;  V.E = v;
+  [p, m, v] = adamw_update(P.gamma1, G.gamma1, M.gamma1, V.gamma1, eta, step, bet1, bet2, eps_a, wd);
+  P.gamma1 = p;  M.gamma1 = m;  V.gamma1 = v;
+  [p, m, v] = adamw_update(P.beta1, G.beta1, M.beta1, V.beta1, eta, step, bet1, bet2, eps_a, wd);
+  P.beta1 = p;  M.beta1 = m;  V.beta1 = v;
+  [p, m, v] = adamw_update(P.gamma2, G.gamma2, M.gamma2, V.gamma2, eta, step, bet1, bet2, eps_a, wd);
+  P.gamma2 = p;  M.gamma2 = m;  V.gamma2 = v;
+  [p, m, v] = adamw_update(P.beta2, G.beta2, M.beta2, V.beta2, eta, step, bet1, bet2, eps_a, wd);
+  P.beta2 = p;  M.beta2 = m;  V.beta2 = v;
+  [p, m, v] = adamw_update(P.Wq, G.Wq, M.Wq, V.Wq, eta, step, bet1, bet2, eps_a, wd);
+  P.Wq = p;  M.Wq = m;  V.Wq = v;
+  [p, m, v] = adamw_update(P.Wk, G.Wk, M.Wk, V.Wk, eta, step, bet1, bet2, eps_a, wd);
+  P.Wk = p;  M.Wk = m;  V.Wk = v;
+  [p, m, v] = adamw_update(P.Wv, G.Wv, M.Wv, V.Wv, eta, step, bet1, bet2, eps_a, wd);
+  P.Wv = p;  M.Wv = m;  V.Wv = v;
+  [p, m, v] = adamw_update(P.Wo, G.Wo, M.Wo, V.Wo, eta, step, bet1, bet2, eps_a, wd);
+  P.Wo = p;  M.Wo = m;  V.Wo = v;
+  [p, m, v] = adamw_update(P.W1, G.W1, M.W1, V.W1, eta, step, bet1, bet2, eps_a, wd);
+  P.W1 = p;  M.W1 = m;  V.W1 = v;
+  [p, m, v] = adamw_update(P.b1f, G.b1f, M.b1f, V.b1f, eta, step, bet1, bet2, eps_a, wd);
+  P.b1f = p;  M.b1f = m;  V.b1f = v;
+  [p, m, v] = adamw_update(P.W2, G.W2, M.W2, V.W2, eta, step, bet1, bet2, eps_a, wd);
+  P.W2 = p;  M.W2 = m;  V.W2 = v;
+  [p, m, v] = adamw_update(P.b2f, G.b2f, M.b2f, V.b2f, eta, step, bet1, bet2, eps_a, wd);
+  P.b2f = p;  M.b2f = m;  V.b2f = v;
+  [p, m, v] = adamw_update(P.W_U, G.W_U, M.W_U, V.W_U, eta, step, bet1, bet2, eps_a, wd);
+  P.W_U = p;  M.W_U = m;  V.W_U = v;
+end
+
+# Warmup + cosine learning-rate schedule (Lesson 17).
+function eta_t = warmup_cosine(step, n_steps, T_w, eta_max, eta_min)
+  if step <= T_w
+    eta_t = eta_max * (step / T_w);
+  else
+    prog = (step - T_w) / (n_steps - T_w);
+    eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * prog));
+  end
+end
+
+# Next-token distribution after a prefix (all-zero mask: logits only).
+function p = next_token_dist(prefix, P)
+  T = length(prefix);
+  zero_mask = zeros(T - 1);
+  [logits, L, cache] = transformer_forward(prefix, zero_mask, P);
+  p = softmax(logits(T, :));
+end

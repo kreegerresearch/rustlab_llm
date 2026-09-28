@@ -217,7 +217,7 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-![plot 2](plots/12-layer-norm-and-residuals/plot-2-12548290.svg)
+![plot 2](plots/12-layer-norm-and-residuals/plot-2-6da7abd6.svg)
 
 <!-- rustlab:output-end -->
 

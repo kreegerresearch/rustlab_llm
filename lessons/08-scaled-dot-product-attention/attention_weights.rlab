@@ -83,27 +83,24 @@ print("Max attention weight in upper triangle (should be ~0):", max_upper);
 print("A(1, 1) (token 1 can only attend to itself — should be 1):", A(1, 1));
 
 # === Plots ===
-# Three-stage pipeline: raw scores → masked scores → attention weights.
+# Three-stage pipeline: raw scores → causal mask → attention weights.
 # Both axes of every matrix here are token positions, so use the labelled
 # heatmap form to make the "row t attends to columns 1..t" structure read
-# without translating cell indices.
+# without translating cell indices.  The middle panel plots the mask
+# indicator (1 = blocked) rather than S_masked itself, whose -1e9 entries
+# would swamp the colour scale.
 positions = {"t1", "t2", "t3", "t4", "t5"};
+M_ind = (M < 0);
 
-# TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 figure();
+subplot(1, 3, 1)
 heatmap(positions, positions, S, "Scaled scores S = Q K^T / sqrt(d_k)", "viridis")
-savefig("attention_pipeline_scores.svg")
-
-figure();
-# rustlab 0.3.6 colormaps by |value|; shift by +1e9 so masked cells render dark (min)
-# (see docs/rustlab-issues-2026-07-12.md §6)
-heatmap(positions, positions, S_masked + 1.0e9, "After causal mask, +1e9 shift (masked → dark)", "viridis")
-savefig("attention_pipeline_masked.svg")
-
-figure();
+subplot(1, 3, 2)
+heatmap(positions, positions, M_ind, "Causal mask (1 = blocked)", "viridis")
+subplot(1, 3, 3)
 heatmap(positions, positions, A, "Attention weights A = softmax_row(S_masked)", "viridis")
-savefig("attention_pipeline_weights.svg")
-print("Saved attention_pipeline_scores.svg, attention_pipeline_masked.svg, attention_pipeline_weights.svg");
+savefig("attention_pipeline.svg")
+print("Saved attention_pipeline.svg");
 
 # Standalone heatmap of the final weights
 figure();

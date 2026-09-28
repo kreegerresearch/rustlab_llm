@@ -39,53 +39,22 @@ For a transformer the per-step cost is dominated by the forward pass. We will re
 
 ### Example — Greedy decoding from the Lesson 18 model
 
-The bigram-style model from [18-training-loop](18-training-loop.md) has $|\mathcal{V}| = 3$ tokens and learns $P(b\mid a) = P(b\mid c) = 1$, $P(a\mid b) = P(c\mid b) = 0.5$ on the period-4 corpus `"abcb abcb abcb…"`. We retrain it inline and run greedy decoding:
+The bigram-style model from [18-training-loop](18-training-loop.md) has $|\mathcal{V}| = 3$ tokens and learns $P(b\mid a) = P(b\mid c) = 1$, $P(a\mid b) = P(c\mid b) = 0.5$ on the period-4 corpus `"abcb abcb abcb…"`. We retrain it (the Lesson 18 training loop is packaged in `lib/bigram_lm.rlab`) and run greedy decoding:
 
 ```rustlab
 % --- Retrain the Lesson 18 model (24 params, 600 steps) ---
 seed(18);
 vocab = 3;
 d_emb = 4;
-E = randn(vocab, d_emb) * 0.3;
-W = randn(d_emb, vocab) * 0.3;
 
 pat = [1, 2, 3, 2];
 corpus = zeros(60);
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
 end
-n_pairs = 49;
-m_E = zeros(vocab, d_emb); v_E = zeros(vocab, d_emb);
-m_W = zeros(d_emb, vocab); v_W = zeros(d_emb, vocab);
-b1 = 0.9; b2 = 0.999; eps_a = 1e-8;
-eta_max = 0.15; eta_min = 0.015; n_tr = 600; T_w = 60;
-for t = 1:n_tr
-  if t <= T_w
-    eta = eta_max * (t / T_w);
-  else
-    prog = (t - T_w) / (n_tr - T_w);
-    eta = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * prog));
-  end
-  dE = zeros(vocab, d_emb); dW = zeros(d_emb, vocab);
-  for k = 0:(n_pairs - 1)
-    curr = corpus(1 + k); nxt = corpus(2 + k);
-    h = E(curr, :); p = softmax(h * W);
-    e_y = zeros(vocab); e_y(nxt) = 1.0;
-    dl = p - e_y;
-    dW = dW + h' * dl;
-    dh = dl * W';
-    for j = 1:d_emb
-      dE(curr, j) = dE(curr, j) + dh(j);
-    end
-  end
-  dE = dE / n_pairs; dW = dW / n_pairs;
-  m_E = b1 * m_E + (1 - b1) * dE;
-  v_E = b2 * v_E + (1 - b2) * (dE .^ 2);
-  E = E - eta * ((m_E / (1 - b1 ^ t)) ./ (sqrt(v_E / (1 - b2 ^ t)) + eps_a));
-  m_W = b1 * m_W + (1 - b1) * dW;
-  v_W = b2 * v_W + (1 - b2) * (dW .^ 2);
-  W = W - eta * ((m_W / (1 - b1 ^ t)) ./ (sqrt(v_W / (1 - b2 ^ t)) + eps_a));
-end
+% AdamW + warmup-cosine on the first 50 tokens (49 pairs): the same loop as
+% Lesson 18, shared via lib/bigram_lm.rlab.  seed(18) above fixes the init.
+[E, W] = train_bigram_lm(corpus(1:50), vocab, d_emb, 600, 0.15, 0.015, 60);
 print("P(. | a) =", softmax(E(1, :) * W));
 print("P(. | b) =", softmax(E(2, :) * W));
 print("P(. | c) =", softmax(E(3, :) * W));
@@ -269,7 +238,7 @@ xlabel("token"); ylabel("probability"); ylim([0, 1])
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/21-sampling-and-generation/plot-1-2bb22086.svg)
+![plot 1](plots/21-sampling-and-generation/plot-1-392c62b4.svg)
 
 <!-- rustlab:output-end -->
 
@@ -312,18 +281,8 @@ The ordering is intuitive: greedy ($H=0$) → top-K=3 → T=0.5 → top-P=0.9 �
 Run the trained Lesson 18 model under three temperatures and observe what changes:
 
 ```rustlab
-function tok = sample_categorical(p)
-  % Inverse-CDF sampling: walk the cumulative distribution until we cross r.
-  c = cumsum(p);
-  r = rand();
-  N = length(p);
-  i = 1;
-  while i < N && c(i) < r
-    i = i + 1;
-  end
-  tok = i;
-end
-
+% sample_categorical(p) is the inverse-CDF draw from lib/sampling.rlab: walk
+% the cumulative distribution until it crosses r ~ U[0, 1).
 function seq = temperature_generate(x0, n_new, E, W, T)
   seq = zeros(n_new + 1);
   seq(1) = x0;
@@ -544,4 +503,4 @@ Run all with `make lesson-21` (or `rustlab run lessons/21-sampling-and-generatio
 
 ## What's next
 
-Lesson 22 is the **capstone**: a single end-to-end script that trains a small GPT (combining tokenisation from [19-byte-pair-encoding](19-byte-pair-encoding.md), training from [18-training-loop](18-training-loop.md), the architecture from [14-full-gpt-architecture](14-full-gpt-architecture.md)) and generates sample text at every checkpoint using the strategies and KV cache from this lesson. After lesson 22 you have built every component of a GPT-style language model from scratch.
+Lesson 22 derives the full backward pass through the block, and Lesson 23 is the **capstone**: a single end-to-end script that trains a small GPT (combining tokenisation from [19-byte-pair-encoding](19-byte-pair-encoding.md), training from [18-training-loop](18-training-loop.md), the architecture from [14-full-gpt-architecture](14-full-gpt-architecture.md)) and generates sample text at every checkpoint using the strategies and KV cache from this lesson. After lesson 22 you have built every component of a GPT-style language model from scratch.
