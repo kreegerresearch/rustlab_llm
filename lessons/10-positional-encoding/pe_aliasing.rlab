@@ -1,0 +1,50 @@
+# Script:  pe_aliasing.rlab
+# System:  Sinusoidal positional encoding — resolution and unambiguous range
+# Concept: A single clock exp(j w k) repeats every 2 pi / w tokens, so on its
+#          own it cannot tell t from t + lambda.  The fastest clock (w_0 = 1
+#          rad/token < pi = Nyquist) resolves neighbours; the slowest sets the
+#          range over which the whole code stays unambiguous — which is what
+#          the base 10000 buys.
+# Equations: |PE_t - PE_{t+k}|^2 = sum_j (2 - 2 cos(w_j k));  lambda_j = 2 pi / w_j
+# Units:     offsets in tokens; distances dimensionless
+
+run "../../lib/transformer.rlab"
+
+d_model = 32;
+n_pairs = d_model / 2;
+omega = 10000.0 .^ (-2 * (0:(n_pairs - 1)) / d_model);
+lambda = 2 * pi ./ omega;
+
+# === Distance vs offset from the closed form: single clocks vs the full bank ===
+kk = 0:130;
+dist_pair0 = sqrt(2 - 2 * cos(omega(1) * kk));
+dist_pair4 = sqrt(2 - 2 * cos(omega(5) * kk));
+dist_all = zeros(length(kk));
+for i = 1:length(kk)
+  dist_all(i) = sqrt(sum(2 - 2 * cos(omega * kk(i))));
+end
+
+# === Check the closed form against the matrix itself ===
+PE = sinusoidal_pe(140, d_model);
+print("k = 63, matrix vs closed form (all pairs):", norm(PE(10, :) - PE(73, :)), dist_all(64));
+print("k = 63, pair 4 alone:", norm(PE(10, 9:10) - PE(73, 9:10)), " (closed form", dist_pair4(64), ")");
+
+# === Resolution and range ===
+print("neighbour distance on pair 0 alone = 2 sin(0.5) =", 2 * sin(0.5), "  full code:", dist_all(2));
+print("fastest rate w_0 =", omega(1), "rad/token < Nyquist pi:", omega(1) < pi, " -> neighbours never alias");
+print("slowest wavelength lambda_15 =", lambda(16), "tokens; design bound 2 pi 1e4 =", 2 * pi * 1e4);
+print("smallest full-code distance for k >= 1:", min(dist_all(2:end)));
+print("pairs with wavelength > the 512-token training context:", sum(lambda > 512), "of", n_pairs);
+
+# === Figure ===
+figure();
+hold("on")
+plot(kk, dist_pair0, "color", "gray", "label", "pair 0 only (wavelength 6.3)")
+plot(kk, dist_pair4, "color", "red", "label", "pair 4 only (wavelength 62.8)")
+plot(kk, dist_all, "color", "blue", "label", "all 16 pairs")
+hold("off")
+title("Distance between PE_t and PE_{t+k}")
+xlabel("offset k (tokens)")
+ylabel("Euclidean distance")
+savefig("pe_aliasing.svg")
+print("Saved pe_aliasing.svg");

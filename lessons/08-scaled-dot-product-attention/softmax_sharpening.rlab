@@ -1,0 +1,45 @@
+# Script:  softmax_sharpening.rlab
+# System:  One attention row as the score scale sweeps from flat to one-hot
+# Concept: The softmax scale is an entropy knob.  Multiplying unit-variance
+#          scores by c = 0.1 ... 3 takes one query row from uniform (H = log2 T
+#          bits) to a near one-hot (H -> 0) without changing the ordering of
+#          the scores; c = 1 is the 1/sqrt(d_k) operating point.
+# Equations: a = softmax(c * q.k / sqrt(d_k));  H(a) = -sum a_i log2 a_i
+# Units:     scores dimensionless; entropy in bits; c dimensionless multiplier
+
+run "../../lib/info.rlab"
+
+seed(16);
+T_g = 8;
+dk_g = 16;
+q_g = randn(1, dk_g);
+K_g = randn(T_g, dk_g);
+s_g = q_g * K_g' / sqrt(dk_g);              # one query row against 8 keys, unit-variance scores
+keys_g = {"t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8"};
+print("scaled scores q.k/sqrt(d_k):", s_g);
+
+# === Animate: scores and softmax as c sweeps 0.1 -> 3 ===
+scales = linspace(0.1, 3.0, 30);
+figure();
+for k = 1:length(scales)
+  c = scales(k);
+  a = softmax(c * s_g);
+  subplot(1, 2, 1)
+  bar(keys_g, c * s_g)
+  ylim([-3, 6])
+  title(sprintf("scores  c * q.k / sqrt(d_k),   c = %.2f", c))
+  subplot(1, 2, 2)
+  bar(keys_g, a)
+  ylim([0, 1])
+  title(sprintf("softmax row:  H(A_t) = %.2f bits  (uniform = 3.00)", entropy_bits(a)))
+  frame();
+end
+saveanim("softmax_sharpening.gif", 6)
+print("Saved softmax_sharpening.gif");
+
+# === The three landmarks ===
+H_c01 = entropy_bits(softmax(0.1 * s_g));
+H_c1  = entropy_bits(softmax(s_g));
+H_c3  = entropy_bits(softmax(3.0 * s_g));
+print("H(A_t) at c = 0.1, 1, 3:", H_c01, H_c1, H_c3, "bits   (log2 8 =", log2(T_g), ")");
+print("argmax never moves: token", argmax(s_g), "  max weight at c = 3:", max(softmax(3.0 * s_g)));

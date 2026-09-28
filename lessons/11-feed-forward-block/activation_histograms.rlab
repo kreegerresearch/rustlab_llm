@@ -1,0 +1,42 @@
+# Script:  activation_histograms.rlab
+# System:  Hidden layer of the FFN sublayer, before and after GELU
+# Concept: The pre-activation of a He-initialised projection is roughly
+#          Gaussian; GELU folds its negative half into the band [-0.17, 0)
+# Equations:
+#   hidden_pre  = H W1           (H ~ N(0,1), W1 ~ N(0, 2/d_model))
+#   hidden_post = GELU(hidden_pre)
+# Units:   activations dimensionless; histogram counts
+
+# === Same W1 as ffn_forward.rlab, many more token rows ===
+seed(11);
+T = 5;
+d_model = 4;
+d_ff = 4 * d_model;
+H  = randn(T, d_model);                               # consumed to keep the seed stream aligned
+W1 = randn(d_model, d_ff) * sqrt(2.0 / d_model);
+
+seed(1);
+T_big = 256;
+pre_big  = reshape(randn(T_big, d_model) * W1, 1, T_big * d_ff);
+post_big = gelu(pre_big);
+
+# === Summary statistics ===
+print("draws:                  ", length(pre_big));
+print("fraction pre  < 0:      ", mean(pre_big < 0));
+print("min post:               ", min(post_big));
+print("fraction |pre|  < 0.05: ", mean(abs(pre_big) < 0.05));
+print("fraction |post| < 0.05: ", mean(abs(post_big) < 0.05));
+
+# === Histograms side by side ===
+figure();
+subplot(1, 2, 1)
+histogram(pre_big, 40);
+title("Pre-activation (4096 values)")
+xlabel("hidden_pre value")
+ylabel("count")
+subplot(1, 2, 2)
+histogram(post_big, 40);
+title("Post-activation, GELU (same 4096 values)")
+xlabel("hidden_post value")
+ylabel("count")
+savefig("activation_histograms.svg")
