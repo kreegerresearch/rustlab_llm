@@ -1,0 +1,149 @@
+# Script:  weight_quantization.rlab
+# System:  The trained Lesson 23 capstone transformer (300 parameters,
+#          32-token BPE corpus), re-trained here with the same recipe and
+#          quantised one weight matrix at a time.
+# Concept: Symmetric uniform quantisation of a weight tensor — per-tensor
+#          and per-row scales, the int8 and Q-format views, SNR per tensor,
+#          and why overflow must saturate rather than wrap.
+# Equations: s = max|W| / (2^(b-1) - 1);  q = clip(round(W / s), -qmax, qmax);
+#            W_hat = s * q;  SNR_dB = 10 log10( sum W^2 / sum (W - W_hat)^2 )
+# Units:   weights dimensionless; SNR in dB; loss in nats; PPL dimensionless.
+
+run "../../lib/transformer.rlab"
+
+# === 1. Re-train the capstone model (Lesson 23 recipe, seed 22) ===
+# TODO: move the corpus + training recipe to lib/capstone.rlab (shared with
+#       notebooks/26 and ppl_vs_bits.rlab).
+tokens = repmat([17, 12, 9, 12, 8, 16, 18, 12], 1, 4);   # Lesson 23's BPE output
+vocab = 18;
+T = length(tokens);
+seed(22);
+d_model = 4;  d_ff = 8;  T_max = T + 16;
+E = randn(vocab, d_model) * 0.3;
+PE = sinusoidal_pe(T_max, d_model);
+gamma1 = ones(d_model);   beta1 = zeros(d_model);
+gamma2 = ones(d_model);   beta2 = zeros(d_model);
+Wq = randn(d_model, d_model) * 0.3;
+Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;
+Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W_U = randn(d_model, vocab) * 0.3;
+P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
+           "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
+mask_train = ones(T - 1);
+n_train = 600;  T_w = 60;  eta_max = 0.05;  eta_min = 0.005;
+bet1 = 0.9;  bet2 = 0.999;  eps_a = 1e-8;
+[M, V] = adamw_init(P);
+for step = 1:n_train
+  eta_t = warmup_cosine(step, n_train, T_w, eta_max, eta_min);
+  [lo, L, cache] = transformer_forward(tokens, mask_train, P);
+  dl = ce_dlogits(tokens, mask_train, lo, cache.total);
+  G = transformer_backward(tokens, dl, cache, P);
+  [P, M, V] = adamw_step(P, G, M, V, eta_t, step, bet1, bet2, eps_a, 0.0);
+end
+[lo_fp, L_fp, cache_fp] = transformer_forward(tokens, mask_train, P);
+print("=== Re-trained capstone ===");
+print("L =", L_fp, "  PPL =", exp(L_fp), "  (Lesson 23: 8.17e-5, 1.00008)");
+
+# === 2. Quantisers ===
+# TODO: move quant_tensor / quant_rows / snr_mat / mat_k to lib/quant.rlab
+#       (duplicated in ppl_vs_bits.rlab and the notebook).
+function [Wq, s] = quant_tensor(W, b)
+  q_max = 2 ^ (b - 1) - 1;
+  s = max(max(abs(W))) / q_max;
+  q = min(max(round(W / s), -q_max), q_max);
+  Wq = q * s;
+end
+function [Wq, s] = quant_rows(W, b)
+  q_max = 2 ^ (b - 1) - 1;
+  s = max(abs(W), [], 2) / q_max;          # one scale per row
+  q = min(max(round(W ./ s), -q_max), q_max);
+  Wq = q .* s;
+end
+function d = snr_mat(W, Wq)
+  n = numel(W);
+  d = snr(reshape(W, 1, n), reshape(Wq, 1, n));
+end
+function W = mat_k(P, k)
+  if k == 1;      W = P.E;   elseif k == 2;  W = P.Wq;  elseif k == 3;  W = P.Wk;  elseif k == 4;  W = P.Wv;
+  elseif k == 5;  W = P.Wo;  elseif k == 6;  W = P.W1;  elseif k == 7;  W = P.W2;  else;           W = P.W_U;  end
+end
+names = {"E", "Wq", "Wk", "Wv", "Wo", "W1", "W2", "W_U"};
+
+# === 3. int8 per-tensor quantisation of the LM head ===
+W = P.W_U;
+n_WU = numel(W);
+s8 = max(max(abs(W))) / 127;
+q8 = int8(W / s8);                         # round half away from zero, saturate at +-127
+W8 = double(q8) * s8;
+print("");
+print("=== int8 per-tensor: W_U (4 x 18) ===");
+print("max|W_U| =", max(max(abs(W))), "  step s =", s8, "  class(q) =", class(q8));
+print("W_U(1, 1:6) =", W(1, 1:6));
+print("q(1, 1:6)   =", q8(1, 1:6));
+print("entries at +-127:", sum(sum(abs(double(q8)) == 127)), "   SNR =", snr_mat(W, W8), "dB");
+
+# === 4. Q-format view: a fixed power-of-two step ===
+fmt_07 = qfmt(8, 7, "round", "saturate");  # range [-1, 1): cannot hold 1.58
+fmt_16 = qfmt(8, 6, "round", "saturate");  # range [-2, 2), step 2^-6
+snr_07 = snr_mat(W, quantize(W, fmt_07));
+snr_16 = snr_mat(W, quantize(W, fmt_16));
+print("");
+print("=== Q-format view of W_U ===");
+print(fmt_07, " saturated:", sum(sum(abs(W) >= 1)), "  SNR", snr_07, "dB");
+print(fmt_16, " saturated:", sum(sum(abs(W) >= 2)), "  SNR", snr_16, "dB");
+print("per-tensor int8 scale", s8, "beats the Q1.6 step", 2 ^ -6, "because it uses all 127 codes");
+
+# === 5. Per-tensor vs per-row SNR at 4 and 8 bits ===
+snr_t4 = zeros(8);  snr_r4 = zeros(8);  snr_t8 = zeros(8);  snr_r8 = zeros(8);
+for k = 1:8
+  Wk_ = mat_k(P, k);
+  [Wt, st] = quant_tensor(Wk_, 4);  snr_t4(k) = snr_mat(Wk_, Wt);
+  [Wr, sr] = quant_rows(Wk_, 4);    snr_r4(k) = snr_mat(Wk_, Wr);
+  [Wt, st] = quant_tensor(Wk_, 8);  snr_t8(k) = snr_mat(Wk_, Wt);
+  [Wr, sr] = quant_rows(Wk_, 8);    snr_r8(k) = snr_mat(Wk_, Wr);
+end
+print("");
+print("=== SNR per matrix (dB): E Wq Wk Wv Wo W1 W2 W_U ===");
+print("4-bit per-tensor:", snr_t4);
+print("4-bit per-row:   ", snr_r4);
+print("8-bit per-tensor:", snr_t8);
+print("8-bit per-row:   ", snr_r8);
+print("per-row gain at 4 bits: E", snr_r4(1) - snr_t4(1), "dB   mean over the eight matrices", mean(snr_r4 - snr_t4), "dB  (one bit = 6.02 dB)");
+row_max_E = max(abs(P.E), [], 2);
+print("row ranges of E: min", min(row_max_E), " max", max(row_max_E));
+
+# === 6. Saturate vs wrap under a stale scale ===
+s_stale = 0.3 / 127;                        # calibrated for |W| <= 0.3 (the initialisation)
+q_sat  = int8(W / s_stale);
+q_wrap = int8(W / s_stale, "wrap");
+snr_sat  = snr_mat(W, double(q_sat) * s_stale);
+snr_wrap = snr_mat(W, double(q_wrap) * s_stale);
+Pq = P;  Pq.W_U = double(q_sat) * s_stale;
+[lo_q, L_sat, c] = transformer_forward(tokens, mask_train, Pq);
+Pq = P;  Pq.W_U = double(q_wrap) * s_stale;
+[lo_q, L_wrap, c] = transformer_forward(tokens, mask_train, Pq);
+print("");
+print("=== Saturate vs wrap (scale 0.3/127 on a tensor with max 1.58) ===");
+print("overflowing entries:", sum(sum(abs(W / s_stale) > 127)), "of", n_WU);
+print("W_U(1,1) =", W(1, 1), " -> W/s =", W(1, 1) / s_stale, "  saturate ->", q_sat(1, 1), "  wrap ->", q_wrap(1, 1));
+print("saturate: SNR", snr_sat, "dB  PPL", exp(L_sat));
+print("wrap:     SNR", snr_wrap, "dB  PPL", exp(L_wrap));
+
+# === 7. Figure ===
+figure();
+subplot(1, 2, 1)
+bar(1:vocab, row_max_E')
+title("Row ranges of E: max |E(i, :)| per token")
+xlabel("token id i"); ylabel("max |E(i, :)|")
+subplot(1, 2, 2)
+bar(1:8, [snr_t4', snr_r4'])
+legend("per-tensor", "per-row")
+ylim([0, 30])
+title("4-bit SNR per matrix (1 = E, 2-5 = Wq Wk Wv Wo, 6-7 = W1 W2, 8 = W_U)")
+xlabel("matrix index"); ylabel("SNR (dB)")
+savefig("weight_quantization.svg")
+print("");
+print("Saved weight_quantization.svg");

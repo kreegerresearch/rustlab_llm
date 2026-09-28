@@ -1,0 +1,59 @@
+# Script:  bigram_linear_layer.rlab
+# System:  The Lesson 05 bigram model written as a |V| x |V| linear layer with one-hot input
+# Concept: Gradient descent on the cross-entropy drives softmax(W) to the count estimator P
+#          (W_ij = log P_ij + c_i) and the loss to the conditional-entropy floor H(X_t+1 | X_t).
+# Equations: L(W) = -(1/N) sum_ij C_ij log softmax(W_i,:)_j
+#            dL/dW_i,: = (n_i / N) (softmax(W_i,:) - P_i,:)
+#            floor = sum_i pi_i H(P_i,:),  pi_i = n_i / N
+# Units:     logits dimensionless; loss in nats (printed in bits where labelled)
+
+run "../../lib/info.rlab"
+
+# === Counts from "abcbabcba" (a=1, b=2, c=3) ===
+seq = [1, 2, 3, 2, 1, 2, 3, 2, 1];
+vocab_size = 3;
+C = zeros(vocab_size, vocab_size);
+for t = 1:(length(seq) - 1)
+  C(seq(t), seq(t + 1)) = C(seq(t), seq(t + 1)) + 1;
+end
+n_row = sum(C, 2);
+N_big = sum(n_row);
+P = C ./ n_row;
+print("count matrix C ="); print(C);
+print("count estimator P ="); print(P);
+
+# === Gradient descent on the linear layer ===
+W_bi = zeros(vocab_size, vocab_size);
+lr_bi = 2.0;
+n_bi = 300;
+loss_bi = zeros(n_bi);
+for k = 1:n_bi
+  P_hat = softmax(W_bi);
+  G = (n_row .* P_hat - C) / N_big;
+  W_bi = W_bi - lr_bi * G;
+  loss_bi(k) = -sum(sum(C .* log(softmax(W_bi)))) / N_big;
+end
+print("softmax(W) after", n_bi, "steps ="); print(softmax(W_bi));
+print("loss:", loss_bi(1), "->", loss_bi(n_bi), "nats;   H(X_t+1 | X_t) =", log(2) / 2, "nats");
+print("row b logits:", W_bi(2, :), "   W_ba - W_bc =", W_bi(2, 1) - W_bi(2, 3), "= log(P_ba / P_bc)");
+
+# === The conditional-entropy floor, in bits ===
+H_rows = row_entropies_bits(P);
+pi_cur = n_row' / N_big;
+floor_bits = sum(pi_cur * H_rows');
+print("row entropies (bits):", H_rows, "   pi =", pi_cur);
+print("conditional-entropy floor =", floor_bits, "bits =", floor_bits * log(2), "nats");
+print("linear layer after", n_bi, "steps:", loss_bi(n_bi) / log(2), "bits   gap =", loss_bi(n_bi) / log(2) - floor_bits, "bits");
+
+figure();
+hold("on")
+plot(1:n_bi, loss_bi / log(2), "color", "blue", "label", "bigram linear layer, GD")
+hline(floor_bits, "red", "H(X_t+1 | X_t) = 0.5 bit")
+hline(log2(3), "gray", "log2 |V| = uniform start")
+title("Cross-entropy of the learned bigram layer vs. the conditional-entropy floor")
+xlabel("gradient step")
+ylabel("cross-entropy (bits / token)")
+legend()
+hold("off")
+savefig("bigram_linear_layer.svg")
+print("Saved bigram_linear_layer.svg");

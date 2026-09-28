@@ -1,0 +1,70 @@
+# Script:  epsilon_vcurve.rlab
+# System:  Central finite-difference gradient check on the Lesson 22
+#          single-block transformer (abb corpus, random init, seed 24),
+#          swept over the perturbation size eps.
+# Concept: The eps V-curve.  A central difference (L(w+eps) - L(w-eps))/(2 eps)
+#          has truncation error ~ eps^2 |L'''|/6 (falls as eps shrinks) and
+#          cancellation error ~ u |L| / eps with unit round-off u = 2^-53
+#          (grows as eps shrinks).  Their sum is minimised near u^(1/3).
+# Equations: rel_err(eps) = |num - ana| / (|num| + |ana|);
+#            num = (L+ - L-) / (2 eps);  ana = dL/dW_U(1,1) from
+#            transformer_backward (lib/transformer.rlab, Lesson 22 piece 2).
+# Units:   loss in nats; eps and rel_err dimensionless.
+
+run "../../lib/transformer.rlab"
+
+# === 1. Corpus and parameters (identical to full_backprop.rlab) ===
+seed(24);
+vocab = 2;  d_model = 4;  d_ff = 8;  T_max = 16;
+pat = [1, 2, 2];  T = 12;  ids = zeros(T);
+for i = 1:T
+  ids(i) = pat(mod(i - 1, 3) + 1);
+end
+mask = ones(T - 1);
+E = randn(vocab, d_model) * 0.3;
+PE = sinusoidal_pe(T_max, d_model);
+Wq = randn(d_model, d_model) * 0.3;  Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;  Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;     W2 = randn(d_ff, d_model) * 0.3;
+W_U = randn(d_model, vocab) * 0.3;
+P = struct("E", E, "PE", PE, "gamma1", ones(d_model), "beta1", zeros(d_model), ...
+           "gamma2", ones(d_model), "beta2", zeros(d_model), ...
+           "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", zeros(d_ff), ...
+           "W2", W2, "b2f", zeros(d_model), "W_U", W_U);
+
+# === 2. Analytical gradient at W_U(1, 1) ===
+[logits_0, L_0, cache] = transformer_forward(ids, mask, P);
+dl = ce_dlogits(ids, mask, logits_0, cache.total);
+G = transformer_backward(ids, dl, cache, P);
+dW_U = G.W_U;  ana_WU = dW_U(1, 1);
+print("analytical dL/dW_U(1,1) =", ana_WU);
+
+# === 3. Sweep eps from 1e-1 to 1e-9 ===
+eps_list = logspace(-1, -9, 9);
+rel_list = zeros(9);
+for k = 1:9
+  e = eps_list(k);
+  Wp = P.W_U;  Wp(1, 1) = Wp(1, 1) + e;  Pp = P;  Pp.W_U = Wp;
+  Wm = P.W_U;  Wm(1, 1) = Wm(1, 1) - e;  Pm = P;  Pm.W_U = Wm;
+  [lo, Lp, ca] = transformer_forward(ids, mask, Pp);
+  [lo, Lm, ca] = transformer_forward(ids, mask, Pm);
+  num = (Lp - Lm) / (2 * e);
+  rel_list(k) = abs(num - ana_WU) / (abs(num) + abs(ana_WU) + 1e-12);
+  print(sprintf("eps = %.0e   rel error = %.2e", e, rel_list(k)));
+end
+k_best = argmin(rel_list);
+u_third = (2 ^ -53) ^ (1 / 3);
+print("best eps =", eps_list(k_best), "  rel error =", rel_list(k_best), "  predicted optimum u^(1/3) =", u_third);
+
+# === 4. Log-log V-curve ===
+figure();
+loglog(eps_list, rel_list, "color", "blue", "label", "relative error")
+hold("on")
+loglog([u_third, u_third], [min(rel_list), max(rel_list)], "color", "red", "label", "u^(1/3)")
+hold("off")
+title("Central-difference gradient check: relative error vs eps")
+xlabel("eps")
+ylabel("relative error")
+legend("relative error", "u^(1/3)")
+savefig("epsilon_vcurve.svg")
+print("Saved epsilon_vcurve.svg");

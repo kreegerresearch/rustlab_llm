@@ -232,3 +232,28 @@ xlabel("step")
 ylabel("L (nats / pair)")
 savefig("dpo.svg")
 print("Saved dpo.svg");
+
+# === 10. The DPO gradient weight beta (1 - sigma) as an error-driven gain ===
+# Full gain while the preference is wrong, beta/2 at zero margin, and a
+# dead band once the scaled margin u = beta (r_w - r_l) is a few units
+# positive.  The right panel recovers the gain along the run from the
+# loss curve (sigma = e^{-L}).
+u = linspace(-8, 8, 321);
+w_u = beta_dpo * (1.0 - 1.0 ./ (1.0 + exp(-u)));
+w_step = max(beta_dpo * (1.0 - exp(-dpo_loss_curve)), 1e-12);
+print("");
+print("DPO gain beta (1 - sigma):  step 0 =", w_step(1), "  step 10 =", w_step(11), "  step 200 =", w_step(n_dpo + 1));
+figure();
+subplot(1, 2, 1)
+plot(u, w_u, "color", "blue", "label", "beta (1 - sigma(u))")
+hold("on")
+hline(beta_dpo / 2, "gray", "zero margin")
+hold("off")
+title("DPO gradient weight vs scaled margin u")
+xlabel("u = beta * (r_w - r_l)"); ylabel("weight")
+subplot(1, 2, 2)
+semilogy(0:n_dpo, w_step, "color", "red", "label", "weight during training")
+title("The gain along the 200-step run")
+xlabel("step"); ylabel("beta (1 - sigma)")
+savefig("dpo_gain.svg")
+print("Saved dpo_gain.svg");

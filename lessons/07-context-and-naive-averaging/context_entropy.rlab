@@ -1,0 +1,57 @@
+# Script:  context_entropy.rlab
+# System:  Bigram vs full-prefix predictors on the two-sentence `bank` corpus
+# Concept: Conditioning cannot increase entropy: H(X_{t+1}|X_t) >= H(X_{t+1}|X_{1..t}).
+#          Both sides are computed by the chain rule H(next|ctx) = H(ctx, next) - H(ctx)
+#          on empirical counts; the gap is the conditional mutual information that a
+#          context-aware model can recover. Also: the log2(t!) order bits a bag of
+#          tokens discards.
+# Equations: H(X_{t+1}|ctx) = H(ctx, X_{t+1}) - H(ctx);
+#            I(X_{t+1}; X_{1..t-1} | X_t) = H(X_{t+1}|X_t) - H(X_{t+1}|X_{1..t})
+# Units:     bits
+
+run "../../lib/info.rlab"
+
+# Entropy (bits) of the empirical distribution of a vector of integer labels.
+function H = empirical_entropy_bits(labels)
+  counts = zeros(max(labels));
+  for m = 1:length(labels)
+    counts(labels(m)) = counts(labels(m)) + 1;
+  end
+  H = entropy_bits(counts / sum(counts));
+end
+
+# === Corpus ===
+# river=1, bank=2, water=3, money=4, safe=5
+vocab_size = 5;
+sents = [1, 2, 3;      # river bank water
+         4, 2, 5];     # money bank safe
+
+# === Contexts and Targets at Every Position ===
+base = vocab_size + 1;
+prev = []; ctx = []; nxt = [];
+for s = 1:2
+  for t = 1:2
+    prev = [prev, sents(s, t)];                            # bigram context: last token only
+    ctx  = [ctx, sents(s, 1:t) * (base .^ (0:t-1))'];     # full prefix, encoded as one integer
+    nxt  = [nxt, sents(s, t + 1)];
+  end
+end
+print("bigram contexts:", prev);
+print("prefix ids     :", ctx);
+print("targets        :", nxt);
+
+# === Conditional Entropies via the Chain Rule ===
+H_bigram = empirical_entropy_bits(prev + base * nxt) - empirical_entropy_bits(prev);
+H_prefix = empirical_entropy_bits(ctx + base ^ 3 * nxt) - empirical_entropy_bits(ctx);
+print("H(X_{t+1} | X_t)             =", H_bigram, "bits  (should be 0.5)");
+print("H(X_{t+1} | X_{1..t})        =", H_prefix, "bits  (should be 0)");
+print("I(X_{t+1}; X_{1..t-1} | X_t) =", H_bigram - H_prefix, "bits recovered by the prefix");
+
+# === The Single Worst Row: after `bank` ===
+p_after_bank = [0, 0, 0.5, 0, 0.5];
+print("H(next | bank) =", entropy_bits(p_after_bank), "bit");
+
+# === Order Bits Discarded by a Bag of Tokens ===
+for t = [2, 4, 6]
+  print("t =", t, "  log2(t!) =", log2(prod(1:t)), "bits of ordering lost by the prefix average");
+end

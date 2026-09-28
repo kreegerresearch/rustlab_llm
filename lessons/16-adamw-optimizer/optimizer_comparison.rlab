@@ -1,6 +1,8 @@
 # Script:  optimizer_comparison.rlab
 # System:  Three optimisers on the anisotropic 2D quadratic
-#          L = 0.5 * (200 * theta1^2 + theta2^2)  (condition number 200).
+#          L = 0.5 * (200 * theta1^2 + theta2^2)  (condition number 200),
+#          with sigma = 0.5 gradient noise for 80 steps.  NB: the notebook
+#          overlay is noiseless and runs 60 steps, so the final losses differ.
 #          Plot trajectories on top of one another to show:
 #            SGD   — stalls in the flat direction (eta capped by the steep axis)
 #            Adam  — per-coordinate scaling breaks the bottleneck, glides down
@@ -91,12 +93,22 @@ print("SGD is stuck in the flat direction; Adam/AdamW break the condition-number
 print("  SGD loss / Adam loss  :", loss_q(theta_sgd, a, b) / loss_q(theta_adam, a, b));
 print("  SGD loss / AdamW loss :", loss_q(theta_sgd, a, b) / loss_q(theta_aw, a, b));
 
-# === Trajectory overlay ===
+# === Trajectory overlay on the loss level sets ===
+# Level c of L = 0.5 (a x^2 + b y^2) is x = ±sqrt((2c - b y^2) / a); drawn with
+# plot() and clipped to the window.
+# TODO: use contour() + hold once contour overlays keep line series in SVG export (rustlab 0.3.7 drops them).
+lev = [0.5, 2, 5, 10, 20, 40, 80, 160, 400];
 figure();
 plot(path_sgd(:, 1),   path_sgd(:, 2),   "color", "red",   "label", "SGD")
 hold("on")
 plot(path_adam(:, 1),  path_adam(:, 2),  "color", "blue",  "label", "Adam")
 plot(path_adamw(:, 1), path_adamw(:, 2), "color", "green", "label", "AdamW (λ=0.05)")
+for c = lev
+  yv = linspace(max(-sqrt(2 * c / b), -1.0), min(sqrt(2 * c / b), 4.5), 80);
+  xv = sqrt((2 * c - b * yv .^ 2) / a);
+  plot(xv, yv, "color", "gray")
+  plot(-xv, yv, "color", "gray")
+end
 hold("off")
 title("SGD vs Adam vs AdamW on  L = ½(200 θ₁² + θ₂²)")
 xlabel("θ₁  (steep)")

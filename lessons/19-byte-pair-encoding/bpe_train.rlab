@@ -1,9 +1,9 @@
 # Script:  bpe_train.rlab
 # System:  Byte-pair encoding on a small character corpus.
 # Concept: One BPE step counts every adjacent pair, takes the argmax, and
-#          rewrites the sequence by replacing each occurrence of that pair
-#          with a fresh integer id.  Iterate to grow the vocab one token
-#          per step; record the merge order.
+#          rewrites the sequence (apply_merge) by replacing each occurrence
+#          of that pair with a fresh integer id.  Iterate to grow the vocab
+#          one token per step; record the merge order.
 # Equations:
 #   counts[i, j] = #{ t : seq_t = i and seq_{t+1} = j }
 #   (i*, j*) = argmax_{i, j} counts[i, j]
@@ -23,38 +23,39 @@ vocab_size = 6;
 print("Initial corpus length:", length(seq));
 print("Initial vocab size   :", vocab_size);
 
-# === One BPE step (returns struct with new seq, merge pair, count, vocab) ===
-function r = bpe_step(seq, vocab_size)
-  V = vocab_size;
+# === Rewrite: replace every adjacent (a, b) by new_id, scanning left to right ===
+function out = apply_merge(seq, a, b, new_id)
   L = length(seq);
-  counts = zeros(V, V);
-  for i = 1:(L - 1)
-    a = seq(i); b = seq(i + 1);
-    counts(a, b) = counts(a, b) + 1;
-  end
-  flat = reshape(counts, 1, V * V);
-  idx  = argmax(flat);
-  best_a = mod(idx - 1, V) + 1;        % column-major decode (matches reshape)
-  best_b = floor((idx - 1) / V) + 1;
-  best_c = counts(best_a, best_b);
-
-  new_id = V + 1;
-  new_seq = zeros(L);
+  buf = zeros(L);
   k = 1;
   i = 1;
   while i <= L
-    if i < L && seq(i) == best_a && seq(i + 1) == best_b
-      new_seq(k) = new_id;
+    if i < L && seq(i) == a && seq(i + 1) == b
+      buf(k) = new_id;
       k = k + 1;
       i = i + 2;
     else
-      new_seq(k) = seq(i);
+      buf(k) = seq(i);
       k = k + 1;
       i = i + 1;
     end
   end
-  trimmed = new_seq(1:(k - 1));
-  r = struct("seq", trimmed, "a", best_a, "b", best_b, "count", best_c, "vocab", new_id);
+  out = buf(1:(k - 1));
+end
+
+# === One BPE step: count pairs, argmax, rewrite (returns a struct) ===
+function r = bpe_step(seq, vocab_size)
+  V = vocab_size;
+  counts = zeros(V, V);
+  for i = 1:(length(seq) - 1)
+    counts(seq(i), seq(i + 1)) = counts(seq(i), seq(i + 1)) + 1;
+  end
+  idx    = argmax(reshape(counts, 1, V * V));
+  best_a = mod(idx - 1, V) + 1;        # undo the column-major flattening
+  best_b = floor((idx - 1) / V) + 1;
+  new_id = V + 1;
+  r = struct("seq", apply_merge(seq, best_a, best_b, new_id), ...
+             "a", best_a, "b", best_b, "count", counts(best_a, best_b), "vocab", new_id);
 end
 
 # === Run 5 merges, printing each ===

@@ -19,6 +19,14 @@ Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts
 
 ## Lesson Roadmap
 
+Every lesson closes with an **Engineering Lenses** section — *Signals*, *Systems*, *Information* — in which each claim is labelled *Exact*, *Model*, or *Analogy* and backed by an executed computation. Lesson 00 is the map.
+
+### Lesson 00 — Orientation `(Complete)`
+
+| # | Title | Core Concept |
+|---|-------|-------------|
+| 00 | The LLM as a System | The GPT signal-flow graph with its two feedback loops; the three lenses; the course notation; where each EE / controls / information-theory tool is used |
+
 ### Phase 1 — Foundations `(Complete)`
 
 | # | Title | Core Concept |
@@ -94,9 +102,15 @@ Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts
 |---|-------|-------------|
 | 25 | Fine-Tuning — SFT and DPO | SFT with prompt-token loss masking and its catastrophic forgetting; DPO with a frozen reference policy |
 
-### Phases 11–15 — EE / Controls / Information-Theory revision `(In progress)`
+### Phase 11 extension — Inference `(Complete)`
 
-Phase 11 (this toolchain pass: rustlab 0.3.7, shared `lib/`, lesson renumbering, live capstone and fine-tuning notebooks) is complete. Phases 12–15 re-centre every lesson on three engineering lenses — Signals, Systems, Information — and add `00-the-llm-as-a-system` and `26-quantization-and-fixed-point-inference`. The plan is [`docs/proposal-2026-09-27-ee-controls-it-revision.md`](docs/proposal-2026-09-27-ee-controls-it-revision.md).
+| # | Title | Core Concept |
+|---|-------|-------------|
+| 26 | Quantization and Fixed-Point Inference | int8 / b-bit uniform quantisation of the capstone's weights; Δ²/12 noise and 6.02 dB per bit; perplexity and KL vs bits per weight (rate–distortion); weights vs activations; saturate vs wrap; KV-cache memory and the bandwidth-bound decode rate |
+
+### Phases 11–15 — EE / Controls / Information-Theory revision `(Complete)`
+
+Phase 11 moved the toolchain to rustlab 0.3.7, introduced the shared `lib/`, and renumbered lessons 22–25. Phases 12–15 re-centred every lesson on the three engineering lenses, fixed the defects found in the 2026-09-27 review, and added Lessons 00 and 26. The plan and the review reports are in [`docs/proposal-2026-09-27-ee-controls-it-revision.md`](docs/proposal-2026-09-27-ee-controls-it-revision.md) and [`docs/review-2026-09-27/`](docs/review-2026-09-27/).
 
 ---
 
@@ -124,7 +138,7 @@ make all                # render committed book/<slug>.md + local book/*.html
 make notebooks          # regenerate book/<slug>.md from notebooks/<slug>.md
 make html               # build book/index.html for local Plotly view (gitignored)
 make notebooks-check    # CI drift guard
-make lesson-06          # run lesson 06's .rlab scripts (pattern target: lesson-NN for any 01–25)
+make lesson-06          # run lesson 06's .rlab scripts (pattern target: lesson-NN for any 01–26)
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
@@ -155,6 +169,7 @@ lib/
   transformer.rlab     # shared block forward, trainable forward/backward, AdamW, schedule
   sampling.rlab        # sample_categorical, top-K, top-P
   bigram_lm.rlab       # the Lesson 18 trainer used by Lessons 20–21
+  info.rlab            # entropy, cross-entropy, KL, per-row entropies, perplexity
 book/
   README.md            # hand-written GitHub landing page
   NN-topic-slug.md     # rendered notebook with inline SVG plots (committed)
@@ -170,7 +185,8 @@ AGENTS.md              # project conventions, Rustlab language reference
 
 ## Design Principles
 
-- **No black boxes.** Every mathematical operation in a script has a corresponding named equation in `lesson.md`.
+- **No black boxes.** Every mathematical operation in a script has a corresponding named equation in the lesson notebook.
+- **Three lenses, labelled honestly.** Every lesson asks what the component is as a signal, as a system, and as a channel for bits — and marks each answer *Exact*, *Model*, or *Analogy*.
 - **Sequential build.** Each lesson depends only on prior lessons; no forward references.
 - **Verify by hand.** Scripts print key numerical results so students can check them against pencil-and-paper calculations.
 - **One concept per script.** Scripts are kept short enough to read in one sitting.

@@ -1,0 +1,77 @@
+# Script:  block_gain_vs_depth.rlab
+# System:  Stack of N random Pre-LN blocks read as a discrete-time system
+#          along depth:  H_{l+1} = H_l + f_l(H_l)
+# Concept: Track the residual-stream norm and the per-block gain (largest
+#          singular value of the finite-difference block Jacobian at token T)
+#          for N = 2, 4, 8 blocks, with the residual-branch output matrices
+#          W_O and W_ff2 as initialised and scaled by 1/sqrt(2N).
+# Equations:
+#   J_l = I + d f_l / d H_l  (d x d block for token T);  gain = sigma_max(J_l)
+#   variance budget: 2N branches of variance s^2 sigma^2 sum to sigma^2 when s = 1/sqrt(2N)
+# Units:   token features dimensionless; gains dimensionless
+
+run "../../lib/transformer.rlab"
+
+# Stack N fresh random blocks on H0; branch_scale multiplies W_O and W_ff2.
+# Returns |H_l| for l = 0..N and, per block, sigma_max of the finite-difference
+# Jacobian d H_out(T,:) / d H_in(T,:) (row j = response to channel j).
+function [norms, gains] = stack_trace(H0, N, H_heads, M_mask, branch_scale)
+  T = size(H0)(1);  d = size(H0)(2);  d_ff = 4 * d;  eps_fd = 1.0e-5;
+  norms = zeros(N + 1);  gains = zeros(N);
+  norms(1) = norm(H0);
+  H = H0;
+  for l = 1:N
+    W_Q = randn(d, d) * (1.0 / sqrt(d));  W_K = randn(d, d) * (1.0 / sqrt(d));
+    W_V = randn(d, d) * (1.0 / sqrt(d));  W_O = randn(d, d) * (1.0 / sqrt(d)) * branch_scale;
+    W_1 = randn(d, d_ff) * sqrt(2.0 / d);  W_2 = randn(d_ff, d) * sqrt(2.0 / d_ff) * branch_scale;
+    H_next = mha_block_forward(H, W_Q, W_K, W_V, W_O, W_1, W_2, H_heads, M_mask);
+    J = zeros(d, d);
+    for j = 1:d
+      H_e = H;
+      H_e(T, j) = H_e(T, j) + eps_fd;
+      H_e_out = mha_block_forward(H_e, W_Q, W_K, W_V, W_O, W_1, W_2, H_heads, M_mask);
+      J(j, :) = (H_e_out(T, :) - H_next(T, :)) / eps_fd;
+    end
+    gains(l) = svd(J)(1);
+    norms(l + 1) = norm(H_next);
+    H = H_next;
+  end
+end
+
+# === Same input as the lesson: H_in is the first draw after seed(13) ===
+seed(13);
+T = 4;  d_model = 8;  H_heads = 2;
+H_in = randn(T, d_model);
+M_mask = causal_mask(T);
+
+# === 2-, 4-, 8-block stacks, same weights with and without branch scaling ===
+for N = [2, 4, 8]
+  seed(1300);
+  [n_u, g_u] = stack_trace(H_in, N, H_heads, M_mask, 1.0);
+  seed(1300);
+  [n_s, g_s] = stack_trace(H_in, N, H_heads, M_mask, 1.0 / sqrt(2 * N));
+  print("N =", N, " |H_N|/|H_0|: unscaled", n_u(N + 1) / n_u(1), " scaled", n_s(N + 1) / n_s(1), ...
+        "  max sigma_max(J): unscaled", max(g_u), " scaled", max(g_s));
+end
+
+# === Figure for the 8-block stack (last iteration) ===
+figure();
+subplot(1, 2, 1)
+semilogy(0:8, n_u, "color", "red", "label", "branch scale 1")
+hold("on")
+semilogy(0:8, n_s, "color", "blue", "label", "branch scale 1/sqrt(2N)")
+hline(norm(H_in), "gray", "|H_0|")
+hold("off")
+title("|H_l| along an 8-block stack")
+xlabel("block l")
+ylabel("|H_l|")
+subplot(1, 2, 2)
+plot(1:8, g_u, "color", "red", "label", "branch scale 1")
+hold("on")
+plot(1:8, g_s, "color", "blue", "label", "branch scale 1/sqrt(2N)")
+hline(1, "gray", "unity gain")
+hold("off")
+title("per-block gain sigma_max(J_l) at token T")
+xlabel("block l")
+ylabel("sigma_max")
+savefig("block_gain_vs_depth.svg")

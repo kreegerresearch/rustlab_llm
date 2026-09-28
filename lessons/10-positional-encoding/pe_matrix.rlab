@@ -16,11 +16,11 @@ for t = 1:T
   for i = 1:d_model
     pair_idx = floor((i - 1) / 2);
     div = 10000.0 ^ (2.0 * pair_idx / d_model);
-    angle = t / div;
+    theta = t / div;
     if mod(i - 1, 2) == 0
-      PE(t, i) = sin(angle);
+      PE(t, i) = sin(theta);
     else
-      PE(t, i) = cos(angle);
+      PE(t, i) = cos(theta);
     end
   end
 end

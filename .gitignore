@@ -4,6 +4,7 @@
 lessons/*/*.svg
 lessons/*/*.html
 lessons/*/*.png
+lessons/*/*.gif
 
 # Legacy outputs/ subdirectories from the previous layout.
 lessons/*/outputs/

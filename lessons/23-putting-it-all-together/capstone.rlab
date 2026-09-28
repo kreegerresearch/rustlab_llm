@@ -23,6 +23,7 @@
 
 run "../../lib/transformer.rlab"
 run "../../lib/sampling.rlab"
+run "../../lib/info.rlab"
 
 # === 1. Corpus + character tokenisation (Lesson 01) ===
 # 10 unique chars in "the cat sat on the mat ": space, a, c, e, h, m, n, o, s, t.
@@ -356,3 +357,22 @@ xlabel("step"); ylabel("eta")
 savefig("capstone.svg")
 print("");
 print("Saved capstone.svg");
+
+# === 11. Attention map across the checkpoints (one frame per checkpoint,
+# === titled with the step and its greedy sample) ===
+function H_mean = attn_frame(P_ck, label, tokens, mask_train)
+  [lo, L, ca] = transformer_forward(tokens, mask_train, P_ck);
+  imagesc(ca.A, "viridis")
+  title(label)
+  frame()
+  H_mean = mean(row_entropies_bits(ca.A));
+end
+figure();
+H_ck = zeros(4);
+H_ck(1) = attn_frame(P_ck0, "step 0: '" + decode_seq(greedy_gen(prompt_id, n_gen, P_ck0), lp, rp, char_names) + "'", tokens, mask_train);
+H_ck(2) = attn_frame(P_ck1, "step 100: '" + decode_seq(greedy_gen(prompt_id, n_gen, P_ck1), lp, rp, char_names) + "'", tokens, mask_train);
+H_ck(3) = attn_frame(P_ck2, "step 300: '" + decode_seq(greedy_gen(prompt_id, n_gen, P_ck2), lp, rp, char_names) + "'", tokens, mask_train);
+H_ck(4) = attn_frame(P_ck3, "step 600: '" + decode_seq(greedy_gen(prompt_id, n_gen, P_ck3), lp, rp, char_names) + "'", tokens, mask_train);
+saveanim("capstone_attention.gif", 1)
+print("mean attention-row entropy at steps 0/100/300/600 (bits):", H_ck, "  uniform prefix average:", mean(log2(1:T)));
+print("Saved capstone_attention.gif");

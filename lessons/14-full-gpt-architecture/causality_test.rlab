@@ -1,0 +1,98 @@
+# Script:  causality_test.rlab
+# System:  The toy GPT (V=50, T=8, d=64, H=4, N=4) as one function of the
+#          token ids -- a causal, finite-memory system along time and an
+#          open-loop cascade along depth.
+# Concept: (1) Change only ids(8) and show the logits at positions 1..7 are
+#          bit-identical (end-to-end causality).  (2) Track |H^(l)| along
+#          depth as initialised and with W_O, W_ff2 scaled by 1/sqrt(2N).
+# Equations:
+#   Z = LN_f(Block_N(...Block_1(E[ids] + PE))) W_U
+#   causality: Z(t, :) depends on ids(1..t) only
+# Units:   token features dimensionless; logits in pre-softmax units
+
+run "../../lib/transformer.rlab"
+
+# The whole toy GPT as one function: returns logits and |H^(l)| for l = 0..N.
+# Block ell's weights are rows (ell-1)*d+1 .. ell*d of the stacked matrices;
+# branch_scale multiplies W_O and W_ff2 of every block (1.0 = as initialised).
+function [logits, norms] = toy_gpt_forward(ids, E_tok, PE, W_Q_all, W_K_all, W_V_all, W_O_all, W_ff1_all, W_ff2_all, W_U, H_heads, M_mask, branch_scale)
+  T = length(ids);  d = size(E_tok)(2);  d_ff = size(W_ff1_all)(2);  N = size(W_Q_all)(1) / d;
+  H = zeros(T, d);
+  for t = 1:T
+    H(t, :) = E_tok(ids(t), :) + PE(t, :);
+  end
+  norms = zeros(N + 1);  norms(1) = norm(H);
+  for ell = 1:N
+    r  = ((ell - 1) * d + 1):(ell * d);
+    rf = ((ell - 1) * d_ff + 1):(ell * d_ff);
+    H = mha_block_forward(H, W_Q_all(r, :), W_K_all(r, :), W_V_all(r, :), W_O_all(r, :) * branch_scale, ...
+                          W_ff1_all(r, :), W_ff2_all(rf, :) * branch_scale, H_heads, M_mask);
+    norms(ell + 1) = norm(H);
+  end
+  logits = layernorm(H) * W_U;
+end
+
+# === Hyperparameters and weights (same RNG order as gpt_forward.rlab) ===
+seed(14);
+vocab = 50;  T = 8;  d_model = 64;  H_heads = 4;  d_ff = 4 * d_model;  N_blocks = 4;
+E_tok = randn(vocab, d_model) * 0.1;
+PE = zeros(T, d_model);
+for t = 1:T
+  for i = 1:d_model
+    pair_idx = floor((i - 1) / 2);
+    div = 10000.0 ^ (2.0 * pair_idx / d_model);
+    if mod(i - 1, 2) == 0
+      PE(t, i) = sin(t / div);
+    else
+      PE(t, i) = cos(t / div);
+    end
+  end
+end
+M_mask = causal_mask(T);
+W_Q_all = zeros(N_blocks * d_model, d_model);  W_K_all = zeros(N_blocks * d_model, d_model);
+W_V_all = zeros(N_blocks * d_model, d_model);  W_O_all = zeros(N_blocks * d_model, d_model);
+W_ff1_all = zeros(N_blocks * d_model, d_ff);   W_ff2_all = zeros(N_blocks * d_ff, d_model);
+for ell = 1:N_blocks
+  r  = ((ell - 1) * d_model + 1):(ell * d_model);
+  rf = ((ell - 1) * d_ff + 1):(ell * d_ff);
+  W_Q_all(r, :) = randn(d_model, d_model) * (1.0 / sqrt(d_model));
+  W_K_all(r, :) = randn(d_model, d_model) * (1.0 / sqrt(d_model));
+  W_V_all(r, :) = randn(d_model, d_model) * (1.0 / sqrt(d_model));
+  W_O_all(r, :) = randn(d_model, d_model) * (1.0 / sqrt(d_model));
+  W_ff1_all(r, :)  = randn(d_model, d_ff) * sqrt(2.0 / d_model);
+  W_ff2_all(rf, :) = randn(d_ff, d_model) * sqrt(2.0 / d_ff);
+end
+W_U = randn(d_model, vocab) * (1.0 / sqrt(d_model));
+
+# === Causality test ===
+ids = [7, 13, 7, 21, 13, 5, 9, 7];
+[logits, norms_l] = toy_gpt_forward(ids, E_tok, PE, W_Q_all, W_K_all, W_V_all, W_O_all, W_ff1_all, W_ff2_all, W_U, H_heads, M_mask, 1.0);
+ids_b = ids;
+ids_b(T) = 42;
+[logits_b, norms_b] = toy_gpt_forward(ids_b, E_tok, PE, W_Q_all, W_K_all, W_V_all, W_O_all, W_ff1_all, W_ff2_all, W_U, H_heads, M_mask, 1.0);
+dZ = logits_b - logits;
+print("|H^(N)| (matches gpt_forward.rlab):", norms_l(N_blocks + 1));
+print("max |dZ| over positions 1..7:", max(max(abs(dZ(1:(T - 1), :)))));
+print("max |dZ| at position 8:      ", max(abs(dZ(T, :))));
+figure();
+imagesc(abs(dZ), "viridis")
+title("|dlogits| after changing ids(8)")
+xlabel("vocab id")
+ylabel("position t")
+savefig("causality_test.svg")
+
+# === Residual-stream norm along depth, with and without 1/sqrt(2N) branch scaling ===
+[logits_s, norms_s] = toy_gpt_forward(ids, E_tok, PE, W_Q_all, W_K_all, W_V_all, W_O_all, W_ff1_all, W_ff2_all, W_U, H_heads, M_mask, 1.0 / sqrt(2 * N_blocks));
+print("|H^(l)| as initialised:          ", norms_l);
+print("|H^(l)| with 1/sqrt(2N) scaling:", norms_s);
+print("sqrt(T * d_model) (unit-variance reference):", sqrt(T * d_model));
+figure();
+semilogy(0:N_blocks, norms_l, "color", "red", "label", "as initialised")
+hold("on")
+semilogy(0:N_blocks, norms_s, "color", "blue", "label", "W_O, W_2 scaled by 1/sqrt(2N)")
+hline(sqrt(T * d_model), "gray", "sqrt(T d): unit-variance entries")
+hold("off")
+title("residual-stream norm along depth")
+xlabel("block l")
+ylabel("|H^(l)|")
+savefig("residual_norm_vs_depth.svg")

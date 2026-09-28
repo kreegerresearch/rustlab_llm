@@ -2,19 +2,19 @@
 
 # Lesson 04: Embeddings & Similarity
 
-One-hot vectors are orthogonal — every pair of tokens is equally "distant". This lesson introduces **dense embeddings**: learned, low-dimensional vectors where geometric proximity encodes semantic similarity.
+One-hot vectors are orthogonal — every pair of tokens is equally "distant". This lesson introduces **dense embeddings**: low-dimensional vectors, one per token, in which geometric proximity can encode similarity. The embedding matrix $\mathbf{E}$ is a *learned* parameter — [18-training-loop](18-training-loop.md) trains it for the bigram model and [23-putting-it-all-together](23-putting-it-all-together.md) for the full transformer — but in this lesson nothing is trained yet: $\mathbf{E}$ is either random (to show the lookup mechanics) or hand-set by construction (to show what similarity looks like once structure exists). The tools built here — the dot product as a correlator, cosine as normalised correlation, $\mathbf{E}$ as a codebook — are the ones [08-scaled-dot-product-attention](08-scaled-dot-product-attention.md) reuses for $\mathbf{q} \cdot \mathbf{k}$.
 
 ## Learning Objectives
 
 - Explain why **dense embeddings** are preferred over one-hot vectors as token representations.
-- Describe the **embedding matrix** $\mathbf{E} \in \mathbb{R}^{|\mathcal{V}| \times d}$ and how a lookup operation works.
-- Compute **cosine similarity** between two vectors and interpret the result geometrically.
-- Read an **embedding matrix heatmap** and identify patterns in learned representations.
-- Reason about what it means for two tokens to be "close" in embedding space.
+- Describe the **embedding matrix** $\mathbf{E} \in \mathbb{R}^{|\mathcal{V}| \times d}$ and show that lookup is row selection, $\mathbf{e}_i \mathbf{E} = \mathbf{E}_{i,:}$, in the course's row convention.
+- Compute **cosine similarity** between two vectors, interpret it geometrically, and read the full similarity matrix $\mathbf{S} = \hat{\mathbf{E}}\hat{\mathbf{E}}^\top$ as a correlation (Gram) matrix.
+- Read the **dot product as a correlator / matched filter** and cosine as its normalised form, and say why magnitude matters for one and not the other.
+- Reason about the embedding dimension $d$ from the near-orthogonality of random vectors, and read $\mathbf{E}$ as a **codebook**.
 
 ## Background
 
-One-hot encoding from [Lesson 01](01-tokens-and-encoding.md) (tokens as sparse integer indices). Vector dot products and norms from linear algebra. The idea that a matrix-vector product $\mathbf{W}\mathbf{x}$ is a linear projection.
+One-hot encoding from [01-tokens-and-encoding](01-tokens-and-encoding.md) (tokens as rows of the identity; $\mathbf{X}\mathbf{M}$ selects rows of $\mathbf{M}$). Vector dot products and norms. Cross-correlation of two signals at zero lag. The idea that right-multiplication by a matrix, $\mathbf{x}\mathbf{W}$, is a linear map.
 
 ## The Problem with One-Hot Vectors
 
@@ -24,33 +24,38 @@ One-hot vectors (Lesson 01) are orthogonal — every pair of tokens is equally "
 
 ### Theory
 
-The fix is to learn a **dense, low-dimensional representation** for each token. The **embedding matrix** is
+The fix is a **dense, low-dimensional representation** for each token. The **embedding matrix** is
 
 $$\mathbf{E} \in \mathbb{R}^{|\mathcal{V}| \times d},$$
 
-where $d \ll |\mathcal{V}|$ is the embedding dimension (e.g., $d = 64$ or $d = 512$). Each row $\mathbf{E}_i \in \mathbb{R}^d$ is the learned embedding vector for token $i$.
+where $d \ll |\mathcal{V}|$ is the embedding dimension (e.g. $d = 64$ or $d = 512$). Row $i$, written $\mathbf{E}_{i,:} \in \mathbb{R}^d$, is the embedding vector for token $i$.
 
-**Lookup as matrix multiplication.** For a one-hot vector $\mathbf{e}_i$:
+**Lookup as matrix multiplication (row convention).** Tokens are rows throughout this course, so a token is a one-hot *row* vector $\mathbf{e}_i \in \{0,1\}^{1 \times |\mathcal{V}|}$ and the lookup is a right-multiplication:
 
-$$\mathbf{E}^\top \mathbf{e}_i = \mathbf{E}_i.$$
+$$\mathbf{e}_i \mathbf{E} = \mathbf{E}_{i,:}.$$
 
-Multiplying by the one-hot vector selects row $i$ — a lookup expressed as a linear map. In practice, implementations index directly (no explicit matrix multiply), but the linear-algebra view is essential for understanding gradient flow during training.
-
-For a sequence of $T$ tokens encoded as a matrix $\mathbf{X} \in \{0,1\}^{T \times |\mathcal{V}|}$:
+For a sequence of $T$ tokens encoded as $\mathbf{X} \in \{0,1\}^{T \times |\mathcal{V}|}$ the same product embeds the whole sequence at once:
 
 $$\mathbf{H} = \mathbf{X} \mathbf{E} \in \mathbb{R}^{T \times d}.$$
 
-The result $\mathbf{H}$ is the **embedded sequence**: each row is the dense embedding of the corresponding token.
+```mermaid
+flowchart LR
+  ids["ids x(1..T)"] -->|"rows of I"| X["one-hot X<br/>T × V"]
+  X -->|"× E  (V × d)"| H["embedded sequence H = X E<br/>T × d"]
+  H -->|"+ positional code (L10)"| blk["transformer blocks (L13)"]
+```
+
+In practice implementations index rows directly — no explicit multiply — but the linear-algebra view is what makes gradients flow into $\mathbf{E}$ during training ([15-backpropagation](15-backpropagation.md)): $\partial \mathcal{L}/\partial \mathbf{E} = \mathbf{X}^\top\, \partial\mathcal{L}/\partial \mathbf{H}$, which routes each row's gradient back to the token that used it.
 
 ### Example — Building a deterministic 8×6 embedding matrix
 
-`seed(N)` re-seeds rustlab's shared RNG with a fixed value, so subsequent `randn` draws are bit-stable across re-renders — exactly what we need for the committed gallery.
+`seed(N)` re-seeds rustlab's shared RNG with a fixed value, so subsequent `randn` draws are bit-stable across re-renders. This is what $\mathbf{E}$ looks like *at initialisation* — small Gaussian noise, no structure:
 
 ```rustlab
 vocab_size = 8;
 d_embed = 6;
 
-seed(42);                                    % deterministic init for the gallery
+seed(42);                                    % deterministic init
 E = randn(vocab_size, d_embed) * 0.1;
 
 print("Embedding matrix E:");
@@ -78,28 +83,26 @@ Shape: 8 $\times$ 6 — one row per token in a 6-dimensional embedding space.
 ### Example — One-hot lookup recovers a row
 
 ```rustlab
-% Token index 3 → one-hot e3 selects row 3 via  h = e3 * E
+% Token id 3 -> one-hot row e3 selects row 3 via  h3 = e3 * E
 e3 = [0, 0, 1, 0, 0, 0, 0, 0];
 h3 = e3 * E;
 
 diff = max(abs(h3 - E(3, :)));       % E(3, :) is row 3; E(3) would be a single scalar
 print("Embedded representation h3:", h3);
-print("Row 3 of E:", E(3, :));
+print("Row 3 of E:              ", E(3, :));
 ```
 
 <!-- rustlab:output-start -->
 ```text
 Embedded representation h3: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
-Row 3 of E: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
+Row 3 of E:               [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
 ```
 
 <!-- rustlab:output-end -->
 
-The one-hot multiply reproduces row 3 bit-for-bit: $\max|h_3 - E_3| = 0.00e+00$ — exactly zero.
+The one-hot multiply reproduces row 3 bit-for-bit: $\max|\mathbf{h}_3 - \mathbf{E}_{3,:}| = 0.00e+00$ — exactly zero.
 
 ### Example — Embedding matrix heatmap
-
-At random initialisation all rows look similar. After training, semantically related tokens would cluster together:
 
 ```rustlab
 tok_labels = {"tok1", "tok2", "tok3", "tok4", "tok5", "tok6", "tok7", "tok8"};
@@ -113,6 +116,9 @@ heatmap(dim_labels, tok_labels, E, "Embedding Matrix E  (8 tokens x 6 dims)  - r
 ![plot 1](plots/04-embeddings-and-similarity/plot-1-bb338320.svg)
 
 <!-- rustlab:output-end -->
+
+> [!TIP]
+> Signed values, no structure: at initialisation every row is independent noise of scale 0.1, so no two rows are more alike than chance. Training ([18-training-loop](18-training-loop.md)) is what makes rows of related tokens move together.
 
 ## Cosine Similarity
 
@@ -132,13 +138,13 @@ Cosine similarity ignores vector magnitude and focuses only on direction, making
 
 The full pairwise similarity matrix for $N$ embeddings stacked as rows of $\mathbf{E}$ is
 
-$$\mathbf{S} = \hat{\mathbf{E}} \, \hat{\mathbf{E}}^\top \in \mathbb{R}^{N \times N}, \qquad \hat{\mathbf{E}}_i = \frac{\mathbf{E}_i}{\|\mathbf{E}_i\|}.$$
+$$\mathbf{S} = \hat{\mathbf{E}} \, \hat{\mathbf{E}}^\top \in \mathbb{R}^{N \times N}, \qquad \hat{\mathbf{E}}_{i,:} = \frac{\mathbf{E}_{i,:}}{\|\mathbf{E}_{i,:}\|}.$$
 
-Entry $S_{ij}$ is the cosine similarity between tokens $i$ and $j$. The diagonal is always 1.
+Entry $S_{ij}$ is the cosine similarity between tokens $i$ and $j$; the diagonal is always 1. $\mathbf{S}$ is the **Gram matrix** of the unit-normalised rows — a correlation matrix in the statistician's sense.
 
 ### Example — Hand-crafted king/queen/man/woman vectors
 
-Use hand-crafted embeddings with dimensions encoding $[\text{royalty}, \text{femininity}, \text{age}, \text{authority}]$:
+These four vectors are set **by construction** with dimensions meaning $[\text{royalty}, \text{femininity}, \text{age}, \text{authority}]$ — a toy that shows what a structured $\mathbf{E}$ looks like. A trained $\mathbf{E}$ has no labelled axes.
 
 ```rustlab
 king  = [1.0,  0.1,  0.8,  0.9];
@@ -146,7 +152,6 @@ queen = [0.9,  0.9,  0.7,  0.8];
 man   = [0.1,  0.1,  0.6,  0.4];
 woman = [0.1,  0.9,  0.5,  0.3];
 
-print("Embedding vectors (dim=4):");
 print("king :", king);
 print("queen:", queen);
 print("man  :", man);
@@ -159,7 +164,6 @@ end
 
 <!-- rustlab:output-start -->
 ```text
-Embedding vectors (dim=4):
 king : [1×4]  1.000000  0.100000  0.800000  0.900000
 queen: [1×4]  0.900000  0.900000  0.700000  0.800000
 man  : [1×4]  0.100000  0.100000  0.600000  0.400000
@@ -168,93 +172,71 @@ woman: [1×4]  0.100000  0.900000  0.500000  0.300000
 
 <!-- rustlab:output-end -->
 
-### Example — 4×4 cosine-similarity matrix
+### Example — Three cosines and the 4×4 matrix form
+
+Three scalar calls fix the intuition; the matrix product $\hat{\mathbf{E}}\hat{\mathbf{E}}^\top$ then delivers all sixteen entries at once:
 
 ```rustlab
-% Compute the full 4x4 similarity matrix
-s_kk = cos_sim(king,  king);
 s_kq = cos_sim(king,  queen);
 s_km = cos_sim(king,  man);
-s_kw = cos_sim(king,  woman);
-s_qk = cos_sim(queen, king);
-s_qq = cos_sim(queen, queen);
-s_qm = cos_sim(queen, man);
 s_qw = cos_sim(queen, woman);
-s_mk = cos_sim(man,   king);
-s_mq = cos_sim(man,   queen);
-s_mm = cos_sim(man,   man);
-s_mw = cos_sim(man,   woman);
-s_wk = cos_sim(woman, king);
-s_wq = cos_sim(woman, queen);
-s_wm = cos_sim(woman, man);
-s_ww = cos_sim(woman, woman);
+print("cos(king, queen) =", s_kq, "  cos(king, man) =", s_km, "  cos(queen, woman) =", s_qw);
 
-S = [s_kk, s_kq, s_km, s_kw; s_qk, s_qq, s_qm, s_qw; s_mk, s_mq, s_mm, s_mw; s_wk, s_wq, s_wm, s_ww];
+E4 = [king; queen; man; woman];          % 4 x 4: one embedding per row
+row_norms = sqrt(sum(E4 .^ 2, 2));        % ||E_i|| for each row
+En = E4 ./ row_norms;                     % Ê — unit-length rows
+S = En * En';                             % S_ij = cos(E_i, E_j)
 
-print("Cosine similarity matrix (king, queen, man, woman):");
+print("Cosine similarity matrix S (king, queen, man, woman):");
 print(S);
-
-% Verify symmetry: S_ij == S_ji
-sym_err = max(reshape(abs(S - transpose(S)), 1, 16));
+sym_err = max(max(abs(S - S')));
+print("max|S - S'| =", sym_err, "   min(S) =", min(min(S)), "  (king/woman)");
 ```
 
 <!-- rustlab:output-start -->
 ```text
-Cosine similarity matrix (king, queen, man, woman):
+cos(king, queen) = 0.8727542186034795   cos(king, man) = 0.824250409967643   cos(queen, woman) = 0.8342398413242228
+Cosine similarity matrix S (king, queen, man, woman):
 Matrix(4x4)
   [1.000000, 0.872754, 0.824250, 0.509099]
   [0.872754, 1.000000, 0.754961, 0.834240]
   [0.824250, 0.754961, 1.000000, 0.657018]
   [0.509099, 0.834240, 0.657018, 1.000000]
+max|S - S'| = 0    min(S) = 0.5090986003882718   (king/woman)
 ```
 
 <!-- rustlab:output-end -->
 
-Key pairs: king/queen = $0.873$ (both royal), king/man = $0.824$ (same gender), queen/woman = $0.834$ (same gender). The matrix is symmetric: $\max|S - S^\top| = 0.00e+00$.
-
-Those 16 `cos_sim` calls are exactly the matrix form $\mathbf{S} = \hat{\mathbf{E}}\,\hat{\mathbf{E}}^\top$ from the theory above — stack the four vectors as rows, normalise each to unit length, and one matrix product recovers the whole table:
-
-```rustlab
-E4 = [king; queen; man; woman];          % 4 x 4: one embedding per row
-row_norms = sqrt(sum(E4 .^ 2, 2));        % ||E_i|| for each row
-En = E4 ./ row_norms;                     % Ê — unit-length rows
-S2 = En * En';                            % S2_ij = cos(E_i, E_j)
-
-print("max|S - S2| (16 calls vs. matrix form):", max(reshape(abs(S - S2), 1, 16)));
-```
-
-<!-- rustlab:output-start -->
-```text
-max|S - S2| (16 calls vs. matrix form): 0.00000000000000011102230246251565
-```
-
-<!-- rustlab:output-end -->
-
-The two agree to machine precision — the pairwise loop and the single $\hat{\mathbf{E}}\hat{\mathbf{E}}^\top$ product compute the same matrix.
+Key pairs: king/queen = $0.873$ (both royal), king/man = $0.824$ (same gender), queen/woman = $0.834$ (same gender). The matrix reproduces the scalar calls in its $(1,2)$, $(1,3)$ and $(2,4)$ entries, is symmetric to machine precision ($\max|\mathbf{S} - \mathbf{S}^\top| = 0.00e+00$), has ones on the diagonal, and its smallest entry is king/woman at $0.509$ — every pair here is positively correlated, because all four vectors live in the positive orthant by construction.
 
 ### Example — Similarity heatmap
 
-Both axes index the same four vocabulary items, so labelling the rows and columns by token name turns the heatmap into a direct lookup table — every cell reads as $\cos(\text{row token}, \text{col token})$ without referring back to a numbered legend.
+Both axes index the same four tokens, so each cell reads as $\cos(\text{row token}, \text{col token})$:
 
 ```rustlab
 vocab = {"king", "queen", "man", "woman"};
 
 figure();
-heatmap(vocab, vocab, S, "Cosine Similarity: king, queen, man, woman", "viridis")
+heatmap(vocab, vocab, S, "Cosine Similarity S: king, queen, man, woman", "viridis")
 ```
 
 <!-- rustlab:output-start -->
-![plot 2](plots/04-embeddings-and-similarity/plot-2-42d28de8.svg)
+![plot 2](plots/04-embeddings-and-similarity/plot-2-c3b37550.svg)
 
 <!-- rustlab:output-end -->
+
+> [!TIP]
+> The colour scale autoscales to the data range $[0.509, 1]$, not to $[-1, 1]$: the darkest cell (king/woman) is $0.509$, still a clearly positive correlation, not orthogonality. Read the numbers from the printed $\mathbf{S}$; read the *pattern* — a bright royal pair, a bright female pair — from the picture.
 
 ## Analogy Arithmetic
 
 ### Theory
 
-Trained embeddings organise so that semantic relationships correspond to geometric ones. The classic example:
+Trained embeddings can organise so that semantic relationships correspond to geometric ones. The classic example:
 
 $$\mathbf{E}_{\text{king}} - \mathbf{E}_{\text{man}} + \mathbf{E}_{\text{woman}} \approx \mathbf{E}_{\text{queen}}.$$
+
+Here the four vectors were set by hand, so the relationship holds *by construction*; in a trained model it is an empirical finding.
 
 ### Example — Closest token to king − man + woman
 
@@ -266,68 +248,149 @@ sim_to_king  = cos_sim(analogy, king);
 sim_to_queen = cos_sim(analogy, queen);
 sim_to_man   = cos_sim(analogy, man);
 sim_to_woman = cos_sim(analogy, woman);
+print("cos to king/queen/man/woman:", sim_to_king, sim_to_queen, sim_to_man, sim_to_woman);
 ```
 
 <!-- rustlab:output-start -->
 ```text
 king - man + woman: [1×4]  1.000000  0.900000  0.700000  0.800000
+cos to king/queen/man/woman: 0.8812662277999913 0.9987995268037284 0.7380952380952381 0.8122479038345392
 ```
 
 <!-- rustlab:output-end -->
 
-Similarity of $\mathbf{E}_{\text{king}} - \mathbf{E}_{\text{man}} + \mathbf{E}_{\text{woman}}$ to each vocab item: king = $0.881$, **queen = 0.999**, man = $0.738$, woman = $0.812$. The closest token is **queen**, as predicted. This emergent structure is not programmed — it arises from training the model to predict next tokens accurately. Dense embeddings are a compressed summary of co-occurrence patterns in language.
+Similarity of $\mathbf{E}_{\text{king}} - \mathbf{E}_{\text{man}} + \mathbf{E}_{\text{woman}}$ to each vocab item: king = $0.881$, **queen = 0.999**, man = $0.738$, woman = $0.812$. The closest token is **queen**, as the construction intended. In a trained embedding this structure is not programmed — it arises from next-token prediction, as a compressed summary of co-occurrence patterns.
 
 ### Example — Visualising the parallelogram
 
-The algebra above says $\mathbf{E}_{\text{queen}} - \mathbf{E}_{\text{king}} \approx \mathbf{E}_{\text{woman}} - \mathbf{E}_{\text{man}}$ — an *approximate* equality. Geometrically the four points form an **approximate parallelogram** in embedding space: the "femininity" displacement is nearly the same whether you start at `king` or `man`, and the "royalty" displacement is nearly the same whether you start at `king` or `queen`.
-
-The hand-crafted embeddings above use four explicit axes — $[\text{royalty}, \text{femininity}, \text{age}, \text{authority}]$ — so we can plot the first two dimensions directly and see the parallelogram literally:
+The algebra says $\mathbf{E}_{\text{queen}} - \mathbf{E}_{\text{king}} \approx \mathbf{E}_{\text{woman}} - \mathbf{E}_{\text{man}}$: the four points form an *approximate* parallelogram. Because the toy axes are labelled, dimensions 1 (royalty) and 2 (femininity) can be plotted directly; each point is its own labelled series, and the two displacement pairs are drawn as arrows:
 
 ```rustlab
-% Royalty (dim 1) on x-axis, femininity (dim 2) on y-axis.
-xs = [king(1), queen(1), man(1), woman(1)];
-ys = [king(2), queen(2), man(2), woman(2)];
+function arrow(x0, y0, x1, y1, c, lbl)
+  % shaft plus a small arrowhead, drawn as one polyline so it is one legend entry
+  dx = x1 - x0;  dy = y1 - y0;  L = sqrt(dx ^ 2 + dy ^ 2);
+  ux = dx / L;   uy = dy / L;
+  hx = x1 - 0.06 * ux;  hy = y1 - 0.06 * uy;
+  plot([x0, x1, hx - 0.03 * uy, x1, hx + 0.03 * uy], [y0, y1, hy + 0.03 * ux, y1, hy - 0.03 * ux], "color", c, "label", lbl)
+end
 
 figure();
-scatter(xs, ys)
+scatter([king(1)], [king(2)], "label", "king")
 hold("on")
-% Draw the parallelogram's four sides: king -> queen, man -> woman
-% (both the "femininity" shift) and king -> man, queen -> woman
-% (both the "royalty" shift).  Two parallel arrows -> parallelogram.
-plot([king(1), queen(1)], [king(2), queen(2)], "color", "blue",  "label", "femininity")
-plot([man(1),  woman(1)], [man(2),  woman(2)], "color", "blue",  "label", "femininity")
-plot([king(1), man(1)],   [king(2), man(2)],   "color", "red",   "label", "royalty")
-plot([queen(1),woman(1)], [queen(2),woman(2)], "color", "red",   "label", "royalty")
+scatter([queen(1)], [queen(2)], "label", "queen")
+scatter([man(1)], [man(2)], "label", "man")
+scatter([woman(1)], [woman(2)], "label", "woman")
+arrow(king(1), king(2), queen(1), queen(2), "blue", "king → queen")
+arrow(man(1),  man(2),  woman(1), woman(2), "blue", "man → woman")
+arrow(king(1), king(2), man(1),   man(2),   "red",  "king → man")
+arrow(queen(1), queen(2), woman(1), woman(2), "red", "queen → woman")
 hold("off")
 title("Parallelogram in (royalty, femininity) space")
-xlabel("royalty")
-ylabel("femininity")
-xlim([-0.1, 1.1])
-ylim([-0.1, 1.1])
+xlabel("royalty (dim 1)")
+ylabel("femininity (dim 2)")
+xlim([-0.1, 1.5])                       % room on the right for the legend
+ylim([-0.1, 1.2])
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/04-embeddings-and-similarity/plot-3-5e577dbd.svg)
+![plot 3](plots/04-embeddings-and-similarity/plot-3-11e2e303.svg)
 
 <!-- rustlab:output-end -->
 
-The two **blue** segments are *nearly* parallel — $(-0.1, +0.8)$ from `king`→`queen` versus $(0, +0.8)$ from `man`→`woman` (the "femininity" shift) — and the two **red** segments (the "royalty" shift, $(-0.9, 0)$ from `king`→`man` versus $(-0.8, 0)$ from `queen`→`woman`) are likewise only approximately parallel. So the four points form an *approximate* parallelogram, not an exact one. The analogy `king − man + woman ≈ queen` is the algebraic statement of this near-geometry: starting from `king`, subtract the "royalty" arrow to reach `man`, then add the "femininity" arrow — and you land *near* `queen`, not exactly on it. The residual is the $0.1$ gap on the royalty axis (`king` sits at royalty $1.0$, `queen` at $0.9$); that gap lives in dimension 1, which we *kept* in the plot, so it survives the projection and is precisely why the analogy is $\approx$, not $=$.
+> [!TIP]
+> Blue arrows are the femininity displacements, $(-0.1, +0.8)$ and $(0, +0.8)$; red arrows are the (negative) royalty displacements, $(-0.9, 0)$ and $(-0.8, 0)$ — nearly, not exactly, parallel. The $0.1$ mismatch on the royalty axis (king at $1.0$, queen at $0.9$) is why king − man + woman lands *near* queen rather than on it; that residual lives in dimension 1, which this projection keeps.
 
-In a *trained* embedding, you don't get to label axes like this — the model discovers the directions on its own from co-occurrence statistics. The fact that the parallelogram shape *emerges* across dozens of analogies (`Paris − France + Italy ≈ Rome`, `walking − walked + ran ≈ running`, etc.) is what tells you the model has organised its representation around interpretable directions, even though no human annotated them.
+## Engineering Lenses
+
+No systems reading adds to this lesson: the lookup $\mathbf{X}\mathbf{E}$ has no state and no update law — the update law that changes $\mathbf{E}$ is gradient descent, which is [06-linear-layers-and-gradient-descent](06-linear-layers-and-gradient-descent.md)'s subject.
+
+### Signals
+
+**Exact.** The dot product $\mathbf{a} \cdot \mathbf{b} = \sum_n a_n b_n$ is the zero-lag **cross-correlation** of two length-$d$ sequences, so a dot product with a fixed template is a **correlator**; cosine similarity is the *normalised* cross-correlation, and $\mathbf{S} = \hat{\mathbf{E}}\hat{\mathbf{E}}^\top$ is the correlation (Gram) matrix of the row signals. A **matched filter** is a correlator too: its output at the sampling instant is the inner product of the received signal with the template it is matched to. Correlating one query vector against every row of $\mathbf{E}$ is therefore a **bank of matched filters**, one per token — exactly the operation $\mathbf{q}\mathbf{K}^\top$ performs in [08-scaled-dot-product-attention](08-scaled-dot-product-attention.md). The raw correlator responds to amplitude; the normalised one does not:
+
+```rustlab
+dots = king * E4';                       % king correlated against the four templates
+coss = (king / norm(king)) * En';     % the same bank, normalised
+print("raw correlator outputs   (king . row):", dots);
+print("normalised (cosine)      (king , row):", coss);
+
+king10 = 10 * king;                      % amplitude x10: correlator scales, cosine does not
+print("10*king . queen =", sum(king10 .* queen), "   cos(10*king, queen) =", cos_sim(king10, queen), "  (was", s_kq, ")");
+
+figure();
+subplot(1, 2, 1)
+bar(vocab, dots, "Matched-filter bank: king . template")
+ylim([0, 2.6])
+subplot(1, 2, 2)
+bar(vocab, coss, "Normalised (cosine) bank")
+ylim([0, 1.1])
+```
+
+<!-- rustlab:output-start -->
+```text
+raw correlator outputs   (king . row): [1×4]  2.460000  2.270000  0.950000  0.860000
+normalised (cosine)      (king , row): [1×4]  1.000000  0.872754  0.824250  0.509099
+10*king . queen = 22.7    cos(10*king, queen) = 0.8727542186034793   (was 0.8727542186034795 )
+```
+
+![plot 4](plots/04-embeddings-and-similarity/plot-4-6e409acd.svg)
+
+<!-- rustlab:output-end -->
+
+> [!TIP]
+> Both panels rank the templates the same way — king, queen, man, woman — but the raw bank's left bar is $\|\mathbf{king}\|^2 = 2.46$ and would grow ×10 if the query were scaled, while the cosine bank tops out at 1 regardless. Attention uses the raw form, which is why [08-scaled-dot-product-attention](08-scaled-dot-product-attention.md) has to divide by $\sqrt{d_k}$.
+
+### Information
+
+**Exact.** $\mathbf{E}$ is a **codebook** in the vector-quantisation sense: $|\mathcal{V}|$ codewords of dimension $d$, and the one-hot product $\mathbf{e}_i\mathbf{E}$ is codebook lookup by index. The index costs $\log_2|\mathcal{V}|$ bits to transmit; the codeword is $d$ real numbers the model can do arithmetic on. The question "how large should $d$ be" has an exact geometric answer: two independent Gaussian vectors in $\mathbb{R}^d$ have cosine with mean $0$ and standard deviation $1/\sqrt{d}$, so as $d$ grows, random vectors become nearly orthogonal and the space can hold many almost-independent directions. That is what a large vocabulary needs: distinct tokens must be distinguishable, and near-orthogonality is what makes room for them.
+
+```rustlab
+seed(7);
+n_pairs = 1000;
+dims = [2, 8, 64];
+figure();
+for k = 1:3
+  d = dims(k);
+  A = randn(n_pairs, d);  B = randn(n_pairs, d);
+  c = sum(A .* B, 2) ./ (sqrt(sum(A .^ 2, 2)) .* sqrt(sum(B .^ 2, 2)));
+  print("d =", d, ": mean|cos| =", mean(abs(c)), "  std(cos) =", std(c), "  1/sqrt(d) =", 1 / sqrt(d));
+  subplot(1, 3, k)
+  histogram(abs(c), 25);
+  title(sprintf("|cos| of 1000 random pairs, d = %d", d))
+  xlim([0, 1])
+end
+```
+
+<!-- rustlab:output-start -->
+```text
+d = 2 : mean|cos| = 0.6293227817710451   std(cos) = 0.7014465768602673   1/sqrt(d) = 0.7071067811865475
+d = 8 : mean|cos| = 0.2835495335637865   std(cos) = 0.34894596930814564   1/sqrt(d) = 0.35355339059327373
+d = 64 : mean|cos| = 0.09817975782434396   std(cos) = 0.12163438477024725   1/sqrt(d) = 0.125
+```
+
+![plot 5](plots/04-embeddings-and-similarity/plot-5-8e0e1730.svg)
+
+<!-- rustlab:output-end -->
+
+> [!TIP]
+> Left to right the histograms collapse toward zero: at $d = 2$ the cosine of two random directions is spread over the whole of $[0, 1]$, at $d = 64$ it is concentrated below $0.3$ with standard deviation $1/8$. Real models pick $d$ in the hundreds so that tens of thousands of tokens can each own a nearly orthogonal direction while still sharing directions with the tokens they resemble.
 
 ## Key Takeaways
 
-- Embeddings are the first transformation inside every language model: one-hot $\to$ dense vector via the embedding matrix $\mathbf{E}$.
-- The embedding matrix is **learned** jointly with the rest of the model by gradient descent ([Lesson 06](06-linear-layers-and-gradient-descent.md)). At initialisation it is random; after training, similar tokens cluster.
-- Cosine similarity measures direction, not magnitude — robust to frequency differences between tokens.
-- The embedding dimension $d$ is a critical hyperparameter: too small and the vectors lack nuance; too large and the model is expensive to train.
+- Embeddings are the first transformation inside every language model: one-hot $\to$ dense vector via right-multiplication by $\mathbf{E}$; $\mathbf{H} = \mathbf{X}\mathbf{E}$ embeds a whole sequence.
+- $\mathbf{E}$ is **learned** by gradient descent ([06-linear-layers-and-gradient-descent](06-linear-layers-and-gradient-descent.md) for the mechanism, [18-training-loop](18-training-loop.md) and [23-putting-it-all-together](23-putting-it-all-together.md) for the training). At initialisation it is random; here the structured example is hand-set by construction.
+- The dot product is a correlator / matched filter; cosine is its normalised form, which measures direction, not magnitude; $\mathbf{S} = \hat{\mathbf{E}}\hat{\mathbf{E}}^\top$ is a correlation matrix.
+- $\mathbf{E}$ is a codebook of $|\mathcal{V}|$ codewords of dimension $d$; random directions in $\mathbb{R}^d$ are nearly orthogonal with spread $1/\sqrt{d}$, which is why $d$ can be far smaller than $|\mathcal{V}|$.
 
 ## Standalone Scripts
 
 | Script | What it computes |
 |---|---|
-| `embedding_matrix.rlab` | random `8 × 6` embedding matrix; one-hot lookup demo; heatmap |
-| `cosine_similarity.rlab` | the 4-token king/queen/man/woman cosine-similarity matrix; analogy arithmetic |
+| `embedding_matrix.rlab` | random `8 × 6` embedding matrix; one-hot lookup demo; signed heatmap |
+| `cosine_similarity.rlab` | three scalar cosines, the 4×4 matrix form $\hat{\mathbf{E}}\hat{\mathbf{E}}^\top$, analogy arithmetic; heatmap |
+| `analogy_parallelogram.rlab` | the labelled parallelogram figure with the two displacement pairs drawn as arrows |
+| `matched_filter_bank.rlab` | `king` correlated against the four templates, raw and normalised; the ×10 norm-effects check |
+| `random_cosines.rlab` | histograms of $\lvert\cos\rvert$ for 1000 random pairs at $d = 2, 8, 64$ against the $1/\sqrt{d}$ law |
 
 Run all with `make lesson-04` (or `rustlab run lessons/04-embeddings-and-similarity/<name>.rlab`).
 
@@ -337,22 +400,21 @@ Run all with `make lesson-04` (or `rustlab run lessons/04-embeddings-and-similar
 |---|---|
 | `size(E)` | `[8, 6]` |
 | `diff` (`h3 − E(3, :)`) | `0` (exact — one-hot multiply reproduces the row) |
-| `s_kq` (king/queen) | ≈ `0.873` |
-| `s_km` (king/man) | ≈ `0.824` |
-| `s_qw` (queen/woman) | ≈ `0.834` |
-| `s_kk` (king/king) | `1.000` |
-| `sym_err` ($\max\lvert S - S^\top\rvert$) | ≈ `0` (machine epsilon) |
-| $\max\lvert S - S_2\rvert$ (matrix form vs. 16 calls) | ≈ `0` (machine epsilon) |
+| `s_kq`, `s_km`, `s_qw` | ≈ `0.873`, `0.824`, `0.834` |
+| `S` diagonal, `sym_err`, `min(S)` | `1.000`, ≈ `0` (machine epsilon), ≈ `0.509` (king/woman) |
 | `sim_to_queen` (analogy → queen) | ≈ `0.999` (closest match) |
+| `dots` (king · king/queen/man/woman) | ≈ `2.46`, `2.27`, `0.95`, `0.86` |
+| `cos(10*king, queen)` | `0.873` (unchanged); `10*king . queen` = `22.7` |
+| `std(cos)` at $d = 2, 8, 64$ | ≈ `0.70`, `0.35`, `0.12` (the $1/\sqrt{d}$ law: `0.707`, `0.354`, `0.125`) |
 
 ## Exercises
 
 1. **Embedding lookup.** If the embedding matrix has shape $|\mathcal{V}| \times d$, and you embed a sequence of $T$ tokens, what is the shape of the output $\mathbf{H}$? Express in terms of $T$, $|\mathcal{V}|$, and $d$.
-2. **Parameter count.** How many learnable parameters does the embedding matrix have for $|\mathcal{V}| = 50{,}000$ and $d = 512$? Compare this to the parameters in one attention head (Lesson 08).
-3. **Cosine symmetry.** Prove algebraically that $\cos(\mathbf{a}, \mathbf{b}) = \cos(\mathbf{b}, \mathbf{a})$. What does this say about the similarity matrix $\mathbf{S}$?
-4. **Analogy arithmetic.** Recompute `king - man + woman` and find which of the four defined tokens it is closest to (by cosine similarity). Does the result match `queen`?
-5. **Effect of dimension.** Edit `embedding_matrix.rlab` to use $d = 2$ instead of $d = 6$. Plot the 8 token embeddings as 2D scatter points. After random initialisation, do any tokens cluster together? Why or why not?
+2. **Parameter count.** How many learnable parameters does the embedding matrix have for $|\mathcal{V}| = 50{,}000$ and $d = 512$? Compare this to the parameters in one attention head ([08-scaled-dot-product-attention](08-scaled-dot-product-attention.md)).
+3. **Cosine symmetry.** Prove algebraically that $\cos(\mathbf{a}, \mathbf{b}) = \cos(\mathbf{b}, \mathbf{a})$. What does this say about the similarity matrix $\mathbf{S}$, and why is $\hat{\mathbf{E}}\hat{\mathbf{E}}^\top$ automatically symmetric?
+4. **Matched filter with a negative template.** Add a fifth hand-set vector `peasant = [0.0, 0.5, 0.6, 0.1]` and recompute the filter-bank figure. Which template now gives the smallest response to `king`, and is any cosine negative? Change one sign in `peasant` to make one negative.
+5. **Effect of dimension.** Extend `random_cosines.rlab` to $d = 512$ and compare `std(cos)` with $1/\sqrt{512}$. Then estimate how many random directions you can pack in $\mathbb{R}^{512}$ with every pairwise $|\cos| < 0.1$ before the $1/\sqrt{d}$ spread makes collisions likely (a rough argument is enough).
 
 ## What's next
 
-Lesson 05 builds the first **language model** of the series: a count-based bigram model that learns next-token probabilities from a corpus and samples text from them. The embedding-style lookup table from this lesson reappears, this time storing transition probabilities rather than learned vectors.
+[05-bigram-language-model](05-bigram-language-model.md) builds the first **language model** of the series: a count-based bigram model that learns next-token probabilities from the Lesson 01 corpus and samples text from them. The lookup-table structure of this lesson reappears — a $|\mathcal{V}| \times |\mathcal{V}|$ matrix indexed by the current token — this time storing transition probabilities rather than learned vectors.

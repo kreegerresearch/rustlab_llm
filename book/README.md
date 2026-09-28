@@ -16,9 +16,18 @@ only `book/README.md` (this file) is hand-written.
 
 ## Reading order
 
-Each lesson depends on the ones before it. See [`../PLAN.md`](../PLAN.md)
-for phase status and the revision plan in
-[`../docs/proposal-2026-09-27-ee-controls-it-revision.md`](../docs/proposal-2026-09-27-ee-controls-it-revision.md).
+Each lesson depends on the ones before it, and each closes with an
+**Engineering Lenses** section (Signals · Systems · Information) whose
+claims are labelled *Exact*, *Model*, or *Analogy* and backed by executed
+code. See [`../PLAN.md`](../PLAN.md) for phase status and
+[`../docs/proposal-2026-09-27-ee-controls-it-revision.md`](../docs/proposal-2026-09-27-ee-controls-it-revision.md)
+for the design of the revision.
+
+### Lesson 00 — Orientation
+
+| # | Lesson | Focus |
+|---|--------|-------|
+| 00 | [The LLM as a System](00-the-llm-as-a-system.md) | the signal-flow map, the three lenses, notation, your toolkit mapped to lessons |
 
 ### Phase 1 — Foundations
 
@@ -89,6 +98,7 @@ for phase status and the revision plan in
 |---|--------|-------|
 | 24 | [Modern Architectural Variants](24-modern-architectural-variants.md) | RoPE, RMSNorm, SwiGLU, GQA |
 | 25 | [Fine-Tuning — SFT and DPO](25-fine-tuning-sft-and-dpo.md) | loss-masked SFT and catastrophic forgetting; DPO with a frozen reference |
+| 26 | [Quantization and Fixed-Point Inference](26-quantization-and-fixed-point-inference.md) | b-bit weights, 6 dB per bit, perplexity vs bits, KV-cache memory and the bandwidth bound |
 
 ## Local interactive view
 

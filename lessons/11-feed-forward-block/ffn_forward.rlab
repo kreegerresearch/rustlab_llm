@@ -1,9 +1,10 @@
 # Script:  ffn_forward.rlab
 # System:  Position-wise feed-forward sublayer of a transformer block
-# Concept: 2-layer MLP applied independently to each token vector; verify per-position independence
+# Concept: 2-layer MLP applied independently to each token vector; verify
+#          per-position independence; show which memory slots fire per token
 # Equations:
-#   FFN(x) = W2 * GELU(W1 * x + b1) + b2
-#   Same W1, W2, b1, b2 applied to every row of H (position-wise)
+#   FFN(x) = GELU(x W1 + b1) W2 + b2          (row convention: x is 1 x d_model)
+#   W1 in R^{d_model x d_ff}, W2 in R^{d_ff x d_model}; same weights for every row of H
 # Units:   token features, dimensionless
 
 # === Configuration ===
@@ -34,17 +35,13 @@ print("output      (T, d):   ", size(out));
 # Gather rows in a different order and verify FFN(H_perm) == FFN(H) reordered.
 perm = [3, 1, 2, 5, 4];
 H_perm = H(perm, :);
-hidden_pre_perm  = H_perm * W1 + outer(ones_T, b1);
-hidden_post_perm = gelu(hidden_pre_perm);
-out_perm         = hidden_post_perm * W2 + outer(ones_T, b2);
-
+out_perm = gelu(H_perm * W1 + outer(ones_T, b1)) * W2 + outer(ones_T, b2);
 shuffle_err = max(reshape(abs(out_perm - out(perm, :)), 1, T * d_model));
 print("max | FFN(P*H) - P*FFN(H) | =", shuffle_err);
 
-# === Save a plot of input H so the artefact has something visible ===
+# === Slot heatmap: hidden_post is T x d_ff, one column per memory slot ===
+n_open = sum(reshape(hidden_post > 0.1, 1, T * d_ff));
+print("slots with output > 0.1:", n_open, "of", T * d_ff);
 figure();
-imagesc(H, "viridis")
-title("Random input H (T=5, d_model=4)")
-xlabel("d_model")
-ylabel("position t")
+heatmap({"1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16"}, {"t=1","t=2","t=3","t=4","t=5"}, hidden_post, "hidden_post (T x d_ff): which slots fire per token")
 savefig("ffn_forward.svg")

@@ -1,0 +1,45 @@
+# Script:  heavy_ball_poles.rlab
+# System:  Heavy-ball momentum on one quadratic mode with curvature a:
+#          u_t = mu u_{t-1} + a theta_{t-1},  theta_t = theta_{t-1} - eta u_t.
+# Concept: Eliminating u gives a second-order recursion
+#          theta_t = (1 + mu - eta a) theta_{t-1} - mu theta_{t-2}
+#          whose complex poles all have |z| = sqrt(mu): the decay rate is
+#          independent of the curvature (that is the acceleration), while
+#          the pole angle sets the ringing period.  Plain SGD's pole for the
+#          same mode is the real number 1 - eta a.
+# Equations:
+#   z^2 - (1 + mu - eta a) z + mu = 0
+#   critical damping  eta a = (1 - sqrt(mu))^2;   instability  eta a = 2 (1 + mu)
+# Units:   poles dimensionless (z-plane); periods in training steps.
+
+mu_hb = 0.9;  eta_hb = 0.01;
+curv = [1, 20, 200];
+cols = {"blue", "green", "red"};
+
+# === Poles for three curvatures ===
+th_c = linspace(0, 2 * pi, 361);
+figure();
+plot(cos(th_c), sin(th_c), "color", "gray", "label", "unit circle")
+hold("on")
+for i = 1:3
+  a_i = curv(i);
+  z = roots([1, -(1 + mu_hb - eta_hb * a_i), mu_hb]);
+  scatter(real(z), imag(z), "color", cols(i), "label", sprintf("heavy ball, a = %d", a_i))
+  print(sprintf("a = %3d: heavy-ball |z| = %.4f at %5.1f deg (period %5.1f steps);  SGD pole 1 - eta a = %+.2f", a_i, abs(z(1)), abs(angle(z(1))) * 180 / pi, 2 * pi / abs(angle(z(1))), 1 - eta_hb * a_i));
+end
+scatter(1 - eta_hb * curv, [0, 0, 0], "color", "orange", "label", "SGD poles")
+hold("off")
+title("Heavy-ball poles (mu = 0.9, eta = 0.01) vs SGD poles")
+xlabel("Re z")
+ylabel("Im z")
+legend("unit circle", "a = 1", "a = 20", "a = 200", "SGD")
+savefig("heavy_ball_poles.svg")
+print("Saved heavy_ball_poles.svg");
+
+# === Damping boundaries ===
+a_crit = (1 - sqrt(mu_hb)) ^ 2 / eta_hb;
+a_max  = 2 * (1 + mu_hb) / eta_hb;
+print("critical damping at eta a = (1 - sqrt(mu))^2 =", (1 - sqrt(mu_hb)) ^ 2, " -> a =", a_crit);
+print("instability at     eta a = 2 (1 + mu)       =", 2 * (1 + mu_hb), " -> a =", a_max);
+print("poles at a_crit (double real root):", roots([1, -(1 + mu_hb - eta_hb * a_crit), mu_hb]));
+print("poles at a = 0.1 (overdamped):     ", roots([1, -(1 + mu_hb - eta_hb * 0.1), mu_hb]));

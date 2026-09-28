@@ -1,0 +1,48 @@
+# Script:  softmax_maxent.rlab
+# System:  Softmax as the maximum-entropy distribution over a vocabulary
+# Concept: Partition function Z, log-sum-exp, shift invariance, logits as log-odds,
+#          the softmax Jacobian, the two-class sigmoid identity, and a numeric
+#          check that softmax maximises entropy under an expected-score constraint
+# Equations: p_i = exp(z_i) / Z,  Z = sum_j exp(z_j),  LSE = ln Z;
+#            ln(p_i/p_j) = z_i - z_j;  dp_i/dz_j = p_i (delta_ij - p_j);
+#            two classes: p_1 = sigma(z_1 - z_2)
+# Units:     Logits dimensionless; probabilities in [0, 1]; entropies in bits
+
+run "../../lib/info.rlab"
+
+# === Softmax, partition function, log-sum-exp ===
+z = [2.0, 1.0, 0.5, -0.5];
+p = softmax(z);
+Z = sum(exp(z));
+LSE = log(Z);
+print("p = softmax(z):", p, "  sum =", sum(p));
+print("Z =", Z, "  LSE = ln Z =", LSE);
+print("exp(z - LSE) reproduces p:", max(abs(exp(z - LSE) - p)));
+
+# === Shift invariance: softmax only sees differences of logits ===
+print("max|softmax(z + 100) - p| =", max(abs(softmax(z + 100) - p)));
+
+# === Logits are log-odds ===
+print("z1 - z2 =", z(1) - z(2), "   ln(p1/p2) =", log(p(1) / p(2)));
+
+# === Jacobian dp_i/dz_j = p_i (delta_ij - p_j) ===
+J = diag(p) - p' * p;
+print("Jacobian diag(p) - p p':");
+print(J);
+print("row sums of J (all 0):", sum(J, 2)');
+
+# === Two classes: softmax = logistic sigmoid of the log-likelihood ratio ===
+z2 = [2.0, 1.0];
+for tau = [0.5, 1.0, 2.0]
+  p_sm = softmax(z2 / tau);
+  print("tau =", tau, ": softmax(z/tau)(1) =", p_sm(1), "  sigma(LLR/tau) =", 1 / (1 + exp(-(z2(1) - z2(2)) / tau)));
+end
+
+# === Max-entropy check: perturb along a direction that keeps sum(p) and E[z] ===
+v = [1, -1, -1, 1];                      # sum(v) = 0 and sum(v .* z) = 0 for this z
+mu = sum(p .* z);
+q_plus  = p + 0.03 * v;
+q_minus = p - 0.03 * v;
+print("sum(v) =", sum(v), "  sum(v .* z) =", sum(v .* z), "  E_q[z] =", sum(q_plus .* z), "  mu =", mu);
+print("H(p) =", entropy_bits(p), " bits  (the maximum)");
+print("H(p + 0.03 v) =", entropy_bits(q_plus), " bits  H(p - 0.03 v) =", entropy_bits(q_minus), " bits  (both lower)");

@@ -1,0 +1,56 @@
+# Script:  jacobian_product.rlab
+# System:  Linearised stability of a deep GELU stack with and without residuals
+# Concept: A perturbation (and, transposed, the gradient) propagates through the
+#          product of per-layer Jacobians. Track its extreme singular values per
+#          layer for x <- f(x) and for x <- x + h f(x). For the no-residual
+#          product only sigma_max is tracked: it bounds every singular value,
+#          and sigma_min drops below the ~1e-8 absolute floor of svd().
+# Equations:
+#   J_l = W_l diag(GELU'(x_l W_l))              (row convention: dx_{l+1} = dx_l J_l)
+#   no residual:   P_L = prod_l J_l
+#   with residual: P_L = prod_l (I + h J_l)
+# Units:   dimensionless gains (singular values)
+
+run "../../lib/transformer.rlab"      # gelu_grad
+
+# === Same stack as residual_signal.rlab ===
+seed(13);
+d = 32;
+n_layers = 24;
+h_step = 0.1;
+W_stack = zeros(n_layers * d, d);
+for L = 1:n_layers
+  W_stack((L - 1) * d + 1:L * d, :) = randn(d, d) * (1.0 / sqrt(d));
+end
+x0 = randn(d);
+
+# === Cumulative Jacobian products ===
+P_plain = eye(d);  P_res = eye(d);
+smax_plain = zeros(n_layers);
+smin_res   = zeros(n_layers);  smax_res = zeros(n_layers);
+x_plain = x0;  x_resi = x0;
+for L = 1:n_layers
+  W_L = W_stack((L - 1) * d + 1:L * d, :);
+  J_plain = W_L * diag(gelu_grad(x_plain * W_L));   x_plain = gelu(x_plain * W_L);
+  J_res   = W_L * diag(gelu_grad(x_resi  * W_L));   x_resi  = x_resi + h_step * gelu(x_resi * W_L);
+  P_plain = P_plain * J_plain;
+  P_res   = P_res * (eye(d) + h_step * J_res);
+  smax_plain(L) = svd(P_plain)(1);
+  s = svd(P_res);  smin_res(L) = s(end);  smax_res(L) = s(1);
+end
+print("after 24 layers: no residual sigma_max =", smax_plain(n_layers));
+print("after 24 layers: h = 0.1 [sigma_min, sigma_max] =", smin_res(n_layers), smax_res(n_layers));
+
+# === Plot ===
+figure();
+hold("on")
+semilogy(1:n_layers, smax_plain, "color", "red",  "label", "no residual: sigma_max")
+semilogy(1:n_layers, smax_res,   "color", "blue", "label", "h = 0.1: sigma_max", "style", "dashed")
+semilogy(1:n_layers, smin_res,   "color", "blue", "label", "h = 0.1: sigma_min")
+yline(1.0, "gray", "1")
+title("Cumulative Jacobian product: extreme singular values vs. depth")
+xlabel("layer index l")
+ylabel("singular value (log scale)")
+legend()
+hold("off")
+savefig("jacobian_product.svg")

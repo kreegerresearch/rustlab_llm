@@ -1,12 +1,16 @@
 # Script:  schedule_vs_constant.rlab
 # System:  Three simulated training runs on a noisy 2D quadratic.
-# Concept: Compare a constant high LR (above the stability limit -> diverges),
-#          a constant low LR (safe but slow to reach the floor), and a
-#          warmup+cosine schedule (reaches the same floor in far fewer steps).
+# Concept: A schedule makes gradient descent linear time-varying: per mode
+#          the error is multiplied by |1 - eta_t lambda| each step.  Compare a
+#          constant high LR (factor 1.5 forever -> diverges), a constant low LR
+#          (0.8 on the fast mode but 0.98 on the slow one -> slow), and a
+#          warmup+cosine schedule (never above 1, through the deadbeat zero at
+#          eta = 1/lambda twice).  The contraction-factor figure is the point;
+#          the loss curves are shown on a log axis without any clamp.
 # Equations:
 #   gradient with noise: g_t = grad(theta) + sigma * z   where z ~ N(0, I)
 #   surrogate loss: L = 0.5*(10*theta1^2 + theta2^2) + 1
-#   stability limit (theta1 direction, curvature 10): eta < 2/10 = 0.2
+#   e_{t+1} = (1 - eta_t lambda) e_t;   stability limit of the fast mode: eta < 2/10 = 0.2
 # Units:   theta dimensionless; loss in surrogate units.
 
 seed(17);
@@ -22,96 +26,100 @@ n_train = 300;
 sigma = 0.3;
 init  = [-3.0, 2.0];
 
-# === Constant high LR (0.25 > 0.2 stability limit -> diverges) ===
-theta = init;
-loss_high = zeros(n_train + 1);
-loss_high(1) = sloss(theta);
-for t = 1:n_train
-  g = sgrad(theta) + sigma * randn(2);
-  theta = theta - 0.25 * g;
-  loss_high(t + 1) = sloss(theta);
-end
-
-# === Constant low LR (0.02 — safe, but slow to reach the floor) ===
-theta = init;
-loss_low = zeros(n_train + 1);
-loss_low(1) = sloss(theta);
-for t = 1:n_train
-  g = sgrad(theta) + sigma * randn(2);
-  theta = theta - 0.02 * g;
-  loss_low(t + 1) = sloss(theta);
-end
-
-# === Warmup + cosine schedule (peak 0.18, floor 0.02) ===
-T_w  = 30;
-T_d  = n_train;
-eta_p = 0.18;
-eta_f = 0.02;
-theta = init;
-loss_sched = zeros(n_train + 1);
-loss_sched(1) = sloss(theta);
-sched_curve = zeros(n_train + 1);
-sched_curve(1) = 0.0;
-for t = 1:n_train
+# === One helper, three schedules ===
+# eta_of_t is a function handle; the RNG draw order (high, low, scheduled)
+# is unchanged from the earlier version of this script, so the numbers are too.
+function e = warmup_cosine(t, T_w, T_d, eta_p, eta_f)
   if t <= T_w
-    eta_t = eta_p * (t / T_w);
+    e = eta_p * (t / T_w);
   else
-    progress = (t - T_w) / (T_d - T_w);
-    eta_t = eta_f + 0.5 * (eta_p - eta_f) * (1 + cos(pi * progress));
+    e = eta_f + 0.5 * (eta_p - eta_f) * (1 + cos(pi * (t - T_w) / (T_d - T_w)));
   end
-  sched_curve(t + 1) = eta_t;
-  g = sgrad(theta) + sigma * randn(2);
-  theta = theta - eta_t * g;
-  loss_sched(t + 1) = sloss(theta);
 end
+function [L, etas] = run_sgd(eta_of_t, n, sigma, init)
+  theta = init;  L = zeros(n + 1);  etas = zeros(n);
+  L(1) = sloss(theta);
+  for t = 1:n
+    etas(t) = eta_of_t(t);
+    theta = theta - etas(t) * (sgrad(theta) + sigma * randn(2));
+    L(t + 1) = sloss(theta);
+  end
+end
+
+T_w = 30;  eta_p = 0.18;  eta_f = 0.02;
+[loss_high,  eta_high] = run_sgd(@(t) 0.25, n_train, sigma, init);   # above the 0.2 limit
+[loss_low,   eta_low]  = run_sgd(@(t) 0.02, n_train, sigma, init);   # safe but slow
+[loss_sched, eta_run]  = run_sgd(@(t) warmup_cosine(t, T_w, n_train, eta_p, eta_f), n_train, sigma, init);
 
 print("Constant high LR (0.25) final loss:", loss_high(n_train + 1), " (diverged)");
 print("Constant low  LR (0.02) final loss:", loss_low(n_train + 1));
 print("Warmup+cosine           final loss:", loss_sched(n_train + 1));
 
 # === Steps to reach the floor neighbourhood (first step with loss < 1.01) ===
-# The noiseless bowl floors at 1.0; loss < 1.01 marks "arrived at the floor".
-# Use the while idiom (rustlab has no break/continue): stop at the first hit.
 thresh = 1.01;
 N = n_train + 1;
-
 i = 1;
 while i < N && loss_low(i) >= thresh
   i = i + 1;
 end
 step_low = i - 1;                 # curve index k holds step k-1
-
 i = 1;
 while i < N && loss_sched(i) >= thresh
   i = i + 1;
 end
 step_sched = i - 1;
-
 print("Steps to loss < 1.01  (constant low LR):", step_low);
 print("Steps to loss < 1.01  (warmup+cosine)  :", step_sched);
 print("Schedule reaches the floor ~", step_low / step_sched, "x sooner than constant-low.");
 
-# === Loss curves overlay (log10; high LR clamped so it does not swamp the axis) ===
-# The diverging high-LR loss reaches ~1e105; clamp it to 1e4 for a readable
-# y-axis, then plot log10(loss) for all three so the low/schedule descent
-# stays legible next to the divergence.
+# === Central figure: per-mode contraction factor |1 - eta_t lambda| ===
+t_ax = 1:n_train;
+figure();
+subplot(1, 2, 1)
+plot(t_ax, abs(1 - eta_high * 10.0), "color", "red",   "label", "constant 0.25")
+hold("on")
+plot(t_ax, abs(1 - eta_low * 10.0),  "color", "blue",  "label", "constant 0.02")
+plot(t_ax, abs(1 - eta_run * 10.0),  "color", "green", "label", "warmup + cosine")
+hline(1, "gray", "stability limit")
+hold("off")
+title("fast mode: |1 - 10 eta_t|")
+xlabel("step")
+ylabel("contraction factor")
+legend("0.25", "0.02", "schedule", "= 1")
+subplot(1, 2, 2)
+plot(t_ax, abs(1 - eta_high), "color", "red",   "label", "constant 0.25")
+hold("on")
+plot(t_ax, abs(1 - eta_low),  "color", "blue",  "label", "constant 0.02")
+plot(t_ax, abs(1 - eta_run),  "color", "green", "label", "warmup + cosine")
+hline(1, "gray", "stability limit")
+hold("off")
+title("slow mode: |1 - eta_t|")
+xlabel("step")
+ylabel("contraction factor")
+legend("0.25", "0.02", "schedule", "= 1")
+savefig("contraction_factor.svg")
+print("Saved contraction_factor.svg");
+
+# === Loss curves on a log axis (no clamp; the frame is cropped at 1e4) ===
 figure();
 steps = 0:n_train;
-plot(steps, log10(min(loss_high, 1.0e4)), "color", "red",   "label", "constant high LR (diverges)")
+semilogy(steps, loss_high,  "color", "red",   "label", "constant 0.25")
 hold("on")
-plot(steps, log10(loss_low),   "color", "blue",  "label", "constant low LR")
-plot(steps, log10(loss_sched), "color", "green", "label", "warmup + cosine")
+semilogy(steps, loss_low,   "color", "blue",  "label", "constant 0.02")
+semilogy(steps, loss_sched, "color", "green", "label", "warmup + cosine")
+hline(1.01, "gray", "floor + 1 %")
 hold("off")
-title("log10(loss) under three LR strategies (noise sigma=0.3)")
+ylim([0.9, 1.0e4])
+title("loss under three LR strategies (log axis, cropped at 1e4)")
 xlabel("step")
-ylabel("log10 L")
-legend("high (clamped 1e4)", "low", "warmup+cosine")
+ylabel("L")
+legend("0.25", "0.02", "schedule", "1.01")
 savefig("schedule_vs_constant.svg")
 print("Saved schedule_vs_constant.svg");
 
 # === Companion: schedule curve ===
 figure();
-plot(steps, sched_curve, "color", "green", "label", "warmup+cosine")
+plot(t_ax, eta_run, "color", "green", "label", "warmup+cosine")
 title("eta(t) used in the scheduled run")
 xlabel("step")
 ylabel("eta")

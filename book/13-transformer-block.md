@@ -2,19 +2,19 @@
 
 # Lesson 13: The Transformer Block
 
-You now have every piece a transformer needs: multi-head attention ([Lesson 09](09-multi-head-attention.md)), positional encoding ([Lesson 10](10-positional-encoding.md)), the feed-forward sublayer ([Lesson 11](11-feed-forward-block.md)), and LayerNorm + residual connections ([Lesson 12](12-layer-norm-and-residuals.md)). This lesson assembles them into the **transformer block** — the unit that gets stacked $N$ times to form a full GPT.
+You now have every piece a transformer needs: multi-head attention ([Lesson 09](09-multi-head-attention.md)), positional encoding ([Lesson 10](10-positional-encoding.md)), the feed-forward sublayer ([Lesson 11](11-feed-forward-block.md)), and LayerNorm + residual connections ([Lesson 12](12-layer-norm-and-residuals.md)). This lesson assembles them into the **transformer block** — the unit that gets stacked $N$ times to form a full GPT — and adds the one mental model the pieces do not give you on their own: the block acts on a $T \times d_{\text{model}}$ signal along **two different axes**, and only one of its sublayers can move information along time.
 
 ## Learning Objectives
 
 - Write the **Pre-LN transformer block** forward pass as a single equation and identify each sublayer.
-- Trace the $(T, d_{\text{model}})$ tensor shape through every operation in the block and confirm input shape equals output shape.
-- Implement one full block end-to-end with multi-head attention, two residuals, two LayerNorms, and an FFN.
-- Stack two blocks and verify the residual stream's magnitude stays bounded.
+- Read the block as a signal-flow graph and trace the $(T, d_{\text{model}})$ shape along every edge; confirm input shape equals output shape.
+- Name the **two mixing axes** — attention mixes along time (rows), the FFN along channels (columns) — and demonstrate it with a perturbation test.
+- Implement one full block end-to-end, stack blocks, and track the residual stream's magnitude and per-block gain with and without the $1/\sqrt{2N}$ branch scaling.
 - Compute the **parameter count per block** and identify which sublayer dominates.
 
 ## Background
 
-Multi-head attention from [Lesson 09](09-multi-head-attention.md). FFN with $d_{\text{ff}} = 4 d_{\text{model}}$ from [Lesson 11](11-feed-forward-block.md). LayerNorm and the Pre-LN residual convention from [Lesson 12](12-layer-norm-and-residuals.md). Causal mask from [Lesson 08](08-scaled-dot-product-attention.md). No new mathematics — only assembly.
+Multi-head attention from [Lesson 09](09-multi-head-attention.md). FFN with $d_{\text{ff}} = 4 d_{\text{model}}$ from [Lesson 11](11-feed-forward-block.md). LayerNorm and the Pre-LN residual convention from [Lesson 12](12-layer-norm-and-residuals.md). Causal mask from [Lesson 08](08-scaled-dot-product-attention.md). Notation follows [Lesson 00](00-the-llm-as-a-system.md): tokens are rows (time $t = 1, \dots, T$), features are columns (channels), layers act by right-multiplication. No new mathematics — only assembly.
 
 ## Pre-LN Block: The Forward Pass
 
@@ -27,19 +27,32 @@ $$\begin{aligned}
 \mathbf{H}_{\text{out}} &= \mathbf{H}_{\text{mid}} + \mathrm{FFN}\!\left(\mathrm{LN}_2(\mathbf{H}_{\text{mid}})\right).
 \end{aligned}$$
 
-Read it as a flow:
+As a signal-flow graph, with the tensor shape on every edge:
 
+```mermaid
+flowchart LR
+  Hin["H_in (T × d)"] --> LN1["LN1 (per row)"]
+  LN1 -->|T × d| MHA["MHA: mixes rows (time)"]
+  MHA -->|A_out (T × d)| add1(("+"))
+  Hin -->|residual| add1
+  add1 -->|H_mid (T × d)| LN2["LN2 (per row)"]
+  LN2 -->|T × d| FFN["FFN: mixes columns (channels)"]
+  FFN -->|F_out (T × d)| add2(("+"))
+  add1 -->|residual| add2
+  add2 -->|H_out (T × d)| Hout["next block"]
 ```
-H_in ──┬─→ LN1 ──→ MHA ──┐
-       │                 ↓
-       └─────────────── (+) ──┬─→ LN2 ──→ FFN ──┐
-                              │                 ↓
-                              └─────────────── (+) ──→ H_out
-```
 
-The two `+` are the **residual additions** ([Lesson 12](12-layer-norm-and-residuals.md)). The unmixed `H_in` flows along the bottom of the diagram all the way to `H_out`; each sublayer adds its correction. This is the "residual stream" picture from [Lesson 12](12-layer-norm-and-residuals.md), now realised concretely.
+> [!TIP]
+> Follow the bottom path: $\mathbf{H}_{\text{in}}$ reaches $\mathbf{H}_{\text{out}}$ untouched through the two `+` nodes. Each sublayer only *adds* a correction to that stream — the "residual stream" of [Lesson 12](12-layer-norm-and-residuals.md), now wired concretely. Every edge on the stream carries a $(T, d_{\text{model}})$ matrix.
 
-Every tensor along the residual stream has shape $(T, d_{\text{model}})$. The intermediate matrices $\mathrm{LN}_1(\mathbf{H}_{\text{in}})$, $\mathrm{MHA}(\dots)$, $\mathrm{LN}_2(\mathbf{H}_{\text{mid}})$, $\mathrm{FFN}(\dots)$ all share that shape too. Inside MHA the projections temporarily produce $(T, d_k)$ per-head matrices, but the concat + output projection $\mathbf{W}_O$ collapses them back to $(T, d_{\text{model}})$. Inside FFN the hidden layer briefly widens to $(T, d_{\text{ff}})$ before the second linear projection reduces it. **The residual stream's width is invariant** — that's what makes blocks stackable without intervening reshape logic.
+**The two mixing axes.** Think of $\mathbf{H} \in \mathbb{R}^{T \times d_{\text{model}}}$ as a signal with two axes: down the rows is *time* (token position $t$), across the columns are *channels* (feature dimensions). The two sublayers move information along different axes:
+
+- **Attention mixes rows.** Row $t$ of $\mathrm{MHA}(\cdot)$ is a weighted sum of *other rows* $i \le t$ — the attention matrix $\mathbf{A}_h \in \mathbb{R}^{T \times T}$ multiplies from the left. It is the only operation in the whole block (indeed the whole GPT) that lets token $t$ see token $i \ne t$.
+- **The FFN mixes columns.** It acts on each row independently: $\mathbf{W}_1$ and $\mathbf{W}_2$ multiply from the right and recombine the channels of one token. It never reads another row.
+
+LayerNorm also acts per row (it standardises each token's channels), so the *only* time-axis coupling in the block is $\mathbf{A}_h$. The perturbation test in [the two mixing axes section](#the-two-mixing-axes) below makes this visible: bump one entry of token 3 and the attention sublayer's response spreads to rows $3, 4$ (never $1, 2$ — causality), while the FFN's response stays inside row 3 and spreads across all eight channels.
+
+Every tensor along the residual stream has shape $(T, d_{\text{model}})$. Inside MHA the projections temporarily produce $(T, d_k)$ per-head matrices, but the concat + output projection $\mathbf{W}_O$ collapses them back to $(T, d_{\text{model}})$. Inside FFN the hidden layer briefly widens to $(T, d_{\text{ff}})$ before the second linear projection reduces it. **The residual stream's width is invariant** — that is what makes blocks stackable without intervening reshape logic.
 
 ### Example — Configure dimensions and initialise weights
 
@@ -52,7 +65,6 @@ d_model = 8;
 H_heads = 2;
 d_k = d_model / H_heads;     % 4
 d_ff = 4 * d_model;          % 32
-NEG_INF = -1.0e9;
 
 H_in = randn(T, d_model);
 
@@ -83,7 +95,7 @@ W_ff2 shape (d_ff -> d_model):    [1×2]  32.000000  8.000000
 
 <!-- rustlab:output-end -->
 
-LayerNorm in this notebook uses $\boldsymbol{\gamma} = \mathbf{1}, \boldsymbol{\beta} = \mathbf{0}$ — pure standardisation, no learned affine. Real implementations carry $(\boldsymbol{\gamma}, \boldsymbol{\beta})$ as small parameter vectors; we add them to the parameter count later but skip them in the forward pass for clarity.
+LayerNorm in this notebook uses $\boldsymbol{\gamma} = \mathbf{1}, \boldsymbol{\beta} = \mathbf{0}$ — pure standardisation, no learned affine. Real implementations carry $(\boldsymbol{\gamma}, \boldsymbol{\beta})$ as small parameter vectors; the parameter count below lists them separately and the forward pass skips them for clarity.
 
 ## Sublayer 1: Pre-LN Multi-Head Self-Attention
 
@@ -95,7 +107,7 @@ $$\mathbf{A} = \mathrm{MHA}\!\left(\mathrm{LN}_1(\mathbf{H}_{\text{in}})\right),
 
 Pre-LN means LayerNorm runs *before* the projections — the inputs to $\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V$ are already normalised, so the dot-product scores stay in a sensible range from the very first iteration. The $1/\sqrt{d_k}$ scale ([Lesson 08](08-scaled-dot-product-attention.md)) handles the rest.
 
-The MHA computation is exactly Lesson 09's: per head, score → mask → softmax → weighted sum → concat → $\mathbf{W}_O$. The novelty here is just plumbing it inside a residual block.
+The MHA computation is exactly Lesson 09's: per head, score → mask → softmax → weighted sum → concat → $\mathbf{W}_O$. The novelty here is just plumbing it inside a residual block. The causal mask and, later, the packaged block come from the shared library `lib/transformer.rlab`.
 
 ### Example — LN1, then per-head Q/K/V, attention, concat, project
 
@@ -108,33 +120,20 @@ Q = H_norm1 * W_Q;       % (T, d_model)
 K = H_norm1 * W_K;
 V = H_norm1 * W_V;
 
-% Causal mask, shared across heads
-M_mask = zeros(T, T);
-for i = 1:T
-  for j = (i + 1):T
-    M_mask(i, j) = NEG_INF;
-  end
-end
-
+M_mask = causal_mask(T);          % 0 on/below the diagonal, -1e9 above
 scale = 1.0 / sqrt(d_k);
 out_concat = zeros(T, d_model);
 
 for h = 1:H_heads
   c_lo = (h - 1) * d_k + 1;     % first column belonging to head h
   c_hi = h * d_k;               % last column belonging to head h
-
-  % Slice head h's d_k columns out of Q, K, V.
-  Q_h = Q(:, c_lo:c_hi);
+  Q_h = Q(:, c_lo:c_hi);        % slice head h's d_k columns out of Q, K, V
   K_h = K(:, c_lo:c_hi);
   V_h = V(:, c_lo:c_hi);
-
   S = Q_h * K_h' * scale + M_mask;
-  % softmax(M) softmaxes each row of M independently (dim=2 default).
-  A_h = softmax(S);
+  A_h = softmax(S);             % row-wise softmax: one tap vector per query
   O_h = A_h * V_h;
-
-  % Write head h's output into its slice of the concat
-  out_concat(:, c_lo:c_hi) = O_h;
+  out_concat(:, c_lo:c_hi) = O_h;   % head h's output goes into its slice of the concat
 end
 
 A_out = out_concat * W_O;     % (T, d_model)
@@ -178,7 +177,11 @@ Same wrapper, different sublayer:
 
 $$\mathbf{F} = \mathrm{FFN}\!\left(\mathrm{LN}_2(\mathbf{H}_{\text{mid}})\right), \qquad \mathbf{H}_{\text{out}} = \mathbf{H}_{\text{mid}} + \mathbf{F}.$$
 
-FFN applies $\mathbf{W}_2 \, \mathrm{GELU}(\mathbf{W}_1 \mathbf{x} + \mathbf{b}_1) + \mathbf{b}_2$ to every row independently ([Lesson 11](11-feed-forward-block.md)). Biases omitted here for clarity.
+In the row convention used throughout the course, the FFN is
+
+$$\mathrm{FFN}(\mathbf{X}) = \mathrm{GELU}\!\left(\mathbf{X}\mathbf{W}_1 + \mathbf{1}\mathbf{b}_1^{\top}\right)\mathbf{W}_2 + \mathbf{1}\mathbf{b}_2^{\top}, \qquad \mathbf{W}_1 \in \mathbb{R}^{d_{\text{model}} \times d_{\text{ff}}},\; \mathbf{W}_2 \in \mathbb{R}^{d_{\text{ff}} \times d_{\text{model}}},$$
+
+applied to every row of $\mathbf{X}$ independently ([Lesson 11](11-feed-forward-block.md)); $\mathbf{1}\mathbf{b}^{\top}$ broadcasts a bias row to all $T$ tokens. Biases are omitted in the code here.
 
 ### Example — LN2, FFN, second residual
 
@@ -231,29 +234,78 @@ print("|FFN contribution|  / |H_mid| =", norm(F_out) / norm(H_mid));
 
 <!-- rustlab:output-end -->
 
-At *this* lesson's initialisation the sublayer contributions are **not** small perturbations. The MHA branch is about the same size as the residual stream it feeds into ($\|\mathrm{MHA}\| / \|\mathbf{H}_{\text{in}}\| \approx 0.99$); the FFN branch is a bit smaller ($\approx 0.52$, because its two He-scaled projections contract the variance). Adding a branch of comparable magnitude to the stream grows the norm roughly like the square root of the number of accumulated terms: $\|\mathbf{H}_{\text{in}}\| = 6.07$ becomes $\|\mathbf{H}_{\text{mid}}\| = 9.20$ after the first residual and $\|\mathbf{H}_{\text{out}}\| = 10.54$ after the second. Production GPTs keep these ratios well below 1 on purpose — they shrink each residual-branch *output* projection at initialisation (nanoGPT divides its variance by $2N$, i.e. scales the weights by $1/\sqrt{2N}$; see [Lesson 14](14-full-gpt-architecture.md)'s initialization sidebar) precisely so a deep stack's residual stream stays bounded. Training then scales each contribution up where it helps and down where it doesn't.
+At *this* lesson's initialisation the sublayer contributions are **not** small perturbations. The MHA branch is about the same size as the residual stream it feeds into ($\|\mathrm{MHA}\| / \|\mathbf{H}_{\text{in}}\| \approx 0.99$); the FFN branch is a bit smaller ($\approx 0.52$, because its two He-scaled projections contract the variance). Adding a branch of comparable magnitude to the stream grows the norm roughly like the square root of the number of accumulated terms: $\|\mathbf{H}_{\text{in}}\| = 6.07$ becomes $\|\mathbf{H}_{\text{mid}}\| = 9.20$ after the first residual and $\|\mathbf{H}_{\text{out}}\| = 10.54$ after the second. Production GPTs keep these ratios well below 1 on purpose — they shrink each residual-branch *output* projection at initialisation (nanoGPT divides its variance by $2N$, i.e. scales the weights by $1/\sqrt{2N}$; see [Lesson 14](14-full-gpt-architecture.md)'s initialization sidebar) precisely so a deep stack's residual stream stays bounded. The [Systems lens](#systems) below runs that experiment on an 8-block stack. Training then scales each contribution up where it helps and down where it doesn't.
 
 ### Example — Visualise the residual stream at each stage
 
+Rather than three nearly identical pictures of the stream, plot the input and the two *corrections* the block adds to it, on their own signed colour scales.
+
 ```rustlab
+feat = {"1", "2", "3", "4", "5", "6", "7", "8"};   % channel labels
+tok  = {"1", "2", "3", "4"};                       % token (time) labels
 figure();
 subplot(1, 3, 1)
-imagesc(H_in, "viridis")
-title("H_in (T=4, d_model=8)")
+heatmap(feat, tok, H_in, "H_in", "viridis")
 subplot(1, 3, 2)
-imagesc(H_mid, "viridis")
-title("H_mid (after MHA + residual)")
+heatmap(feat, tok, A_out, "MHA correction A_out", "viridis")
 subplot(1, 3, 3)
-imagesc(H_out, "viridis")
-title("H_out (after FFN + residual)")
+heatmap(feat, tok, F_out, "FFN correction F_out", "viridis")
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/13-transformer-block/plot-1-dfd9d502.svg)
+![plot 1](plots/13-transformer-block/plot-1-333f28c5.svg)
 
 <!-- rustlab:output-end -->
 
-Each row of each panel is one token's representation; each column is one feature dimension. The structure barely changes between the three panels — that is the residual stream doing its job. Zoom in and you can see the FFN and MHA each nudge specific cells, but the dominant pattern carried by $\mathbf{H}_{\text{in}}$ persists.
+> [!TIP]
+> Rows are tokens $t = 1..4$, columns channels $1..8$; colour is the signed value. The MHA correction has a visible *column* structure (channels 5–6 light up for every token — $\mathbf{W}_O$ writes its output into the same channels regardless of $t$), while the FFN correction varies row by row. Neither panel resembles $\mathbf{H}_{\text{in}}$: the block adds new content instead of rescaling what was there.
+
+## The Two Mixing Axes
+
+### Theory
+
+The claim in the opening section is precise: $\mathrm{MHA}$ is the only operation whose row $t$ depends on rows $i \ne t$, and — because of the causal mask — only on rows $i < t$. Write the sublayers as maps on the whole matrix. For any row-wise map $g$ (LayerNorm, the FFN, a right-multiplication),
+
+$$g(\mathbf{H})_{t,:} = g(\mathbf{H}_{t,:}) \quad \text{(depends on row } t \text{ only)},$$
+
+whereas for a head, $(\mathbf{A}_h \mathbf{V}_h)_{t,:} = \sum_{i \le t} A_h(t, i)\, \mathbf{V}_h(i, :)$ depends on every earlier row. The cleanest test is a *perturbation*: change one input entry of token 3 and record which output rows move. A row-wise map can only move row 3; a causal time-mixing map can move rows $3, 4, \dots, T$ and must leave rows $1, 2$ exactly unchanged.
+
+### Example — Perturb token 3 at the input of each sublayer
+
+Two thin wrappers (hidden) evaluate just the MHA sublayer and just the FFN sublayer on an arbitrary input; the test is six lines.
+
+```rustlab
+H_p = H_in;
+H_p(3, 1) = H_p(3, 1) + 1.0;                   % bump channel 1 of token 3 at the MHA input
+dA = attn_sublayer(H_p, W_Q, W_K, W_V, W_O, H_heads, M_mask) - A_out;
+H_mid_p = H_mid;
+H_mid_p(3, 1) = H_mid_p(3, 1) + 1.0;           % same bump at the FFN input
+dF = ffn_sublayer(H_mid_p, W_ff1, W_ff2) - F_out;
+print("sum |dA_out| per token (MHA response):", sum(abs(dA), 2)');
+print("sum |dF_out| per token (FFN response):", sum(abs(dF), 2)');
+print("max |dA_out| on tokens 1-2:", max(max(abs(dA(1:2, :)))), "   channels of token 3 touched by the FFN:", sum(abs(dF(3, :)) > 0), "of", d_model);
+figure();
+subplot(1, 2, 1)
+heatmap(feat, tok, dA, "MHA response to a bump at token 3", "viridis")
+subplot(1, 2, 2)
+heatmap(feat, tok, dF, "FFN response to a bump at token 3", "viridis")
+```
+
+<!-- rustlab:output-start -->
+```text
+sum |dA_out| per token (MHA response): Matrix(1x4)
+  [0.000000, 0.000000, 0.775304, 0.351612]
+sum |dF_out| per token (FFN response): Matrix(1x4)
+  [0.000000, 0.000000, 1.758853, 0.000000]
+max |dA_out| on tokens 1-2: 0    channels of token 3 touched by the FFN: 8 of 8
+```
+
+![plot 2](plots/13-transformer-block/plot-2-88a6234b.svg)
+
+<!-- rustlab:output-end -->
+
+> [!TIP]
+> Rows are tokens, columns channels, colour the signed change. Left: the change propagates *down* the time axis — rows 3 and 4 move, rows 1 and 2 are exactly zero (the causal mask forbids them from seeing token 3). Right: the change stays in row 3 and spreads *across* all 8 channels — one perturbed channel was recombined into every channel through $\mathbf{W}_1$, GELU and $\mathbf{W}_2$. That is the whole division of labour inside a transformer: attention routes along time, the FFN computes along channels.
 
 ## Stacking Two Blocks
 
@@ -299,7 +351,7 @@ After two blocks the residual stream's magnitude has grown from $\|\mathbf{H}_{\
 
 ### Theory
 
-Sum the learnable matrices and bias vectors:
+**Counting convention** (used here and in [Lesson 14](14-full-gpt-architecture.md)): every weight matrix is counted; the two FFN biases are counted; the two LayerNorm affines are listed and added separately (the code here runs $\boldsymbol{\gamma} = \mathbf{1}, \boldsymbol{\beta} = \mathbf{0}$); attention-projection biases are *not* counted — GPT-2 has them, and they are exactly the 36,864-parameter gap Lesson 14 reports when it reconstructs GPT-2 small from this formula ($12 \text{ blocks} \times 4 \cdot 768$).
 
 | Component | Params |
 |---|---|
@@ -312,15 +364,13 @@ Total (ignoring small lower-order terms): $\boxed{12 d_{\text{model}}^2 + O(d_{\
 
 The $4 d_{\text{model}}^2$ for attention vs. $8 d_{\text{model}}^2$ for FFN means **FFN holds twice the parameters of attention** in every block — confirmed in [Lesson 11](11-feed-forward-block.md). The number of heads $H$ does not appear: more heads at fixed $d_{\text{model}}$ just slices the same matrices into narrower per-head views.
 
-**Attention biases are omitted here.** Real GPT-2 attention adds a bias to each projection — $3 d_{\text{model}}$ for the packed Q/K/V and $d_{\text{model}}$ for the output projection, $4 d_{\text{model}}$ per block. These are exactly the parameters [Lesson 14](14-full-gpt-architecture.md) reports as its 36,864-parameter "Discrepancy" when it reconstructs GPT-2 small from this formula ($12 \text{ blocks} \times 4 \cdot 768 = 36{,}864$).
-
 ### Example — Block parameter count
 
 ```rustlab
 n_attn = 4 * d_model * d_model;
 n_ffn  = 2 * d_model * d_ff;            % W_ff1 + W_ff2 (no bias)
-n_bias = d_ff + d_model;                % FFN biases (LN affine ignored — γ=1, β=0 here)
-n_block = n_attn + n_ffn + n_bias;
+n_bias = d_ff + d_model;                % FFN biases
+n_block = n_attn + n_ffn + n_bias;      % LN affines listed separately below
 
 print("d_model:        ", d_model);
 print("d_ff:           ", d_ff);
@@ -329,6 +379,7 @@ print("FFN matmul params:", n_ffn);
 print("FFN biases:     ", n_bias);
 print("Total per block:", n_block);
 print("FFN / attention:", n_ffn / n_attn);
+print("With LN affines (+4 d_model):", n_block + 4 * d_model);
 ```
 
 <!-- rustlab:output-start -->
@@ -340,22 +391,137 @@ FFN matmul params: 512
 FFN biases:      40
 Total per block: 808
 FFN / attention: 2
+With LN affines (+4 d_model): 840
 ```
 
 <!-- rustlab:output-end -->
 
-For our toy $d_{\text{model}} = 8$ the block has 808 parameters total. This count omits the two LayerNorms' affine parameters ($\boldsymbol{\gamma}, \boldsymbol{\beta}$), since the forward pass here uses $\gamma = 1, \beta = 0$. Add them back — $+4 d_{\text{model}} = 32$ — and you get 840, which is exactly what [Lesson 14](14-full-gpt-architecture.md)'s `block_params()` counter reports (it includes the LN affines). Scale to $d_{\text{model}} = 384$ (nanoGPT-small) and the block has ~1.77M parameters — multiplied by $N$ blocks in [Lesson 14](14-full-gpt-architecture.md).
+For our toy $d_{\text{model}} = 8$ the block has 808 parameters under the convention above; adding the two LayerNorm affines ($+4 d_{\text{model}} = 32$) gives 840, which is exactly what [Lesson 14](14-full-gpt-architecture.md)'s `block_params()` counter reports. Scale to $d_{\text{model}} = 384$ (nanoGPT-small) and the block has ~1.77M parameters — multiplied by $N$ blocks in Lesson 14.
 
-## Connection to Information Theory
+## Engineering Lenses
 
-Each block performs two information operations on the residual stream:
+### Signals
 
-1. **Attention extracts a fragment of $I(X_{t+1}; X_{1..t})$.** Per the [Lesson 08](08-scaled-dot-product-attention.md) framing, MHA's softmax-weighted sum re-weights past values toward those that carry mutual information about the next token. Multi-head splits that extraction into $H$ orthogonal channels ([Lesson 09](09-multi-head-attention.md)).
-2. **FFN re-shapes the resulting representation.** No new mutual information about $X_{t+1}$ is introduced (the FFN sees only the current position), but the geometric arrangement of the per-token features is reshaped non-linearly so the *next* attention layer can extract a different fragment.
+**Exact.** Each row of an attention matrix is a **causal, non-negative, unit-DC-gain FIR tap vector** along the time axis: $A_h(t, i) = 0$ for $i > t$ (causal), $A_h(t, i) \ge 0$ and $\sum_i A_h(t, i) = 1$ (unit DC gain). Row $t$ of the head output is the filter $\sum_{i \le t} A_h(t, i)\,\mathbf{V}_h(i, :)$ — [Lesson 07](07-context-and-naive-averaging.md)'s uniform prefix average is the special case $A_h(t, i) = 1/t$. Two consequences follow from the row sums alone: attention cannot amplify a constant (a constant $\mathbf{V}$ passes through unchanged), and it cannot invert sign. What makes it more than an FIR filter is that the taps are *computed from the signal* ([Lesson 08](08-scaled-dot-product-attention.md)) — a time-varying filter whose coefficients change with every input. **Exact.** The FFN is memoryless along time: a static nonlinearity applied per sample (row), as the perturbation test showed. **Analogy.** LN → $\mathbf{W}_1$ → GELU → $\mathbf{W}_2$ per row has the *shape* of a Wiener–Hammerstein cascade (linear – static nonlinear – linear), which is useful vocabulary and nothing more.
 
-The residual stream is the **lossless backbone** ([Lesson 12](12-layer-norm-and-residuals.md)): $\mathbf{H}_{\text{in}}$'s information is preserved through `H_in + sublayer(LN(H_in))` no matter what the sublayer does. Stacking $N$ blocks therefore composes $N$ rounds of "extract MI → re-shape representation" without ever discarding what earlier rounds learned. The model's capacity to lower the cross-entropy loss ([Lesson 03](03-cross-entropy-loss.md)) grows roughly linearly in depth, until other constraints (gradient noise, parameter sharing, dataset size) intervene.
+```rustlab
+c1 = 1:d_k;                       % head 1's columns
+c2 = (d_k + 1):(2 * d_k);         % head 2's columns
+A_1 = softmax(Q(:, c1) * K(:, c1)' * scale + M_mask);
+A_2 = softmax(Q(:, c2) * K(:, c2)' * scale + M_mask);
+print("head 1 taps A_1 (row = query t, column = key i):", A_1);
+print("row sums of A_1:", sum(A_1, 2)');
+V_const = ones(T, d_k) * 0.7;
+print("max |A_1 * V_const - 0.7| =", max(max(abs(A_1 * V_const - 0.7))));
+print("head 2, row 4 taps:", A_2(4, :));
+```
 
-A useful framing: a transformer is a **conditional entropy refinement pipeline**. The bigram baseline ([Lesson 05](05-bigram-language-model.md)) gives one number per row: $H(X_{t+1} \mid X_t)$. Each transformer block lowers that conditional entropy by the amount of information it can extract from the larger context. The stack converges (in the limit of unlimited training and capacity) toward the true entropy $H(X_{t+1} \mid X_{1..t})$ of the language.
+<!-- rustlab:output-start -->
+```text
+head 1 taps A_1 (row = query t, column = key i): Matrix(4x4)
+  [1.000000, 0.000000, 0.000000, 0.000000]
+  [0.060243, 0.939757, 0.000000, 0.000000]
+  [0.066182, 0.699757, 0.234061, 0.000000]
+  [0.066049, 0.209946, 0.502133, 0.221872]
+row sums of A_1: Matrix(1x4)
+  [1.000000, 1.000000, 1.000000, 1.000000]
+max |A_1 * V_const - 0.7| = 0.00000000000000011102230246251565
+head 2, row 4 taps: [1×4]  0.363668  0.045474  0.079966  0.510892
+```
+
+<!-- rustlab:output-end -->
+
+Read `A_1` row by row: each row is one FIR tap vector — zeros above the diagonal (causal), entries summing to 1. Row 4, $[0.07, 0.21, 0.50, 0.22]$, weights token 3 most; head 2's row 4 chooses differently from the *same* input — two filters in a bank ([Lesson 09](09-multi-head-attention.md)). The constant-input test prints a difference at floating-point noise: unit DC gain.
+
+### Systems
+
+**Exact.** One block is one step of a nonlinear discrete-time system whose state is the residual stream and whose time index is depth:
+
+$$\mathbf{H}_{\ell+1} = \mathbf{H}_\ell + f_\ell(\mathbf{H}_\ell), \qquad f_\ell = \text{MHA}\circ\text{LN}_1 \;\text{then}\; \text{FFN}\circ\text{LN}_2 .$$
+
+There is no feedback inside the block — along depth it is an open-loop cascade (the two feedback loops of the course, training and generation, close around the whole model; [Lesson 00](00-the-llm-as-a-system.md)). "Stability" therefore means bounded growth of $\|\mathbf{H}_\ell\|$ with $\ell$, and the per-stage gain is set by the block Jacobian $\mathbf{J}_\ell = \mathbf{I} + \partial f_\ell / \partial \mathbf{H}_\ell$: its largest singular value bounds how much a small input change is amplified in one step ([Lesson 12](12-layer-norm-and-residuals.md)). The experiment below stacks 2, 4 and 8 fresh random blocks on `H_in`, once as initialised and once with the two residual-branch output matrices $\mathbf{W}_O, \mathbf{W}_2$ scaled by $1/\sqrt{2N}$, and measures $\|\mathbf{H}_\ell\|$ plus the largest singular value of the finite-difference Jacobian of token $T$'s output with respect to its own input (an $8 \times 8$ matrix at $d_{\text{model}} = 8$; the singular value, not the spectral radius, is the right one-step gain for a non-normal Jacobian). **Model.** The $1/\sqrt{2N}$ rule is a variance budget: if the $2N$ branch outputs were independent with variance $\sigma^2$ each, the stream would accumulate $2N\sigma^2$; scaling each by $1/\sqrt{2N}$ makes the total $\sigma^2$ regardless of depth.
+
+```rustlab
+for N = [2, 4, 8]
+  seed(1300);
+  [n_u, g_u] = stack_trace(H_in, N, H_heads, M_mask, 1.0);                  % as initialised
+  seed(1300);
+  [n_s, g_s] = stack_trace(H_in, N, H_heads, M_mask, 1.0 / sqrt(2 * N));    % same weights, branches scaled
+  print("N =", N, " |H_N|/|H_0|: unscaled", n_u(N + 1) / n_u(1), " scaled", n_s(N + 1) / n_s(1), ...
+        "  max sigma_max(J): unscaled", max(g_u), " scaled", max(g_s));
+end
+figure();
+subplot(1, 2, 1)
+semilogy(0:8, n_u, "color", "red", "label", "branch scale 1")
+hold("on")
+semilogy(0:8, n_s, "color", "blue", "label", "branch scale 1/sqrt(2N)")
+hline(norm(H_in), "gray", "|H_0|")
+hold("off")
+title("|H_l| along an 8-block stack")
+xlabel("block l")
+ylabel("|H_l|")
+subplot(1, 2, 2)
+plot(1:8, g_u, "color", "red", "label", "branch scale 1")
+hold("on")
+plot(1:8, g_s, "color", "blue", "label", "branch scale 1/sqrt(2N)")
+hline(1, "gray", "unity gain")
+hold("off")
+title("per-block gain sigma_max(J_l) at token T")
+xlabel("block l")
+ylabel("sigma_max")
+```
+
+<!-- rustlab:output-start -->
+```text
+N = 2  |H_N|/|H_0|: unscaled 2.110514497741098  scaled 1.2876085953458334   max sigma_max(J): unscaled 2.1436353496367158  scaled 1.6271641931427023
+N = 4  |H_N|/|H_0|: unscaled 3.4271154139164315  scaled 1.3965030076089215   max sigma_max(J): unscaled 2.1436353496367158  scaled 1.4986869084529255
+N = 8  |H_N|/|H_0|: unscaled 4.259092877559233  scaled 1.2613544565561314   max sigma_max(J): unscaled 2.1436353496367158  scaled 1.3894371112628574
+```
+
+![plot 3](plots/13-transformer-block/plot-3-506537b9.svg)
+
+<!-- rustlab:output-end -->
+
+> [!TIP]
+> Left: as initialised, eight blocks multiply the stream norm by 4.3; with the $1/\sqrt{2N}$ branch scaling the same weights give 1.3. Right: the per-block gain starts above 2 for the unscaled stack and settles near 1.3 once the stream is large relative to the branches; the scaled stack sits near 1.3 from the first block. No block has gain below 1 — the identity path guarantees $\sigma_{\max}(\mathbf{J}) \ge 1 - \|\partial f\|$, which is the "gradient highway" of Lesson 12 read forwards.
+
+### Information
+
+**Model.** A transformer is a **conditional-entropy refinement pipeline**. The bigram baseline ([Lesson 05](05-bigram-language-model.md)) achieves $H(X_{t+1} \mid X_t)$; a stack of blocks can only do better by extracting information from the longer context, and in the limit of unlimited capacity and data it approaches the true $H(X_{t+1} \mid X_{1..t})$ of the source. How much each block lowers the achieved conditional entropy is an empirical question — the scaling laws of [Lesson 14](14-full-gpt-architecture.md) — not a fixed amount per layer. The two sublayers play different roles in that pipeline: attention is the only place mutual information between *past* tokens and the next token can enter row $t$ (it is the only row-mixing map — the perturbation test); the FFN cannot add information about $X_{t+1}$ that was not already in row $t$ (data-processing inequality, [Lesson 11](11-feed-forward-block.md)) — it re-shapes the row so the next block's attention can extract a different fragment. Multi-head attention splits the extraction into $H$ parallel channels that share the residual stream and are not, in general, orthogonal ([Lesson 09](09-multi-head-attention.md)). The residual stream is the lossless backbone ([Lesson 12](12-layer-norm-and-residuals.md)): $\mathbf{H}_{\text{in}}$ is preserved through `H_in + sublayer(LN(H_in))` no matter what the sublayer does.
+
+**Exact.** Each attention row is a distribution over $t$ keys, so its entropy is at most $\log_2 t$ bits; the deficit $\log_2 t - H(\mathbf{A}_{t,:})$ is how far the head has moved from uniform prefix averaging ([Lesson 08](08-scaled-dot-product-attention.md)'s row entropy). At random initialisation the deficits are small — the heads route almost nothing yet:
+
+```rustlab
+bound = log2(1:T);
+H_1 = row_entropies_bits(A_1);
+H_2 = row_entropies_bits(A_2);
+print("log2 t bound (bits):        ", bound);
+print("row entropy, head 1 (bits): ", H_1);
+print("row entropy, head 2 (bits): ", H_2);
+figure();
+plot(1:T, bound, "color", "gray", "label", "log2 t (uniform prefix average)")
+hold("on")
+plot(1:T, H_1, "color", "blue", "label", "head 1")
+plot(1:T, H_2, "color", "red", "label", "head 2")
+hold("off")
+title("attention row entropy vs the uniform bound")
+xlabel("query position t")
+ylabel("bits")
+```
+
+<!-- rustlab:output-start -->
+```text
+log2 t bound (bits):         [1×4]  0.000000  1.000000  1.584963  2.000000
+row entropy, head 1 (bits):  [1×4]  0.000000  0.328409  1.110058  1.712712
+row entropy, head 2 (bits):  [1×4]  0.000000  0.910635  1.531749  1.519905
+```
+
+![plot 4](plots/13-transformer-block/plot-4-a12b59e9.svg)
+
+<!-- rustlab:output-end -->
+
+> [!TIP]
+> Both heads sit within a fraction of a bit of the $\log_2 t$ ceiling at every position: at initialisation the block is close to Lesson 07's prefix average, and the routing information (the gap to the grey line) is what training will buy.
 
 ## Sidebar: Dropout
 
@@ -399,17 +565,19 @@ The lessons in this series build a **decoder-only stack** (GPT-style). To conver
 ## Key Takeaways
 
 - The Pre-LN transformer block is `H + MHA(LN(H))` followed by `H' + FFN(LN(H'))` — two residual sublayers around the persistent residual stream.
-- Tensor shape is $(T, d_{\text{model}})$ at every step of the residual stream; FFN widens to $(T, d_{\text{ff}})$ internally and contracts back.
-- Blocks stack trivially because input and output shapes match. Each block has its own parameters but identical architecture.
-- Per-block parameter count: $4 d_{\text{model}}^2$ (attention) + $8 d_{\text{model}}^2$ (FFN) + small bias / LN terms.
-- FFN dominates the parameter budget at $4\times$ widening; attention dominates the compute at long context.
+- The block acts on a $T \times d_{\text{model}}$ signal along two axes: **attention is the only operation that mixes rows (time)**, and causally; LayerNorm and the FFN act per row and mix only columns (channels).
+- Tensor shape is $(T, d_{\text{model}})$ at every step of the residual stream; FFN widens to $(T, d_{\text{ff}})$ internally and contracts back. Blocks stack because input and output shapes match.
+- Along depth the block is one step of an open-loop nonlinear system $\mathbf{H}_{\ell+1} = \mathbf{H}_\ell + f_\ell(\mathbf{H}_\ell)$; as initialised the stream norm grows with depth, and the $1/\sqrt{2N}$ branch scaling holds it near its input scale.
+- Per-block parameter count: $4 d_{\text{model}}^2$ (attention) + $8 d_{\text{model}}^2$ (FFN) + small bias / LN terms — FFN holds twice the parameters; attention's *compute* overtakes the FFN's only beyond $T \approx 4 d_{\text{model}}$ ([Lesson 14](14-full-gpt-architecture.md) computes it).
 
 ## Standalone Scripts
 
 | Script | What it computes |
 |---|---|
-| `block_forward.rlab` | one Pre-LN transformer block end-to-end with $T = 4, d_{\text{model}} = 8, H = 2$; prints shape at every step |
+| `block_forward.rlab` | one Pre-LN transformer block end-to-end with $T = 4, d_{\text{model}} = 8, H = 2$; prints shape at every step; signed 1×3 heatmap of $\mathbf{H}_{\text{in}}$, $\mathbf{A}_{\text{out}}$, $\mathbf{F}_{\text{out}}$ |
 | `two_block_stack.rlab` | runs the same block twice with different weights; prints residual-stream magnitude after each block |
+| `mixing_axes.rlab` | the perturbation test: bump token 3 at each sublayer's input; per-token response sums and a 1×2 signed heatmap |
+| `block_gain_vs_depth.rlab` | 2-, 4-, 8-block stacks with and without the $1/\sqrt{2N}$ branch scaling: $\lVert \mathbf{H}_\ell \rVert$ and the finite-difference block Jacobian's $\sigma_{\max}$ and spectral radius |
 
 Run all with `make lesson-13` (or `rustlab run lessons/13-transformer-block/<name>.rlab`).
 
@@ -423,18 +591,28 @@ Run all with `make lesson-13` (or `rustlab run lessons/13-transformer-block/<nam
 | `size(F_pre)` (FFN hidden) | `[4, 32]` |
 | `size(F_out)` | `[4, 8]` |
 | `size(H_out)` | `[4, 8]` (= input shape — block is shape-preserving) |
+| `norm(H_in)` / `norm(H_mid)` / `norm(H_out)` | `6.07` / `9.20` / `10.54` |
+| `norm(A_out) / norm(H_in)` | `0.987` |
+| `norm(F_out) / norm(H_mid)` | `0.521` |
+| `sum(abs(dA), 2)'` / `sum(abs(dF), 2)'` (responses to a bump at token 3) | `[0, 0, 0.775, 0.352]` / `[0, 0, 1.759, 0]`; all 8 channels of row 3 non-zero in `dF` |
+| `norm(H_out2)` (after block 2) | `14.85` |
 | `n_attn` ($d_{\text{model}} = 8$) | `256` |
 | `n_ffn` | `512` |
 | `n_ffn / n_attn` | `2` |
+| `n_block` | `808` (`840` with the two LN affines) |
+| `sum(A_1, 2)'` | `[1, 1, 1, 1]` |
+| `A_1(4, :)` | `[0.066, 0.210, 0.502, 0.222]` |
+| 8-block stack: `n_u(9)/n_u(1)` vs `n_s(9)/n_s(1)`; `max(g_u)` vs `max(g_s)` | `4.26` vs `1.26`; `2.14` vs `1.39` |
+| `H_1` (head-1 row entropies, bits) | `[0, 0.328, 1.110, 1.713]` vs bound `[0, 1, 1.585, 2]` |
 
 ## Exercises
 
 1. **Shape check across configs.** Re-run the block with $T = 16, d_{\text{model}} = 64, H = 8$. List the shape of $\mathbf{H}_{\text{in}}, \mathbf{H}_{\text{mid}}, \mathbf{H}_{\text{out}}, \mathbf{F}_{\text{pre}}$, $\mathbf{F}_{\text{out}}$. Which intermediate shapes change with $H$? Which don't?
-2. **Without residuals.** Remove the two `+` operations in the block (just use `H_mid = A_out` and `H_out = F_out`). Run two blocks in a row. How does $\|\mathbf{H}_{\text{out}}\|$ compare to $\|\mathbf{H}_{\text{in}}\|$? Connect to [Lesson 12](12-layer-norm-and-residuals.md)'s magnitude collapse demo.
+2. **Without residuals.** Remove the two `+` operations in the block (just use `H_mid = A_out` and `H_out = F_out`). Run two blocks in a row. How does $\|\mathbf{H}_{\text{out}}\|$ compare to $\|\mathbf{H}_{\text{in}}\|$? Connect to [Lesson 12](12-layer-norm-and-residuals.md)'s magnitude collapse demo and to the per-block gain plot in the Systems lens — what happens to $\sigma_{\max}(\mathbf{J})$ without the identity path?
 3. **Post-LN variant.** Rewrite the block as `H_mid = LN(H_in + MHA(H_in))` and `H_out = LN(H_mid + FFN(H_mid))` (Post-LN). Confirm the final shape is unchanged. Why might this version need a learning-rate warmup that Pre-LN doesn't?
-4. **Scaling laws.** Compute the per-block parameter count for $d_{\text{model}} \in \{64, 128, 256, 512, 1024\}$. Plot it. The $d_{\text{model}}^2$ scaling is the reason transformer compute and memory grow so steeply with width — sketch why.
+4. **Perturb a different token.** Repeat the perturbation test with the bump on token 1 instead of token 3. Which rows of the MHA response are now non-zero, and why is that the *maximum* spread a causal block allows?
 5. **Bias accounting.** Add the LayerNorm affine parameters $(\boldsymbol{\gamma}, \boldsymbol{\beta})$ for both LN1 and LN2 to the count. By how much does the per-block total change? At what $d_{\text{model}}$ do these become negligible compared to the $12 d_{\text{model}}^2$ matrix budget?
 
 ## What's next
 
-Lesson 14 wraps the block into the **full GPT decoder**: a token embedding ([Lesson 04](04-embeddings-and-similarity.md)), positional encoding ([Lesson 10](10-positional-encoding.md)), $N$ stacked transformer blocks (this lesson), a final LayerNorm, and a language-modelling head that projects the residual stream to vocabulary logits. The lesson prints the parameter count of every component for a small GPT config and confirms the breakdown matches a known reference. After Lesson 14 you have every piece needed to *train* the architecture — Phases 6 onward fill in the training loop, optimizer, and evaluation.
+[Lesson 14](14-full-gpt-architecture.md) wraps the block into the **full GPT decoder**: a token embedding ([Lesson 04](04-embeddings-and-similarity.md)), positional encoding ([Lesson 10](10-positional-encoding.md)), $N$ stacked transformer blocks (this lesson), a final LayerNorm, and a language-modelling head that projects the residual stream to vocabulary logits. It proves end-to-end that the whole model is causal, prints the parameter count *and* the FLOPs per token of every component for a small GPT config, and confirms the breakdown matches a known reference. After Lesson 14 you have every piece needed to *train* the architecture — Phase 6 onward fills in the training loop, optimizer, and evaluation.

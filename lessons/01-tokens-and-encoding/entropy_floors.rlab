@@ -1,0 +1,57 @@
+# Script:  entropy_floors.rlab
+# System:  The corpus "to be or not to be" as a discrete source over a 7-symbol alphabet
+# Concept: The staircase of information floors — uniform bound, unigram entropy,
+#          bigram conditional entropy — plus one-hot (unary) redundancy and symbol rate
+# Equations: H(f) = -sum_i f_i log2 f_i;  H(X'|X) = sum_i pi_i H(P_i,:);
+#            redundancy = 1 - log2|V| / |V|;  bits/message = symbols x bits/symbol
+# Units:   Entropies in bits per symbol; redundancy dimensionless; bits per message
+
+# === Source statistics ===
+vocab_size = 7;
+ids = [7, 5, 1, 2, 3, 1, 5, 6, 1, 4, 5, 7, 1, 7, 5, 1, 2, 3];
+T = length(ids);
+counts = zeros(vocab_size);
+for t = 1:T
+  counts(ids(t)) = counts(ids(t)) + 1;
+end
+freqs = counts / T;
+
+# === Floor 1 and 2: uniform alphabet and unigram (memoryless) entropy ===
+H_max = log2(vocab_size);
+H_f   = -sum(freqs .* log2(freqs));       # every f_i > 0 here
+print("log2|V|      =", H_max, "bits/symbol");
+print("H(f) unigram =", H_f, "bits/symbol");
+print("gap          =", H_max - H_f, "bits/symbol");
+
+# === Floor 3 (preview of Lesson 05): bigram conditional entropy ===
+C = zeros(vocab_size, vocab_size);        # transition counts C(i, j)
+for t = 1:T - 1
+  C(ids(t), ids(t + 1)) = C(ids(t), ids(t + 1)) + 1;
+end
+H_cond = 0;
+for i = 1:vocab_size
+  n_i = sum(C(i, :));
+  for j = 1:vocab_size
+    if C(i, j) > 0
+      H_cond = H_cond - (n_i / (T - 1)) * (C(i, j) / n_i) * log2(C(i, j) / n_i);
+    end
+  end
+end
+print("H(X_{t+1} | X_t) bigram preview =", H_cond, "bits/symbol");
+
+# === One-hot as a unary code ===
+redundancy = 1 - H_max / vocab_size;
+print("one-hot redundancy 1 - log2|V|/|V| =", redundancy);
+
+# === Symbol rate: the same message at character and word level ===
+f_words = [2, 1, 1, 2] / 6;               # {be, not, or, to}
+H_words = -sum(f_words .* log2(f_words));
+print("chars: 18 symbols x", H_f, "bits =", T * H_f, "bits/message");
+print("words:  6 symbols x", H_words, "bits =", 6 * H_words, "bits/message");
+
+# === Staircase bar chart ===
+figure();
+bar({"uniform log2|V|", "unigram H(f)  (L01)", "bigram"}, [H_max, H_f, H_cond], "The staircase of floors (bits/token)")
+ylim([0, 3])
+savefig("entropy_floors.svg")
+print("Saved entropy_floors.svg")

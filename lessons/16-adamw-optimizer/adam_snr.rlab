@@ -1,0 +1,64 @@
+# Script:  adam_snr.rlab
+# System:  Adam on the anisotropic bowl L = 0.5 (200 theta1^2 + theta2^2) with
+#          additive gradient noise sigma = 0.5 (a noisy sensor), beta2 = 0.95
+#          as in LLM practice so that v_hat has a ~20-step memory.
+# Concept: v_hat estimates the per-coordinate second moment of the score,
+#          E[g^2] = mean(g)^2 + var(g) — the diagonal empirical Fisher.  Near
+#          a noisy minimum the mean vanishes, v_hat is pure noise power, and
+#          m_hat / sqrt(v_hat) is a signal-to-noise ratio: a one-pole filter
+#          of white noise has rms sqrt((1 - beta1)/(1 + beta1)) = 0.229, so
+#          Adam keeps stepping by ~0.23 eta at the minimum.  sqrt(v_hat) is
+#          a gradient scale, not a curvature: its ratio across the two
+#          coordinates is ~3, not the Hessian's 200.
+# Equations:
+#   g = grad L(theta) + sigma z,  z ~ N(0, I)
+#   v_hat -> E[g_i^2];   rms(m_hat_i / sqrt(v_hat_i)) -> sqrt((1-b1)/(1+b1)) for white g
+# Units:   theta dimensionless; gradients in loss units per unit theta.
+
+function g = grad_q(theta)
+  g = [200.0 * theta(1), theta(2)];
+end
+
+seed(16);
+beta1 = 0.9;  beta2_llm = 0.95;  eps = 1e-8;  eta_a = 0.09;
+sigma = 0.5;  n_i = 600;
+
+# === Noisy Adam run, recording the gradient and the step ratio ===
+th_i = [-2.0, 4.0];  m_i = [0.0, 0.0];  v_i = [0.0, 0.0];
+G = zeros(n_i, 2);  S = zeros(n_i, 2);
+for k = 1:n_i
+  g = grad_q(th_i) + sigma * randn(2);        # score sample = true gradient + sensor noise
+  m_i = beta1 * m_i + (1 - beta1) * g;
+  v_i = beta2_llm * v_i + (1 - beta2_llm) * (g .* g);
+  m_hat = m_i / (1 - beta1 ^ k);
+  v_hat = v_i / (1 - beta2_llm ^ k);
+  G(k, :) = g;
+  S(k, :) = m_hat ./ sqrt(v_hat);
+  th_i = th_i - eta_a * m_hat ./ (sqrt(v_hat) + eps);
+end
+
+# === Second-moment identity and SNR over the last 200 steps ===
+w = 401:600;
+g1 = reshape(G(w, 1), 1, 200);  g2 = reshape(G(w, 2), 1, 200);
+s1 = reshape(S(w, 1), 1, 200);  s2 = reshape(S(w, 2), 1, 200);
+var_g = [std(g1) ^ 2, std(g2) ^ 2];
+snr_rms = [sqrt(mean(s1 .^ 2)), sqrt(mean(s2 .^ 2))];
+print("v_hat at t = 600                 :", v_hat);
+print("mean g^2 over steps 401-600      :", [mean(g1 .^ 2), mean(g2 .^ 2)]);
+print("  = mean(g)^2 + var(g)           :", [mean(g1) ^ 2, mean(g2) ^ 2], " + ", var_g, "   (sigma^2 =", sigma ^ 2, ")");
+print("rms of m_hat ./ sqrt(v_hat)      :", snr_rms, "   white-noise prediction sqrt((1-b1)/(1+b1)) =", sqrt((1 - beta1) / (1 + beta1)));
+print("sqrt(v_hat) ratio, coord 1 : 2   :", sqrt(v_hat(1) / v_hat(2)), "   Hessian ratio a/b = 200");
+
+# === Plot: per-step |m_hat / sqrt(v_hat)| for both coordinates ===
+figure();
+semilogy(1:n_i, abs(reshape(S(:, 1), 1, n_i)) + 1e-6, "color", "red",  "label", "steep coordinate")
+hold("on")
+semilogy(1:n_i, abs(reshape(S(:, 2), 1, n_i)) + 1e-6, "color", "blue", "label", "flat coordinate")
+hline(sqrt((1 - beta1) / (1 + beta1)), "gray", "white-noise rms 0.229")
+hold("off")
+title("Adam step ratio |m_hat / sqrt(v_hat)| per step (noisy bowl)")
+xlabel("step")
+ylabel("|step| / eta")
+legend("steep", "flat", "0.229")
+savefig("adam_snr.svg")
+print("Saved adam_snr.svg");

@@ -1,0 +1,73 @@
+# Script:  pe_phasor_bank.rlab
+# System:  Sinusoidal positional encoding as a bank of phasors
+# Concept: Pair k of the code is Im/Re of z_k(t) = exp(j w_k t).  Translation
+#          by delta multiplies every phasor by exp(j w_k delta) — the rotation
+#          identity in one complex multiply.  The rates form a geometric
+#          ladder (straight on a log axis) and each column is a single tone.
+# Equations: z_k(t+d) = exp(j w_k d) z_k(t);  w_k = 10000^(-2k/d_model);
+#            lambda_k = 2 pi / w_k;  |DFT| of a column has one line at w_k / 2 pi
+# Units:     w in rad/token; lambda in tokens; DFT frequency in cycles/token
+
+run "../../lib/transformer.rlab"
+
+T = 64;
+d_model = 32;
+n_pairs = d_model / 2;
+PE = sinusoidal_pe(T, d_model);              # 0-based positions; every quantity below is offset-invariant
+omega = 10000.0 .^ (-2 * (0:(n_pairs - 1)) / d_model);
+lambda = 2 * pi ./ omega;
+
+# === Translation = one complex multiply per pair ===
+t0 = 10;
+delta = 3;
+z_t  = exp(1j * omega * t0);
+z_td = exp(1j * omega * (t0 + delta));
+rot  = exp(1j * omega * delta);
+print("max |exp(j w d) z(t) - z(t+d)| =", max(abs(z_t .* rot - z_td)));
+print("rotation angles w_k * delta for pairs 0, 2, 4 (rad):", omega(1) * delta, omega(3) * delta, omega(5) * delta);
+
+# === Ladder and spectrum ===
+F1 = abs(fft(PE(:, 1)));                     # column 1: w_0 = 1 rad/token
+F9 = abs(fft(PE(:, 9)));                     # column 9: w_4 = 0.1 rad/token
+f  = fftfreq(T, 1);                          # cycles per token
+[p1, i1] = max(F1(1:32));
+[p9, i9] = max(F9(1:32));
+print("wavelengths (tokens): pair 0 =", lambda(1), " pair 4 =", lambda(5), " pair 15 =", lambda(16));
+print("spectral line of column 1 at f =", f(i1), " (w_0 / 2 pi =", omega(1) / (2 * pi), ")");
+print("spectral line of column 9 at f =", f(i9), " (w_4 / 2 pi =", omega(5) / (2 * pi), ")");
+
+# === Figure 1: three phasors before and after the shift ===
+figure();
+hold("on")
+circ = linspace(0, 2 * pi, 200);
+polar(circ, ones(1, 200), "color", "gray")
+pick = [1, 3, 5];
+cols = {"blue", "red", "green"};
+for m = 1:3
+  k = pick(m);
+  polar([angle(z_t(k)), angle(z_t(k))], [0, 1], "color", cols(m), "label", sprintf("pair %d at t", k - 1))
+  polar([angle(z_td(k)), angle(z_td(k))], [0, 1], "color", cols(m), "style", "dashed", "label", sprintf("pair %d at t+3", k - 1))
+end
+hold("off")
+title("Phasors of pairs 0, 2, 4 at t and t + 3")
+savefig("pe_phasors.svg")
+
+# === Figure 2: log-frequency ladder, wavelengths, single-line spectra ===
+figure();
+subplot(1, 3, 1)
+stem(0:(n_pairs - 1), log10(omega), "color", "blue")
+title("log10 omega_k vs pair k")
+subplot(1, 3, 2)
+hold("on")
+semilogy(0:(n_pairs - 1), lambda, "color", "blue", "label", "wavelength")
+semilogy(0:(n_pairs - 1), T * ones(1, n_pairs), "color", "red", "style", "dashed", "label", "T = 64")
+hold("off")
+title("wavelength (tokens)")
+subplot(1, 3, 3)
+hold("on")
+stem(f(1:32), F1(1:32), "color", "blue", "label", "column 1")
+stem(f(1:32), F9(1:32), "color", "red", "label", "column 9")
+hold("off")
+title("|DFT| of one column (cycles/token)")
+savefig("pe_ladder_spectrum.svg")
+print("Saved pe_phasors.svg, pe_ladder_spectrum.svg");

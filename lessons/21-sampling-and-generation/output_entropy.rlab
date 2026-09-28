@@ -1,0 +1,72 @@
+# Script:  output_entropy.rlab
+# System:  The trained Lesson 18 bigram at its one uncertain state 'b', and
+#          the 10-class logit vector of sampling_strategies.rlab.
+# Concept: The entropy of the output distribution is the one number that
+#          summarises every decoding control.  On the trained model only the
+#          repetition penalty moves it (temperature, top-K and top-P cannot
+#          break a tie); top-P is the smallest set whose mass reaches P (a
+#          one-symbol typical set); sampling at tau = 1 is a Markov chain
+#          whose entropy rate equals the corpus's 1/2 bit per token.
+# Equations:
+#   H(q) = -sum_i q_i log2 q_i
+#   nucleus(P) = smallest set S with sum_{i in S} p_i >= P
+#   pi = left eigenvector of P_hat for lambda = 1;  rate = sum_i pi_i H(row i)
+# Units:   entropies in bits; probabilities dimensionless.
+
+run "../../lib/bigram_lm.rlab"
+run "../../lib/sampling.rlab"
+run "../../lib/info.rlab"
+
+# === 1. Train the model ===
+seed(18);
+pat = [1, 2, 3, 2];
+corpus = zeros(60);
+for i = 1:60
+  corpus(i) = pat(mod(i - 1, 4) + 1);
+end
+[E, W] = train_bigram_lm(corpus(1:50), 3, 4, 600, 0.15, 0.015, 60);
+logits_b = E(2, :) * W;
+p_b = softmax(logits_b);
+
+# === 2. Entropy of P(. | b) under each control ===
+function q = greedy_dist(z)
+  q = zeros(length(z));
+  q(argmax(z)) = 1.0;
+end
+function z_out = apply_repetition_penalty(z, recent, penalty)
+  z_out = z;
+  for i = 1:length(recent)
+    tok = recent(i);
+    if z_out(tok) > 0
+      z_out(tok) = z_out(tok) / penalty;
+    else
+      z_out(tok) = z_out(tok) * penalty;
+    end
+  end
+end
+p_pen = softmax(apply_repetition_penalty(logits_b, [1, 1], 2.0));
+print("H(P(.|b)) in bits under each control:");
+print("  greedy", entropy_bits(greedy_dist(logits_b)), "  tau=0.5", entropy_bits(softmax(logits_b / 0.5)), ...
+      "  tau=1", entropy_bits(p_b), "  tau=2", entropy_bits(softmax(logits_b / 2)), "  tau=5", entropy_bits(softmax(logits_b / 5)));
+print("  top-K=2", entropy_bits(topk_mass(p_b, 2)), "  top-P=0.9", entropy_bits(topp_mass(p_b, 0.9)), ...
+      "  penalty rho=2 on 'a' x2", entropy_bits(p_pen));
+
+# === 3. Nucleus minimality on the 10-class vector ===
+logits = [3.0, 2.5, 2.0, 1.5, 1.0, 0.5, 0.0, -0.5, -1.0, -1.5];
+p10 = softmax(logits);
+c_sorted = cumsum(sort(p10)(10:-1:1));
+q_p09 = topp_mass(p10, 0.9);
+print("sorted cumulative mass:", c_sorted);
+print("top-P=0.9 support:", sum(q_p09 > 0), "  top-4 mass", c_sorted(4), "< 0.9 <= top-5 mass", c_sorted(5));
+
+# === 4. Sampling at tau = 1 as a Markov chain: stationary pi and entropy rate ===
+P_hat = zeros(3, 3);
+for s = 1:3
+  P_hat(s, :) = softmax(E(s, :) * W);
+end
+[Vec, D] = eig(P_hat');
+lam = diag(D);
+v1 = abs(Vec(:, argmin(abs(lam - 1))));
+pi_stat = reshape(v1 / sum(v1), 1, 3);
+print("eigenvalues of P_hat':", lam, "  stationary pi =", pi_stat);
+print("entropy rate = sum_i pi_i H(row i) =", dot(pi_stat, row_entropies_bits(P_hat)), "bits/token  (corpus: 0.5)");

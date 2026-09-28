@@ -1,0 +1,71 @@
+# Script:  pre_vs_post_ln.rlab
+# System:  Residual stream under Pre-LN and Post-LN block conventions
+# Concept: Post-LN renormalises the whole stream (magnitude pinned at sqrt(d));
+#          Pre-LN leaves the bus untouched and it grows: the per-token DC of each
+#          written GELU output adds coherently (linear in l), the rest adds as a
+#          random walk (sqrt(l)).
+# Equations:
+#   Pre-LN:  x <- x + GELU(LN(x) W)        Post-LN: x <- LN(x + GELU(x W))
+#   DC part: |mean(x)| sqrt(d)             AC part: |x - mean(x)|
+#   predictions: DC_l = DC_0 + l * mean_l(mean(f_l)) sqrt(d);  AC_l^2 = AC_0^2 + l * mean_l |f_l - mean(f_l)|^2
+# Units:   activations dimensionless, magnitudes = L2 norm
+
+# === Setup ===
+seed(21);
+d = 32;
+N = 24;
+x_pre  = randn(d);
+x_post = x_pre;
+mag_pre  = zeros(N + 1);  mag_post = zeros(N + 1);
+dc_pre   = zeros(N + 1);  ac_pre   = zeros(N + 1);
+f_dc     = zeros(N);      f_ac2    = zeros(N);
+mag_pre(1) = norm(x_pre);  mag_post(1) = norm(x_post);
+dc_pre(1)  = abs(mean(x_pre)) * sqrt(d);
+ac_pre(1)  = norm(x_pre - mean(x_pre));
+
+# === Sweep ===
+for L = 1:N
+  W_L = randn(d, d) * (1.0 / sqrt(d));
+  f_L = gelu(layernorm(x_pre) * W_L);
+  f_dc(L)  = mean(f_L);
+  f_ac2(L) = norm(f_L - mean(f_L)) ^ 2;
+  x_pre  = x_pre + f_L;
+  x_post = layernorm(x_post + gelu(x_post * W_L));
+  mag_pre(L + 1)  = norm(x_pre);
+  mag_post(L + 1) = norm(x_post);
+  dc_pre(L + 1)   = abs(mean(x_pre)) * sqrt(d);
+  ac_pre(L + 1)   = norm(x_pre - mean(x_pre));
+end
+pred_dc = dc_pre(1) + (0:N) * mean(f_dc) * sqrt(d);
+pred_ac = sqrt(ac_pre(1) ^ 2 + (0:N) * mean(f_ac2));
+
+print("Pre-LN  |x_l| at l = 0, 6, 12, 24:", mag_pre(1), mag_pre(7), mag_pre(13), mag_pre(N + 1));
+print("Post-LN |x_l| at l = 0, 6, 12, 24:", mag_post(1), mag_post(7), mag_post(13), mag_post(N + 1));
+print("sqrt(d) reference:                 ", sqrt(d));
+print("mean per-layer DC of f:            ", mean(f_dc), " (E[GELU(z)], z ~ N(0,1), is 0.282)");
+print("DC part at l = 24: measured", dc_pre(N + 1), " predicted", pred_dc(N + 1));
+print("AC part at l = 24: measured", ac_pre(N + 1), " predicted", pred_ac(N + 1));
+
+# === Plot: magnitudes | DC/AC split ===
+figure();
+subplot(1, 2, 1)
+hold("on")
+plot(0:N, mag_pre,  "color", "blue", "label", "Pre-LN |x_l|")
+plot(0:N, mag_post, "color", "red",  "label", "Post-LN |x_l|")
+yline(sqrt(d), "gray", "sqrt(d)")
+title("Residual-stream magnitude vs. depth")
+xlabel("layer index l")
+ylabel("|x_l|")
+legend()
+hold("off")
+subplot(1, 2, 2)
+hold("on")
+plot(0:N, dc_pre,  "color", "orange", "label", "DC part (measured)")
+plot(0:N, pred_dc, "color", "orange", "label", "coherent: linear in l", "style", "dashed")
+plot(0:N, ac_pre,  "color", "blue",   "label", "AC part (measured)")
+plot(0:N, pred_ac, "color", "blue",   "label", "random walk: sqrt(l)", "style", "dashed")
+title("Pre-LN stream split into DC and AC parts")
+xlabel("layer index l")
+legend()
+hold("off")
+savefig("pre_vs_post_ln.svg")

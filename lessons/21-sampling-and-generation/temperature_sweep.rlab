@@ -1,0 +1,78 @@
+# Script:  temperature_sweep.rlab
+# System:  Softmax with temperature tau on (a) a 10-class logit vector and
+#          (b) the trained Lesson 18 bigram's P(. | b), whose two live
+#          logits are tied.
+# Concept: softmax(z / tau) is the Boltzmann-Gibbs distribution with
+#          energies -z_i at temperature tau.  Its entropy rises monotonically
+#          from 0 to log2|V| as tau grows, with slope equal to the logit
+#          variance under the tilted distribution -- so a tie, which has no
+#          variance, is invariant under tau.  The GIF shows the 10-class
+#          distribution morphing as tau sweeps 0.2 -> 5.
+# Equations:
+#   q_i(tau) = exp(z_i / tau) / Z(tau)
+#   dH_nats / dln(tau) = Var_q(z) / tau^2
+# Units:   logits in nats; entropies in bits (nats where stated).
+
+run "../../lib/bigram_lm.rlab"
+run "../../lib/info.rlab"
+
+# === 1. The two logit vectors ===
+logits = [3.0, 2.5, 2.0, 1.5, 1.0, 0.5, 0.0, -0.5, -1.0, -1.5];
+seed(18);
+pat = [1, 2, 3, 2];
+corpus = zeros(60);
+for i = 1:60
+  corpus(i) = pat(mod(i - 1, 4) + 1);
+end
+[E, W] = train_bigram_lm(corpus(1:50), 3, 4, 600, 0.15, 0.015, 60);
+logits_b = E(2, :) * W;
+print("trained logits at 'b':", logits_b, " (tied pair)");
+
+# === 2. Entropy vs tau for both ===
+n_tau = 60;
+taus = logspace(-1.5, 2, n_tau);
+H_10 = zeros(n_tau);  H_b = zeros(n_tau);
+for k = 1:n_tau
+  H_10(k) = entropy_bits(softmax(logits / taus(k)));
+  H_b(k)  = entropy_bits(softmax(logits_b / taus(k)));
+end
+print("10-class: H at tau = 0.03 ->", H_10(1), " at tau = 100 ->", H_10(n_tau), " (log2 10 =", log2(10), ")");
+print("P(.|b)  : H at tau = 0.03 ->", H_b(1),  " at tau = 100 ->", H_b(n_tau),  " (log2 3  =", log2(3), ")");
+
+# === 3. Slope check: dH/dln(tau) = Var_q(z) / tau^2 at tau = 1 ===
+function H = H_nats_at(z, tau)
+  H = entropy_nats(softmax(z / tau));
+end
+slope_fd = (H_nats_at(logits, 1.001) - H_nats_at(logits, 0.999)) / (log(1.001) - log(0.999));
+p = softmax(logits);
+var_z = sum(p .* (logits - sum(p .* logits)) .^ 2);
+print("dH/dln(tau) at tau = 1:", slope_fd, "nats   Var_q(z) =", var_z);
+
+# === 4. Plot: noise power vs the knob ===
+figure();
+semilogx(taus, H_10, "color", "blue", "label", "10-class logit vector")
+hold("on")
+semilogx(taus, H_b, "color", "red", "label", "trained model, P(. | b)")
+yline(log2(10), "gray", "log2 10")
+yline(log2(3), "gray", "log2 3")
+yline(1.0, "black", "1 bit: the tie")
+hold("off")
+title("Output entropy vs temperature")
+xlabel("tau (log axis)")
+ylabel("H [bits]")
+savefig("temperature_sweep.svg")
+print("Saved temperature_sweep.svg");
+
+# === 5. Animation: the 10-class distribution as tau sweeps 0.2 -> 5 ===
+figure();
+taus_anim = logspace(log10(0.2), log10(5), 30);
+for k = 1:30
+  q = softmax(logits / taus_anim(k));
+  bar(1:10, q)
+  ylim([0, 1])
+  xlabel("token"); ylabel("probability")
+  title(sprintf("tau = %.2f     H = %.2f bits   (uniform = 3.32)", taus_anim(k), entropy_bits(q)))
+  frame()
+end
+saveanim("temperature_sweep.gif", 8)
+print("Saved temperature_sweep.gif");

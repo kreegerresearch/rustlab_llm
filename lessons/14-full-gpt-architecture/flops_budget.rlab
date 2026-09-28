@@ -1,0 +1,53 @@
+# Script:  flops_budget.rlab
+# System:  GPT decoder compute budget (toy config and GPT-2 small)
+# Concept: FLOPs per token from the parameter count -- about 2 per weight
+#          forward and 6 per weight per training token -- plus attention's
+#          weight-free 4 T d per layer; the crossover T* = 4 d where the
+#          score FLOPs equal the FFN's; Chinchilla token and compute budgets.
+# Equations:
+#   fwd  ~= 2 (N n_block + d V)       train ~= 3 fwd
+#   attn  = 4 T d N                   T* : 4 T d = 16 d^2  =>  T* = 4 d
+#   D ~= 20 P tokens,  C ~= 6 P D FLOPs
+# Units:   FLOPs (floating-point operations), parameters, tokens
+
+# === Parameter counts (same formula as param_count.rlab) ===
+function n = block_params(d_model, d_ff)
+  n = 4 * d_model * d_model + 2 * d_model * d_ff + (d_ff + d_model) + 4 * d_model;
+end
+
+# === Toy config: V=50, T=8, d=64, N=4 ===
+vocab = 50;  T = 8;  d_model = 64;  N_blocks = 4;  d_ff = 4 * d_model;
+n_blocks_total = N_blocks * block_params(d_model, d_ff);
+n_total = vocab * d_model + n_blocks_total + 2 * d_model + d_model * vocab;
+f_fwd_toy   = 2 * (n_blocks_total + d_model * vocab);
+f_attn_toy  = 4 * T * d_model * N_blocks;
+print("toy: params", n_total, "  forward FLOPs/token", f_fwd_toy, "  training", 3 * f_fwd_toy);
+print("toy: attention-score FLOPs/token at T =", T, ":", f_attn_toy, " =", f_attn_toy / f_fwd_toy * 100, "% of forward");
+print("toy: crossover T* = 4 d =", 4 * d_model);
+
+# === GPT-2 small: V=50257, d=768, N=12, T_max=1024, weight-tied ===
+vocab_gpt2 = 50257;  d_gpt2 = 768;  N_gpt2 = 12;  T_max_gpt2 = 1024;
+n_block_gpt2 = block_params(d_gpt2, 4 * d_gpt2);
+P_gpt2 = vocab_gpt2 * d_gpt2 + T_max_gpt2 * d_gpt2 + N_gpt2 * n_block_gpt2 + 2 * d_gpt2;
+f_fwd_gpt2  = 2 * (N_gpt2 * n_block_gpt2 + d_gpt2 * vocab_gpt2);
+f_attn_gpt2 = 4 * T_max_gpt2 * d_gpt2 * N_gpt2;
+print("GPT-2 small: params", P_gpt2, "  forward FLOPs/token", f_fwd_gpt2, "  training", 3 * f_fwd_gpt2);
+print("GPT-2 small: attention-score FLOPs/token at T = 1024:", f_attn_gpt2, " =", f_attn_gpt2 / f_fwd_gpt2 * 100, "% of forward");
+print("GPT-2 small: crossover T* = 4 d =", 4 * d_gpt2);
+
+# === Chinchilla budgets: D ~= 20 P tokens, C ~= 6 P D FLOPs ===
+D_gpt2 = 20 * P_gpt2;
+print("GPT-2 small: Chinchilla tokens D ≈", D_gpt2, "  training compute C ≈", sprintf("%.2e", 6 * P_gpt2 * D_gpt2), "FLOPs");
+
+# === Attention share of forward FLOPs vs context length (GPT-2 dims) ===
+T_grid = logspace(1, 5.2, 60);
+share = (4 * T_grid * d_gpt2 * N_gpt2) ./ (f_fwd_gpt2 + 4 * T_grid * d_gpt2 * N_gpt2);
+figure();
+semilogx(T_grid, share * 100, "color", "blue", "label", "attention share (%)")
+hold("on")
+hline(50, "gray", "50 %: attention scores = everything else")
+hold("off")
+title("share of forward FLOPs spent on attention scores, GPT-2 small dims")
+xlabel("context length T")
+ylabel("% of forward FLOPs")
+savefig("flops_budget.svg")

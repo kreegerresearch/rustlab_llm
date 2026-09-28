@@ -1,0 +1,77 @@
+# Script:  averaging_as_fir.rlab
+# System:  Prefix averaging read as a causal, time-varying FIR filter along the token axis
+# Concept: Row t of the averaging matrix W is the impulse response observed at output
+#          time t (t taps of 1/t). The exponential moving average is its one-pole IIR
+#          cousin. Freezing the window gives an LTI filter whose frequency response is a
+#          low-pass: "smoother" means "low-pass". Both have a first-order recursive form.
+# Equations: x̄_t = sum_{i<=t} W[t,i] x_i;   W_ema[t,i] = (1-g) g^(t-i) / (1 - g^t)
+#            x̄_t = x̄_{t-1} + (x_t - x̄_{t-1}) / t;   y_t = g y_{t-1} + (1-g) x_t
+# Units:     taps dimensionless (rows sum to 1); frequency in cycles per token (Nyquist = 0.5)
+
+# === The Averaging Matrix as a Bank of Impulse Responses ===
+T = 6;
+d = 4;
+W = cumsum(eye(T), 1) ./ repmat((1:T)', 1, T);   # W[t,i] = 1/t for i <= t
+print("Row 2 of W (impulse response at t = 2):", W(2, :));
+print("Row 6 of W (impulse response at t = 6):", W(6, :));
+
+figure();
+rows_to_show = [2, 4, 6];
+for k = 1:3
+  t = rows_to_show(k);
+  subplot(1, 3, k)
+  stem(1:T, W(t, :))
+  title(sprintf("row %d of W: %d taps of 1/%d", t, t, t))
+  xlabel("input time i")
+  ylim([0, 0.6])
+end
+savefig("impulse_responses.svg")
+print("Saved impulse_responses.svg");
+
+# === The EMA: a One-Pole IIR, Renormalised over the Available Window ===
+gamma = 0.8;
+W_ema = zeros(T, T);
+for t = 1:T
+  for i = 1:t
+    W_ema(t, i) = (1 - gamma) * gamma ^ (t - i) / (1 - gamma ^ t);
+  end
+end
+print("W_ema row 6 =", W_ema(6, :), "  row sum =", sum(W_ema(6, :)));
+print("EMA pole z = gamma =", gamma, "  time constant -1/ln(gamma) =", -1 / log(gamma), "tokens");
+
+# === Recursive (State-Space) Forms ===
+X = [1, 0, 0, 0; 0, 1, 0, 0; 0, 0, 1, 0; 0, 0, 0, 1; 1, 1, 0, 0; 0, 0, 1, 1];
+X_bar_rec = zeros(T, d);
+x_bar = zeros(1, d);
+for t = 1:T
+  x_bar = x_bar + (X(t, :) - x_bar) / t;      # gain 1/t -> 0: the state stops responding
+  X_bar_rec(t, :) = x_bar;
+end
+print("max|recursion - W*X| (should be ~0):", max(reshape(abs(X_bar_rec - W * X), 1, T * d)));
+print("running-mean gains 1/t:", 1 ./ (1:T), "   EMA gain (1 - gamma):", 1 - gamma);
+
+# === Frequency Response: T-tap Box vs One-Pole IIR ===
+n_f = 256;
+h_box = ones(1, T) / T;                        # row T of W
+h_ema = (1 - gamma) * gamma .^ (0:63);         # IIR impulse response, truncated (gamma^64 < 1e-6)
+R_box = freqz(h_box, n_f, 1.0);                # row 1: f in cycles/token; row 2: complex H(f)
+R_ema = freqz(h_ema, n_f, 1.0);
+f = real(R_box(1, :));
+H_box = abs(R_box(2, :));
+H_ema = abs(R_ema(2, :));
+print("|H(0)| box, EMA (unit DC gain because rows sum to 1):", H_box(1), H_ema(1));
+print("box first null at 1/T =", 1 / T, " cycles/token");
+print("EMA gain at Nyquist (1-g)/(1+g) =", (1 - gamma) / (1 + gamma), "  measured", H_ema(end));
+
+figure();
+plot(f, H_box, "color", "blue", "label", "6-tap box")
+hold("on")
+plot(f, H_ema, "color", "red", "label", "EMA, gamma = 0.8")
+hline(1 / sqrt(2), "gray", "-3 dB")
+hold("off")
+title("|H(f)| of the frozen-window box vs the one-pole EMA")
+xlabel("frequency (cycles / token)")
+ylabel("|H(f)|")
+legend("6-tap box", "EMA, gamma = 0.8", "-3 dB")
+savefig("box_vs_ema_freqz.svg")
+print("Saved box_vs_ema_freqz.svg");

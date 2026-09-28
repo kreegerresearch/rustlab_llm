@@ -1,7 +1,7 @@
 # Script:  embedding_matrix.rlab
 # System:  Token embedding lookup via a learned embedding matrix
-# Concept: E in R^(|V| x d); one-hot lookup selects a dense row vector
-# Equations: h = E^T * e_i  =  E_i  (row i of the embedding matrix)
+# Concept: E in R^(|V| x d); a one-hot row vector times E selects one dense row
+# Equations: h = e_i * E = E(i, :)   (row convention: tokens are rows)
 # Units:     Embedding values are dimensionless real numbers; no physical units
 
 # === Parameters ===
@@ -11,7 +11,7 @@ d_embed    = 6;   # embedding dimension (d << vocab_size in practice)
 # === Random Embedding Matrix Initialisation ===
 # At the start of training, embeddings are drawn from a small normal distribution.
 # Scale by 0.1 so initial activations are not too large (standard practice).
-# seed the shared RNG so the draw is deterministic (matches the notebook).
+# Seed the shared RNG so the draw is deterministic (matches the notebook).
 seed(42);
 E = randn(vocab_size, d_embed) * 0.1;
 
@@ -20,14 +20,12 @@ print(size(E));
 print(E);
 
 # === Embedding Lookup via One-Hot Multiply ===
-# Token index 3  →  one-hot vector e3 = [0,0,1,0,0,0,0,0]
-# h = X * E  where X is the one-hot row vector
-# Result should equal row 3 of E exactly.
+# Token id 3  →  one-hot row vector e3 = [0,0,1,0,0,0,0,0]
+# h = e3 * E  (1x8 * 8x6 = 1x6) should equal row 3 of E exactly.
+e3 = [0, 0, 1, 0, 0, 0, 0, 0];
+h3 = e3 * E;
 
-e3 = [0, 0, 1, 0, 0, 0, 0, 0];    # one-hot for token index 3
-h3 = e3 * E;                        # 1x8 * 8x6 = 1x6  (embedding lookup)
-
-print("One-hot vector for token 3:");
+print("One-hot row vector for token 3:");
 print(e3);
 print("Embedded representation of token 3  (= row 3 of E):");
 print(h3);
@@ -36,13 +34,12 @@ print(E(3, :));
 
 # === Verify: lookup result equals the row ===
 # E(3, :) is row 3 of E; E(3) would be a single column-major scalar element.
-# Max absolute difference should be 0 (one-hot multiply reproduces the row).
 diff = max(abs(h3 - E(3, :)));
-print("Max difference between lookup and direct row access (should be ~0):", diff);
+print("Max difference between lookup and direct row access (should be 0):", diff);
 
-# === Heatmap of Embedding Matrix ===
-# Rows = tokens (1..vocab_size), Columns = embedding dimensions (1..d_embed)
-# At random init all rows look similar; after training clusters would appear.
+# === Heatmap of Embedding Matrix (signed values) ===
+# Rows = tokens 1..vocab_size, columns = embedding dimensions 1..d_embed.
+# At random init there is no structure; after training, related tokens' rows align.
 tok_labels = {"tok1", "tok2", "tok3", "tok4", "tok5", "tok6", "tok7", "tok8"};
 dim_labels = {"d1", "d2", "d3", "d4", "d5", "d6"};
 figure();

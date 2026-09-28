@@ -85,20 +85,20 @@ x_bar_3_expected = [1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0, 0.0];
 print("Expected x̄_3 = [1/3, 1/3, 1/3, 0]:", x_bar_3_expected);
 print("Computed x̄_3:", X_bar_mm(3, :));
 
-# === Plot: Averaging Matrix W ===
-figure();
-imagesc(W, "viridis")
-title("Causal Averaging Matrix W (T=6) — lower-triangular, row t = 1/t")
-savefig("averaging_matrix.svg")
-print("Saved averaging_matrix.svg");
+# === Read Row 6 Back ===
+# Rows 5 and 6 of X were x1+x2 and x3+x4, so the six rows sum to [2,2,2,2]
+# and x̄_6 = [1/3, 1/3, 1/3, 1/3]: perfectly flat — order and identity gone.
+print("Computed x̄_6 (flat: every feature equally present):", X_bar_mm(6, :));
 
-# === Plot: Input vs Averaged Embeddings (side by side) ===
+# === Plot: X | W | X̄ side by side (labelled axes) ===
+positions = {"t1", "t2", "t3", "t4", "t5", "t6"};
+dims = {"d1", "d2", "d3", "d4"};
 figure();
-subplot(1, 2, 1)
-imagesc(X, "viridis")
-title("Input Embeddings X (distinct per token)")
-subplot(1, 2, 2)
-imagesc(X_bar_mm, "viridis")
-title("Prefix Averages X̄ = W*X (smoother; each row mixes all earlier tokens)")
+subplot(1, 3, 1)
+heatmap(dims, positions, X, "Input X (rows: tokens, cols: features)", "viridis")
+subplot(1, 3, 2)
+heatmap(positions, positions, W, "W (rows: output time t, cols: input time i)", "viridis")
+subplot(1, 3, 3)
+heatmap(dims, positions, X_bar_mm, "Prefix averages X_bar = W X", "viridis")
 savefig("prefix_averages.svg")
 print("Saved prefix_averages.svg");
