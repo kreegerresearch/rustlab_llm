@@ -1,5 +1,5 @@
 # Script:  kv_cache.rlab
-# System:  Single-head causal-attention block (d_model=4, T_max=8) — a
+# System:  Single-head causal-attention block (d_head=4, T_max=8) — a
 #          deliberately tiny stand-in for one transformer layer.  Runs
 #          generation two ways:
 #            (a) naive  — recompute Q,K,V for ALL positions at every step
@@ -28,15 +28,15 @@
 # === 1. Setup: tiny model ===
 seed(21);
 vocab = 6;
-d_model = 4;
+d_head = 4;
 T_max = 8;
 
 # Token + position embeddings, single set of attention weights.
-E_tok = randn(vocab, d_model) * 0.3;
-E_pos = randn(T_max, d_model) * 0.3;
-Wq = randn(d_model, d_model) * 0.3;
-Wk = randn(d_model, d_model) * 0.3;
-Wv = randn(d_model, d_model) * 0.3;
+E_tok = randn(vocab, d_head) * 0.3;
+E_pos = randn(T_max, d_head) * 0.3;
+Wq = randn(d_head, d_head) * 0.3;
+Wk = randn(d_head, d_head) * 0.3;
+Wv = randn(d_head, d_head) * 0.3;
 
 # A fixed token sequence for the test — pretend the LM already decided these.
 tokens = [1, 4, 2, 5, 3, 6, 2, 1];
@@ -102,12 +102,12 @@ end
 
 # === 5. Run both and compare ===
 T_run = T_max;
-naive_out  = zeros(T_run, d_model);
-cached_out = zeros(T_run, d_model);
+naive_out  = zeros(T_run, d_head);
+cached_out = zeros(T_run, d_head);
 naive_flops_step = zeros(T_run);
 cached_flops_step = zeros(T_run);
-K_cache = zeros(0, d_model);
-V_cache = zeros(0, d_model);
+K_cache = zeros(0, d_head);
+V_cache = zeros(0, d_head);
 
 for t = 1:T_run
   [n_row, n_f] = naive_step(tokens, t, E_tok, E_pos, Wq, Wk, Wv);

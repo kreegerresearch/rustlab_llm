@@ -9,7 +9,7 @@
 #   h_t      = E(x_t, :)                          (row gather)
 #   p_t      = softmax(h_t * W)                    (next-token distribution)
 #   x_{t+1}  = argmax_i p_t(i)                     (greedy)
-#       or   = sample_i ~ Categorical(p_t / T)     (temperature T)
+#       or   = sample_i ~ Categorical(softmax(z_t / tau))   (temperature tau)
 # Units:   parameters dimensionless; loss in nats.
 
 # Shared code: the Lesson 18 trainer and the Lesson 21 sampling helpers.
@@ -71,37 +71,44 @@ greedy_seq_b = greedy_generate(2, 12, E, W);
 print("greedy from 'b':", seq_to_str(greedy_seq_b, names));
 
 # === 4. Temperature sampling ===
-# Reshape logits by 1/T before softmax.  T=1 is the trained distribution;
-# T<1 sharpens (greedy as T -> 0); T>1 flattens (uniform as T -> infinity).
+# Reshape logits by 1/tau before softmax.  tau=1 is the trained distribution;
+# tau<1 sharpens (greedy as tau -> 0); tau>1 flattens (uniform as tau -> inf).
+# NOTE: on this model the only uncertain row, P(.|b), has two TIED logits, and
+# a tie is invariant under tau -- so the three samples below are statistically
+# the same process.  See temperature_sweep.rlab for a vector tau does reshape.
 # The draw itself is sample_categorical(p) from lib/sampling.rlab: inverse-CDF
 # sampling that walks the cumulative distribution until it crosses r ~ U[0,1).
-function seq = temperature_generate(x0, n_new, E, W, T_temp)
+function seq = temperature_generate(x0, n_new, E, W, tau)
   seq = zeros(n_new + 1);
   seq(1) = x0;
   for t = 1:n_new
     logits = E(seq(t), :) * W;
-    p = softmax(logits / T_temp);
+    p = softmax(logits / tau);
     seq(t + 1) = sample_categorical(p);
   end
 end
 
 seed(42);
-print("T=0.5 from 'a':", seq_to_str(temperature_generate(1, 12, E, W, 0.5), names));
-print("T=1.0 from 'a':", seq_to_str(temperature_generate(1, 12, E, W, 1.0), names));
-print("T=2.0 from 'a':", seq_to_str(temperature_generate(1, 12, E, W, 2.0), names));
+print("tau=0.5 from 'a':", seq_to_str(temperature_generate(1, 12, E, W, 0.5), names));
+print("tau=1.0 from 'a':", seq_to_str(temperature_generate(1, 12, E, W, 1.0), names));
+print("tau=2.0 from 'a':", seq_to_str(temperature_generate(1, 12, E, W, 2.0), names));
 
 # === 5. Plot: P(. | b) at three temperatures ===
-# 'b' has the most interesting distribution (split between 'a' and 'c').
+# 'b' is the only row with any uncertainty (split between 'a' and 'c'), and
+# its two live logits are tied, so the three bar triples are identical:
+# temperature scales logit *gaps* and a tie has none.
 logits_b = E(2, :) * W;
+print("logits at 'b':", logits_b);
 p_05 = softmax(logits_b / 0.5);
 p_10 = softmax(logits_b / 1.0);
 p_20 = softmax(logits_b / 2.0);
+print("P(.|b) at tau = 0.5 / 1 / 2:", p_05, p_10, p_20, " (identical: the tie is tau-invariant)");
 
 figure();
 bar([p_05; p_10; p_20]')
-title("P(. | b) at three temperatures: T=0.5 sharpens, T=2.0 flattens")
+title("P(. | b) at tau = 0.5, 1, 2: the tied pair does not move")
 xlabel("token (1=a, 2=b, 3=c)")
 ylabel("probability")
-legend("T=0.5", "T=1.0", "T=2.0")
+legend("tau=0.5", "tau=1.0", "tau=2.0")
 savefig("generation_loop.svg")
 print("Saved generation_loop.svg");

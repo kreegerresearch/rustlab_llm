@@ -3,9 +3,11 @@
 #          from Lesson 18.  PPL = exp(L) plotted alongside the loss curve.
 # Concept: PPL is just exp(L) and inherits L's training-curve shape; it
 #          adds the unit "effective branching factor" so endpoints (3 at
-#          init, 1.4 at the bigram floor) read directly off the y-axis.
+#          init, sqrt(2) at the optimal-bigram floor) read directly off a
+#          log y-axis, where the floors are horizontal lines.  The notebook
+#          carries the same loop inline; lib/bigram_lm.rlab packages it.
 # Equations:
-#   forward / backward identical to lesson 18 train_loop.r
+#   forward / backward identical to lesson 18 train_loop.rlab
 #   L(t) = mean cross-entropy at step t
 #   PPL(t) = exp(L(t))
 # Units:   PPL dimensionless; loss in nats.
@@ -115,28 +117,30 @@ PPL_val   = exp(L_val);
 
 print("Final train PPL:", PPL_train(n_train + 1));
 print("Final val   PPL:", PPL_val(n_train + 1));
-print("Bigram floor (Lesson 05): exp(0.347) =", exp(0.347));
-# The final train PPL (~1.4042) sits just BELOW the 1.4148 population floor
+print("Optimal-bigram floor (Lesson 05): 2^0.5 = sqrt(2) =", sqrt(2));
+# The final train PPL (~1.4042) sits just BELOW the sqrt(2) population floor
 # because it is measured on the finite training sample: only 24 of the 49
 # training pairs start from the ambiguous state b, so the empirical entropy is
-# 24*ln2/49 = 0.33950 nats and the empirical PPL floor is exp(0.33950) =
-# 1.40425 -- exactly what the run converges to.  1.4148 is the true-distribution
-# floor no Markov-1 model can beat; the finite empirical sample can sit under it.
-print("Empirical train floor: exp(24*ln2/49) =", exp(24 * log(2) / 49));
+# 24*ln2/49 = 0.33950 nats and the empirical train floor is exp(0.33950) =
+# 1.40425 -- exactly what the run converges to.  The 9 held-out pairs contain
+# 5 b-transitions, so their floor is exp(5*ln2/9) = 1.4701, again exactly
+# where the held-out curve lands.  sqrt(2) is the population floor no Markov-1
+# model can beat; a finite sample can sit on either side of it.
+print("Empirical train floor   : exp(24*ln2/49) =", exp(24 * log(2) / 49));
+print("Empirical held-out floor: exp(5*ln2/9)   =", exp(5 * log(2) / 9));
 
-# === Plot 1: PPL curves ===
+# === Plot 1: PPL curves on a log axis with both floors ===
 figure();
 steps = 0:n_train;
-plot(steps, PPL_train, "color", "red",  "label", "train PPL")
+semilogy(steps, PPL_train, "color", "red",  "label", "train")
 hold("on")
-plot(steps, PPL_val,   "color", "blue", "label", "val PPL")
-hline(3.0,            "gray", "uniform PPL = 3")
-hline(exp(0.347),     "gray", "bigram PPL ≈ 1.41")
+semilogy(steps, PPL_val,   "color", "blue", "label", "held-out")
+yline(3.0,     "gray",  "uniform reference = 3")
+yline(sqrt(2), "black", "optimal-bigram floor = 1.414")
 hold("off")
-title("Train / val perplexity over training")
+title("Train / held-out perplexity over training (log axis)")
 xlabel("step")
 ylabel("PPL")
-legend("train", "val")
 savefig("perplexity_curve.svg")
 print("Saved perplexity_curve.svg");
 

@@ -1,0 +1,46 @@
+# Script:  encode_decode.rlab
+# System:  Character-level tokenisation of a text corpus
+# Concept: Vocabulary construction, the encode/decode round trip, and the
+#          relative character frequencies counted from the id sequence
+# Equations: encode: V -> {1..|V|};  decode = encode^-1;  f_i = c_i / sum(c)
+# Units:   ids are dimensionless integers; frequencies are probabilities summing to 1
+
+# === Corpus and Vocabulary ===
+corpus = "to be or not to be";
+chars  = {" ", "b", "e", "n", "o", "r", "t"};   # sorted unique characters
+vocab_size = length(chars);
+T = length(corpus);
+print("Corpus: '" + corpus + "'");
+print("T =", T, " |V| =", vocab_size);
+
+# === Encode: ids(t) = position of corpus(t) in the vocabulary ===
+ids = zeros(T);
+for t = 1:T
+  j = 1;
+  while j < vocab_size && corpus(t) != chars(j)
+    j = j + 1;
+  end
+  ids(t) = j;
+end
+
+# === Decode: concatenate the vocabulary entry for each id ===
+decoded = "";
+id_str  = "";
+for t = 1:T
+  decoded = decoded + chars(ids(t));
+  id_str  = id_str + sprintf("%d ", ids(t));
+end
+print("ids:     ", id_str);
+print("decoded: '" + decoded + "'");
+print("round trip exact:", decoded == corpus);
+
+# === Counts and Relative Frequencies from the ids ===
+counts = zeros(vocab_size);
+for t = 1:T
+  counts(ids(t)) = counts(ids(t)) + 1;
+end
+freqs = counts / sum(counts);
+print("Character counts (space, b, e, n, o, r, t):", counts);
+print("Relative frequencies:", freqs);
+print("Sum of frequencies (should be 1.0):", sum(freqs));
+print("Highest frequency (space, 5/18):", max(freqs));

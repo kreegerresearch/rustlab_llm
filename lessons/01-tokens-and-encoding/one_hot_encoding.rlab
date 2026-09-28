@@ -1,55 +1,48 @@
 # Script:  one_hot_encoding.rlab
 # System:  One-hot encoding of a character sequence
-# Concept: Mapping token indices to orthogonal basis vectors in R^|V|
-# Equations: (e_i)_j = 1 if j == i, else 0;  e_i · e_j = delta_ij
+# Concept: Mapping token ids to standard basis vectors in R^|V|; stacking them into X
+# Equations: (e_i)_j = 1 if j == i, else 0;  e_i · e_j = delta_ij;  X = I(ids, :);  X * I = X
 # Units:   Binary matrix entries (0 or 1); no physical units
 
-# === Vocabulary ===
-# Encoding "hello" with vocabulary {e:1, h:2, l:3, o:4}
-# vocab_size = 4 (four unique characters)
-vocab_size = 4;
+# === Vocabulary and ids for "to be or not to be" ===
+# Vocabulary (sorted): ' '=1, 'b'=2, 'e'=3, 'n'=4, 'o'=5, 'r'=6, 't'=7
+# ids come from encode_decode.rlab
+vocab_size = 7;
+ids = [7, 5, 1, 2, 3, 1, 5, 6, 1, 4, 5, 7, 1, 7, 5, 1, 2, 3];
+T = length(ids);
 
-# === One-Hot Rows (each row is a basis vector in R^4) ===
-# e → index 1 → [1, 0, 0, 0]
-# h → index 2 → [0, 1, 0, 0]
-# l → index 3 → [0, 0, 1, 0]
-# o → index 4 → [0, 0, 0, 1]
+# === One-hot rows: e_i is row i of the identity ===
+I = eye(vocab_size);
+X = I(ids, :);                    # row t of X is e_{ids(t)}
 
-oh_e = [1, 0, 0, 0];
-oh_h = [0, 1, 0, 0];
-oh_l = [0, 0, 1, 0];
-oh_o = [0, 0, 0, 1];
-
-# === Sequence Matrix X ∈ {0,1}^(T × |V|) ===
-# "hello" encodes as token sequence [h, e, l, l, o] → [2, 1, 3, 3, 4]
-# Stack one-hot rows:  row 1 = h, row 2 = e, row 3 = l, row 4 = l, row 5 = o
-X = [oh_h; oh_e; oh_l; oh_l; oh_o];
-
-print("One-hot matrix X for 'hello'  (5 tokens × 4 vocab):");
+print("One-hot matrix X for 'to be or not to be'  (18 tokens x 7 slots):");
 print(X);
 print("Shape (rows=tokens, cols=vocab_size):", size(X));
+print("Fraction of non-zero entries (= 1/|V|):", sum(sum(X)) / (T * vocab_size));
 
-# === Verify: each row sums to 1 (exactly one active character per token) ===
-# Row sums — computed as X * ones(4) (matrix-vector product)
+# === Verify: each row sums to 1 (exactly one active slot per token) ===
 row_sums = X * ones(vocab_size)';
 print("Row sums (each must equal 1):");
 print(row_sums);
 
-# === Verify: orthogonality — e_h · e_e = 0, e_l · e_l = 1 ===
-dot_h_e = sum(oh_h .* oh_e);
-dot_l_l = sum(oh_l .* oh_l);
-print("Dot product h · e (should be 0):", dot_h_e);
-print("Dot product l · l (should be 1):", dot_l_l);
+# === Verify: orthogonality — e_t · e_o = 0, e_t · e_t = 1 ===
+e_t = I(7, :);
+e_o = I(5, :);
+print("Dot product t · o (should be 0):", sum(e_t .* e_o));
+print("Dot product t · t (should be 1):", sum(e_t .* e_t));
+
+# === Lookup teaser: X * M selects rows of M (Lesson 04 uses M = E) ===
+lookup_diff = max(max(abs(X * eye(vocab_size) - X)));
+print("max|X * eye(|V|) - X| (should be 0):", lookup_diff);
 
 # === Heatmap ===
-# Bright = 1 (active character), dark = 0 (inactive)
-# Labelled axes turn the picture into the encoding itself: each row is the
-# token at that sequence position, and the bright cell sits in the column
-# for that character.
-vocab    = {"e", "h", "l", "o"};
-sequence = {"h", "e", "l", "l", "o"};
+# Bright = 1 (active slot), dark = 0.  Rows are labelled with the character
+# at each position, columns with the vocabulary slot, so the bright cell on
+# each row sits under the column for that character.
+labels = {"␣", "b", "e", "n", "o", "r", "t"};
+seq_labels = labels(ids);
 
 figure();
-heatmap(vocab, sequence, X, "One-Hot Matrix: 'hello' (5 tokens x 4 vocab)", "viridis")
+heatmap(labels, seq_labels, X, "One-Hot Matrix X: 'to be or not to be' (18 tokens x 7 slots)", "viridis")
 savefig("one_hot_matrix.svg")
 print("Saved one_hot_matrix.svg")

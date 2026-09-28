@@ -1,0 +1,133 @@
+# Script:  bpe_coding_cost.rlab
+# System:  BPE as a compression algorithm — the corpus priced in bits
+# Concept: Run the full merge schedule (35 -> 1 token) and compare the coding cost of
+#          the corpus under ASCII, a fixed-width code, the order-0 entropy bound,
+#          Huffman, and BPE with k merges charged at minimum description length
+#          (data + merge table).  The minimum over k is the MDL-optimal vocabulary.
+# Equations: bits_data(k)  = N_k * ceil(log2 |V_k|)
+#            bits_table(k) = 2 k * ceil(log2 |V_k|)      (two ids per merge)
+#            order-0 bound = N_char * H(chars);  N_tok * H_tok vs N_char * H_char
+# Units:     bits; token counts dimensionless; entropies in bits per symbol
+
+run "../../lib/info.rlab"
+
+# === Corpus: "abracadabra abracadabra abracadabra" ===
+# Initial vocab:  a=1  b=2  c=3  d=4  r=5  ' '=6
+seq = [1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1, ...
+       6, ...
+       1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1, ...
+       6, ...
+       1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1];
+vocab_size = 6;
+N_char = length(seq);
+
+# === BPE primitives (same as bpe_train.rlab) ===
+function out = apply_merge(seq, a, b, new_id)
+  L = length(seq);
+  buf = zeros(L);
+  k = 1;
+  i = 1;
+  while i <= L
+    if i < L && seq(i) == a && seq(i + 1) == b
+      buf(k) = new_id;
+      k = k + 1;
+      i = i + 2;
+    else
+      buf(k) = seq(i);
+      k = k + 1;
+      i = i + 1;
+    end
+  end
+  out = buf(1:(k - 1));
+end
+
+function r = bpe_step(seq, vocab_size)
+  V = vocab_size;
+  counts = zeros(V, V);
+  for i = 1:(length(seq) - 1)
+    counts(seq(i), seq(i + 1)) = counts(seq(i), seq(i + 1)) + 1;
+  end
+  idx    = argmax(reshape(counts, 1, V * V));
+  best_a = mod(idx - 1, V) + 1;
+  best_b = floor((idx - 1) / V) + 1;
+  new_id = V + 1;
+  r = struct("seq", apply_merge(seq, best_a, best_b, new_id), ...
+             "a", best_a, "b", best_b, "count", counts(best_a, best_b), "vocab", new_id);
+end
+
+# === Full merge schedule: record N_k for k = 0..10 ===
+K = 10;
+N_k = zeros(K + 1);
+N_k(1) = N_char;
+cur_seq = seq;
+cur_vocab = vocab_size;
+for k = 1:K
+  step = bpe_step(cur_seq, cur_vocab);
+  N_k(k + 1) = length(step.seq);
+  if k == 5
+    seq_5 = step.seq;
+  end
+  cur_seq = step.seq;
+  cur_vocab = step.vocab;
+end
+print("Sequence length N_k for k = 0..10 merges:", N_k);
+
+# === Baselines: ASCII, fixed width, order-0 bound, Huffman ===
+c_char = zeros(vocab_size);
+for i = 1:vocab_size
+  c_char(i) = sum(seq == i);
+end
+p_char = c_char / N_char;
+H_char = entropy_bits(p_char);
+bits_ascii  = 8 * N_char;
+bits_fixed  = ceil(log2(vocab_size)) * N_char;
+bits_order0 = N_char * H_char;
+huff_len    = [1, 3, 3, 4, 3, 4];             # a b c d r _ — one valid Huffman tree, run by hand
+bits_huff   = sum(c_char .* huff_len);
+print("char counts a b c d r _ :", c_char, "  H(chars) =", H_char, "bits/char");
+print("ASCII        :", bits_ascii, "bits");
+print("fixed 3-bit  :", bits_fixed, "bits");
+print("order-0 bound:", bits_order0, "bits   Huffman:", bits_huff, "bits");
+
+# === BPE at minimum description length: data + merge table ===
+kk         = 0:K;
+V_k        = vocab_size + kk;
+w_k        = ceil(log2(V_k));
+bits_data  = N_k .* w_k;
+bits_table = 2 * kk .* w_k;
+bits_total = bits_data + bits_table;
+[bits_min, k_min] = min(bits_total);
+k_star = k_min - 1;
+print("BPE data bits  (k = 0..10):", bits_data);
+print("BPE table bits (k = 0..10):", bits_table);
+print("BPE total      (k = 0..10):", bits_total);
+print("minimum", bits_min, "bits at k* =", k_star, "merges (|V| =", vocab_size + k_star, ")");
+
+# === Order-0 entropies over characters vs over tokens (five merges) ===
+N_tok = length(seq_5);
+p_tok = zeros(vocab_size + 5);
+for i = 1:(vocab_size + 5)
+  p_tok(i) = sum(seq_5 == i) / N_tok;
+end
+H_tok = entropy_bits(p_tok);
+print("characters: N =", N_char, "  H =", H_char, "  N*H =", N_char * H_char, "bits   bits/char =", H_char);
+print("BPE tokens: N =", N_tok, "  H =", H_tok, "  N*H =", N_tok * H_tok, "bits   bits/char =", N_tok * H_tok / N_char);
+print("compression ratio N_char/N_tok =", N_char / N_tok);
+
+# === Figure: sequence length vs |V| and total bits vs k ===
+figure();
+subplot(1, 2, 1)
+plot(V_k, N_k, "color", "blue", "label", "N_k")
+title("Sequence length vs vocabulary size")
+xlabel("|V_k| = 6 + k"); ylabel("tokens in corpus")
+subplot(1, 2, 2)
+hold("on")
+plot(kk, bits_total, "color", "blue", "label", "data + merge table")
+plot(kk, bits_data, "color", "green", "label", "data only")
+yline(bits_order0, "gray", "order-0 bound")
+legend("data + merge table", "data only")
+title("Total bits vs number of merges")
+xlabel("merges k"); ylabel("bits")
+hold("off")
+savefig("bpe_coding_cost.svg")
+print("Saved bpe_coding_cost.svg");

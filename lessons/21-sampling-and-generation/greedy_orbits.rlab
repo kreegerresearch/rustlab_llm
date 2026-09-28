@@ -1,0 +1,65 @@
+# Script:  greedy_orbits.rlab
+# System:  Greedy decoding of the trained Lesson 18 bigram viewed as an
+#          autonomous map on its 3-element state space {a, b, c}; the KV
+#          cache viewed as the state of the generation loop.
+# Concept: A Markov-k model under greedy decoding is a deterministic map on
+#          |V|^k states, so every orbit is eventually periodic with transient
+#          + period <= |V|^k.  For the bigram (3 states) "abab..." is the only
+#          long-run behaviour from every start.  The generation loop is a
+#          closed loop with unit delay whose state -- the KV cache -- grows
+#          as 2 t d_head numbers per head per layer.
+# Equations:
+#   x_{t+1} = argmax_i P(i | x_t)                        (autonomous map)
+#   x_{t+1} = g(f_theta(x_{1:t}), eps_t)                 (closed loop, unit delay)
+#   KV state at step t = 2 * t * d_head per head per layer
+# Units:   tokens are 1-based ids; state sizes in numbers (fp16 = 2 bytes).
+
+run "../../lib/bigram_lm.rlab"
+
+# === 1. Train the model ===
+seed(18);
+pat = [1, 2, 3, 2];
+corpus = zeros(60);
+for i = 1:60
+  corpus(i) = pat(mod(i - 1, 4) + 1);
+end
+[E, W] = train_bigram_lm(corpus(1:50), 3, 4, 600, 0.15, 0.015, 60);
+
+names = {"a", "b", "c"};
+function s = seq_to_str(seq, names)
+  s = "";
+  for i = 1:length(seq)
+    s = s + names(seq(i));
+  end
+end
+
+# === 2. The argmax map and its orbits from every start ===
+function nxt = argmax_step(x, E, W)
+  nxt = argmax(softmax(E(x, :) * W));
+end
+for s = 1:3
+  print("argmax map:", names(s), "->", names(argmax_step(s, E, W)));
+end
+for s = 1:3
+  orbit = zeros(9);  orbit(1) = s;
+  for t = 1:8
+    orbit(t + 1) = argmax_step(orbit(t), E, W);
+  end
+  j = 8;                                   # previous visit of the final state
+  while j >= 1 && orbit(j) != orbit(9)
+    j = j - 1;
+  end
+  print("orbit from", names(s), ":", seq_to_str(orbit, names), "  period", 9 - j);
+end
+print("bound: transient + period <= |V|^k = 3 states");
+
+# === 3. The KV cache as the loop's state: dimension grows with t ===
+d_head = 4;
+for t = [1, 2, 4, 8]
+  print("toy head (d_head = 4): KV state at t =", t, "->", 2 * t * d_head, "numbers");
+end
+L_layers = 32;  H_heads = 32;  d_head_prod = 128;
+for T_ctx = [1024, 8192]
+  n_cache = 2 * L_layers * H_heads * T_ctx * d_head_prod;
+  print("production (32 x 32 heads, d_head 128) at T =", T_ctx, ":", n_cache, "numbers =", n_cache * 2 / 1e9, "GB fp16");
+end
