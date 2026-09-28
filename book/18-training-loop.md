@@ -325,7 +325,7 @@ To add clipping to the loop above, insert two lines between the gradient accumul
 
 ```rustlab
 % --- After computing dE_avg and dW_avg, before updating m, v --- (illustrative — comments only)
-% gn = sqrt(sum(dE_avg .^ 2, "all") + sum(dW_avg .^ 2, "all"));
+% gn = sqrt(sum(sum(dE_avg .^ 2)) + sum(sum(dW_avg .^ 2)));
 % if gn > clip_c
 %   scale = clip_c / gn;
 %   dE_avg = dE_avg * scale;

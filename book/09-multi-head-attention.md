@@ -120,48 +120,24 @@ Head 4 row 4 should equal $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case 
 
 ### Example — Four head-attention heatmaps
 
-Both axes are token positions $t_1..t_T$ — labelled axes make the per-head pattern read at a glance: head 1 lights up column $t_1$, head 2 the sub-diagonal, head 3 the diagonal, head 4 every available position equally. Each head gets its own figure below (one heatmap per panel).
+Both axes are token positions $t_1..t_T$ — labelled axes make the per-head pattern read at a glance: head 1 lights up column $t_1$, head 2 the sub-diagonal, head 3 the diagonal, head 4 every available position equally. The four heads are laid out below in a 2×2 grid (one heatmap per panel).
 
 ```rustlab
-% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 positions = {"t1", "t2", "t3", "t4", "t5", "t6"};
 
 figure();
+subplot(2, 2, 1)
 heatmap(positions, positions, A1, "Head 1 — first token", "viridis")
-```
-
-<!-- rustlab:output-start -->
-![plot 1](plots/09-multi-head-attention/plot-1-75514f5b.svg)
-
-<!-- rustlab:output-end -->
-
-```rustlab
-figure();
+subplot(2, 2, 2)
 heatmap(positions, positions, A2, "Head 2 — previous token", "viridis")
-```
-
-<!-- rustlab:output-start -->
-![plot 2](plots/09-multi-head-attention/plot-2-e1686980.svg)
-
-<!-- rustlab:output-end -->
-
-```rustlab
-figure();
+subplot(2, 2, 3)
 heatmap(positions, positions, A3, "Head 3 — self", "viridis")
-```
-
-<!-- rustlab:output-start -->
-![plot 3](plots/09-multi-head-attention/plot-3-8930ef40.svg)
-
-<!-- rustlab:output-end -->
-
-```rustlab
-figure();
+subplot(2, 2, 4)
 heatmap(positions, positions, A4, "Head 4 — uniform", "viridis")
 ```
 
 <!-- rustlab:output-start -->
-![plot 4](plots/09-multi-head-attention/plot-4-f3d5b7aa.svg)
+![plot 1](plots/09-multi-head-attention/plot-1-e15b19a0.svg)
 
 <!-- rustlab:output-end -->
 
@@ -256,30 +232,22 @@ Shapes: $\mathrm{Concat} \in \mathbb{R}^{4 \times 4}$, $\mathbf{O} \in \mathbb{R
 
 ### Example — Concat and final output heatmaps
 
-Rows are still token positions; columns are now feature dimensions. The first $d_v = 2$ columns of `Concat` come from head 1, the next two from head 2. The two pipeline stages are shown in consecutive figures.
+Rows are still token positions; columns are now feature dimensions. The first $d_v = 2$ columns of `Concat` come from head 1, the next two from head 2. The two pipeline stages are shown side by side.
 
 ```rustlab
-% TODO: recombine into a subplot grid once rustlab subplot+heatmap SVG export renders all panels
 positions2 = {"t1", "t2", "t3", "t4"};
 concat_cols = {"h1.1", "h1.2", "h2.1", "h2.2"};
 out_cols    = {"d1", "d2", "d3", "d4"};
 
 figure();
+subplot(1, 2, 1)
 heatmap(concat_cols, positions2, O_concat, "Concat = [O_1, O_2]  (T × H*d_v)", "viridis")
-```
-
-<!-- rustlab:output-start -->
-![plot 5](plots/09-multi-head-attention/plot-5-01bac9c1.svg)
-
-<!-- rustlab:output-end -->
-
-```rustlab
-figure();
+subplot(1, 2, 2)
 heatmap(out_cols, positions2, O, "Final MHA output O = Concat * W_O", "viridis")
 ```
 
 <!-- rustlab:output-start -->
-![plot 6](plots/09-multi-head-attention/plot-6-e335c9ed.svg)
+![plot 2](plots/09-multi-head-attention/plot-2-15ca4af3.svg)
 
 <!-- rustlab:output-end -->
 

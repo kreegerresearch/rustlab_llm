@@ -61,8 +61,6 @@ H_heads = 4;
 d_k = d_model / H_heads;          % 16
 d_ff = 4 * d_model;               % 256
 N_blocks = 4;
-NEG_INF = -1.0e9;
-scale = 1.0 / sqrt(d_k);
 
 % --- Token embedding (|V| × d_model) ---
 E_tok = randn(vocab, d_model) * 0.1;
@@ -120,7 +118,7 @@ The lookup `E_tok(ids(t), :)` returns row `ids(t)` of the embedding matrix — a
 
 ### Example — Stack of N transformer blocks
 
-To keep the code block readable we factor one block into a helper, then run it $N$ times with $N$ independent weight sets.
+The block itself comes from the shared library `lib/transformer.rlab`: `mha_block_forward` is exactly the [Lesson 13](13-transformer-block.md) block, so this code block only builds $N$ independent weight sets and runs it $N$ times.
 
 ```rustlab
 % Run H through N independently-initialised blocks
@@ -132,7 +130,7 @@ for ell = 1:N_blocks
   W_ff1_ell = randn(d_model, d_ff)    * sqrt(2.0 / d_model);
   W_ff2_ell = randn(d_ff,    d_model) * sqrt(2.0 / d_ff);
 
-  H = block_fwd(H, W_Q_ell, W_K_ell, W_V_ell, W_O_ell, W_ff1_ell, W_ff2_ell, T, d_model, H_heads, d_k, d_ff, scale, M_mask);
+  H = mha_block_forward(H, W_Q_ell, W_K_ell, W_V_ell, W_O_ell, W_ff1_ell, W_ff2_ell, H_heads, M_mask);
 end
 
 print("H^{(N)} shape after", N_blocks, "blocks:", size(H));
@@ -153,10 +151,7 @@ The shape stays $(T, d_{\text{model}}) = (8, 64)$ across all $N$ blocks — that
 
 ```rustlab
 % Final LN (γ = 1, β = 0 here; real models learn them)
-H_f = zeros(T, d_model);
-for t = 1:T
-  H_f(t) = layernorm(H(t, :));
-end
+H_f = layernorm(H);
 
 % LM head: project (T, d_model) → (T, |V|) logits
 W_U = randn(d_model, vocab) * (1.0 / sqrt(d_model));
@@ -186,17 +181,15 @@ The full pipeline `ids → embed → +PE → N blocks → LN_f → W_U → softm
 ### Example — Logit heatmap across positions
 
 ```rustlab
-% rustlab 0.3.6 colormaps by |value|; shift so min = 0 so the render is faithful
-% (see docs/rustlab-issues-2026-07-12.md §6)
 figure();
-imagesc(logits - min(min(logits)), "viridis")
-title("Logits - min (T=8 positions × |V|=50 vocab)")
+imagesc(logits, "viridis")
+title("Logits (T=8 positions × |V|=50 vocab)")
 xlabel("vocab id")
 ylabel("position t")
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/14-full-gpt-architecture/plot-1-b7aa1253.svg)
+![plot 1](plots/14-full-gpt-architecture/plot-1-bc01386b.svg)
 
 <!-- rustlab:output-end -->
 

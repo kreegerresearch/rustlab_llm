@@ -201,7 +201,7 @@ scatter(w_path, b_path, "Gradient Descent Path in (w,b) Space - converges to (2,
 ```
 
 <!-- rustlab:output-start -->
-![plot 4](plots/06-linear-layers-and-gradient-descent/plot-4-74fc3d86.svg)
+![plot 4](plots/06-linear-layers-and-gradient-descent/plot-4-d1011024.svg)
 
 <!-- rustlab:output-end -->
 
