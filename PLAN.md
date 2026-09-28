@@ -22,7 +22,14 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 | 7 | Tokenization & Evaluation | Complete |
 | 8 | Generation & Capstone | Complete |
 | 9 | Modern Architectural Variants (post-curriculum extension) | Complete |
-| 10 | Full Backprop and Fine-Tuning (post-curriculum extension) | Complete |
+| 10 | Fine-Tuning — SFT and DPO (post-curriculum extension) | Complete |
+| 11 | Toolchain modernisation (rustlab 0.3.7), shared `lib/`, lesson renumbering | Complete |
+| 12 | Attention & transformer arc rewrite (07–14) under the three lenses | Planned — see `docs/proposal-2026-09-27-ee-controls-it-revision.md` |
+| 13 | Training as feedback control (03, 06, 15–18) | Planned |
+| 14 | Information arc (01, 02, 04, 05, 19–21) | Planned |
+| 15 | New lessons 00 and 26, late lessons, consistency pass | Planned |
+
+**Lesson numbering (since 2026-09-27, Phase 11):** `22-full-backprop-through-the-block` (was the first half of 24), `23-putting-it-all-together` (was 22), `24-modern-architectural-variants` (was 23), `25-fine-tuning-sft-and-dpo` (was the second half of 24). The capstone now comes *after* the lesson that derives the backward pass it runs on. Older handoff notes below keep their original numbers where they narrate history.
 
 ---
 
@@ -241,7 +248,8 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 
 **Lessons in this phase:**
 - `21-sampling-and-generation` (renamed from `21-sampling-strategies` — scope expanded to cover the autoregressive loop, KV cache, and logit-level controls in addition to the four sampling strategies)
-- `22-putting-it-all-together`
+- `22-full-backprop-through-the-block` (split out of the old Lesson 24 in Phase 11 so the capstone follows the backward pass it uses)
+- `23-putting-it-all-together` (was `22-putting-it-all-together` until Phase 11)
 
 **Deliverables:**
 - [x] Lesson 21 plots probability distributions under greedy, temperature (T=0.5, 1.0, 2.0), top-K (K=3), and top-P (P=0.9) on the same axes
@@ -279,7 +287,7 @@ These close the gaps surfaced by the nanoGPT / *Attention Is All You Need* cover
 **Goal:** Cover the four post-2020 architectural deltas that every open LLM (LLaMA, Mistral, Qwen, Falcon) uses against the Vaswani / GPT-2 baseline built in Phases 1–8. Each variant is a surgical swap at one component of the Lesson 14 stack.
 
 **Lessons in this phase:**
-- `23-modern-architectural-variants`
+- `24-modern-architectural-variants` (was `23-…` until Phase 11)
 
 **Deliverables:**
 - [x] Lesson 23 covers **RoPE** as a rotation matrix replacement for sinusoidal PE (Lesson 10), with a relative-position invariance demonstration.
@@ -305,7 +313,7 @@ These close the gaps surfaced by the nanoGPT / *Attention Is All You Need* cover
 **Goal:** Close the "trained end-to-end" gap left by Lesson 22 by implementing the full backward pass through the Lesson 13 single-block transformer, then apply the resulting machinery to two fine-tuning paradigms (SFT and DPO).
 
 **Lessons in this phase:**
-- `24-full-backprop-and-fine-tuning`
+- `25-fine-tuning-sft-and-dpo` (the SFT/DPO half of the old `24-full-backprop-and-fine-tuning`; the backward-pass half is now Lesson 22)
 
 **Deliverables:**
 - [x] Lesson 24 derives the chain rule through one Pre-LN block (LN, softmax row-wise, attention, residuals, FFN-with-GELU, LM head) and wires it into a single backward function.
@@ -332,10 +340,30 @@ These close the gaps surfaced by the nanoGPT / *Attention Is All You Need* cover
 
 ---
 
+## Phase 11 — Toolchain Modernisation and Ordering (2026-09-27)
+
+**Goal:** Bring the curriculum onto rustlab 0.3.7, remove every workaround the 0.3.6 era forced, factor the duplicated transformer code into a shared library, fix the reading order, and make the capstone and fine-tuning lessons execute inside their notebooks. No pedagogical rewrites — those are Phases 12–15 in `docs/proposal-2026-09-27-ee-controls-it-revision.md`.
+
+**Deliverables:**
+- [x] `lib/transformer.rlab` (`causal_mask`, `sinusoidal_pe`, `mha_block_forward`, `transformer_forward`/`transformer_backward`, `ce_dlogits`, `grad_norm`, `adamw_init`/`adamw_step`, `warmup_cosine`, `next_token_dist`), `lib/sampling.rlab`, `lib/bigram_lm.rlab`; scripts `run "../../lib/<name>.rlab"`, notebooks `run "../lib/<name>.rlab"`; Makefile passes `--jail-root .` to the renderer.
+- [x] Every duplicated forward/backward copy (capstone, full_backprop, sft, dpo) and block copy (13/14) replaced by the library; all four heavy scripts verified **byte-identical** in stdout against their pre-refactor output.
+- [x] Lessons renumbered 22–25 (see Overall Status); old Lesson 24 split into notebooks 22 and 25; all cross-links, README, Makefile, and this file updated.
+- [x] Lessons 22, 23, 25 execute in-notebook (previously 0–1 code blocks and no figures in the book); their Expected-Outputs tables regenerated from the live run.
+- [x] All `TODO: recombine into a subplot grid` splits recombined into `subplot` figures; all `|value|`-colormap shifts removed (signed heatmaps); `acts` → `cache` revert; editor meta-text removed from lessons 01–04; maintainer changelog removed from the capstone; script defects fixed (`hline("dashed")`, unclosed `hold`, `.r` comment, `sum(M, "all")`).
+- [x] Book re-rendered; orphan plot SVGs pruned; `make notebooks-check` and `rustlab-notebook check` clean; every script exits 0.
+
+**Handoff notes:**
+- Renderer facts that shaped this phase (also in AGENTS.md): the markdown renderer captures **one plot per code block**, so side-by-side panels use `subplot`; a `run` inside a script that a *notebook* runs resolves relative to the notebook, so notebooks carry their own short library-based blocks rather than running the lesson scripts; `run` paths must be quoted.
+- Next action: Phase 12 (attention & transformer arc, lessons 07–14) per §5 of the proposal, starting from these clean sources.
+- Known blockers: none. Still upstream-open: autodiff, struct-field indexing, `A^k` element-wise, `<!-- solution -->` in markdown output.
+
+---
+
 ## Cross-Phase Rules
 
 - **Never skip ahead:** Lessons must be written in order within a phase. Phases may be written in order (1 → 8).
 - **No black boxes:** Every mathematical operation in a script must correspond to a named equation in the same lesson's `lesson.md`.
 - **Rustlab blockers:** If a needed function is missing, add it to `AGENTS.md` Rustlab Recommendations, implement a workaround, and leave a `# TODO: replace with built-in <function_name> once available` comment in the script.
+- **Shared code:** anything used by more than one lesson goes in `lib/*.rlab` and is pulled in with a quoted `run` — never copy a function between scripts.
 - **Outputs are not committed:** The `outputs/` directory in each lesson is generated at runtime. Do not add SVG files to git.
 - **Status updates:** When finishing a lesson or pausing mid-phase, update the Handoff Notes for that phase in this file.

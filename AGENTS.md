@@ -17,7 +17,7 @@ This file guides AI coding tools working in this repository.
 
 Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts and integrated notebooks that produce visualisations. The series builds from raw probability and linear algebra to a complete GPT-style decoder — nothing is a black box.
 
-**Curriculum status:** 24 lessons across 10 phases, all complete. Phases 1–8 (Lessons 01–22) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end. Phase 9 (Lesson 23) covers post-2020 architectural variants — RoPE, RMSNorm, SwiGLU, GQA — as drop-in swaps. Phase 10 (Lesson 24) wires the full analytical backward pass through the Lesson 13 transformer block and uses it for SFT and DPO. The Lesson 22 capstone trains the full architecture end-to-end (PPL → 1.00008 on a corpus whose optimal-bigram floor is ≈ 1.47).
+**Curriculum status:** 25 lessons. Phases 1–8 (Lessons 01–23) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end: Lesson 22 derives the full analytical backward pass through the Lesson 13 block (the shared `lib/transformer.rlab`), and the Lesson 23 capstone trains the full architecture end-to-end (PPL → 1.00008 on a corpus whose optimal-bigram floor is ≈ 1.47). Phase 9 (Lesson 24) covers post-2020 architectural variants — RoPE, RMSNorm, SwiGLU, GQA — as drop-in swaps. Phase 10 (Lesson 25) applies the backward pass to SFT and DPO. Phase 11 (2026-09-27) moved the toolchain to rustlab 0.3.7, introduced `lib/`, and renumbered 22–25. Phases 12–15 — the re-centring of every lesson on the Signals / Systems / Information lenses plus new lessons 00 and 26 — are specified in `docs/proposal-2026-09-27-ee-controls-it-revision.md` and tracked in `PLAN.md`.
 
 **Learning goal:** Derive every core LLM algorithm — tokenisation, attention, transformer blocks, training, fine-tuning, and inference — with working code and plots at each step. Follows the architecture of [nanoGPT](https://github.com/karpathy/nanoGPT) through Phase 8 and extends it through Phases 9–10.
 
@@ -41,6 +41,12 @@ lessons/
   NN-topic-slug/
     *.rlab                  # standalone shell-runnable rustlab scripts
     *.svg|*.png|*.html   # script artefacts (gitignored)
+
+lib/
+  transformer.rlab       # causal_mask, sinusoidal_pe, mha_block_forward (L13/14),
+                         # transformer_forward/backward + AdamW + schedule (L22/23/25)
+  sampling.rlab          # sample_categorical, topk_mass, topp_mass (L21/23)
+  bigram_lm.rlab         # train_bigram_lm — the Lesson 18 model used by L20/21
 
 book/                    # rendered output for GitHub display
   README.md              # hand-written GitHub landing page
@@ -69,11 +75,11 @@ make notebooks          # render book/<slug>.md from notebooks/<slug>.md (markdo
 make html               # render book/index.html + per-notebook html (gitignored)
 make notebooks-check    # CI drift guard: fails if book/ is out of sync with sources
 make validate           # lint rendered markdown via `rustlab-notebook validate` (markdownlint-cli2)
-make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–24)
+make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–25; fails on the first script error)
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
-The notebook render is directory-mode: `rustlab-notebook render notebooks --format markdown --output book` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The hand-written `book/README.md` is preserved (the renderer skips files named `README.md` on input). Note: as of rustlab 0.3.4 (May 2026) the renderer is a separate binary `rustlab-notebook` — the old `rustlab notebook ...` subcommand has been removed. `make notebooks` is updated accordingly.
+The notebook render is directory-mode: `rustlab-notebook render notebooks --format markdown --output book --jail-root .` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The `--jail-root .` is required so notebook blocks may `run "../lib/<name>.rlab"` (0.3.7 jails notebook file I/O to the collection root by default). The hand-written `book/README.md` is preserved (the renderer skips files named `README.md` on input). Note: as of rustlab 0.3.4 (May 2026) the renderer is a separate binary `rustlab-notebook` — the old `rustlab notebook ...` subcommand has been removed. `make notebooks` is updated accordingly.
 
 `make validate` shells out to `rustlab-notebook validate -f markdown notebooks`, which re-renders every notebook to a temp dir and pipes it through `markdownlint-cli2` using the project-root `.markdownlint-cli2.jsonc` (mirrors rustlab's own noise floor plus `MD024: { siblings_only: true }` so the curriculum's repeated `### Theory` H3s under distinct H2 parents pass). Install the linter with `npm i -g markdownlint-cli2`; without it, validate reports SKIPPED rather than failing. HTML / LaTeX / PDF validation are opt-in via `-f html|latex|pdf` and require additional linters (`vnu` + JRE, `chktex`, `qpdf`/`pdfinfo`).
 
@@ -108,6 +114,9 @@ Use GitHub-flavored Markdown with LaTeX math: `$inline$` and `$$block$$`. Each n
 **Authoring rules (renderer-specific):**
 
 - Variables persist across ` ```rustlab ` blocks within a notebook — define `[X, Y]`, `vocab_size`, etc. once, reuse below.
+- **Shared code:** pull a library in with a hidden block placed before first use — `<!-- hide -->` then a ```` ```rustlab ```` block containing `run "../lib/transformer.rlab"` (quoted path). Do **not** `run` a lesson script from a notebook: a `run` nested inside that script resolves relative to the *notebook* directory and escapes the jail. Notebooks carry their own short, library-based code blocks that parallel the scripts.
+- **One captured plot per code block** in markdown output. Side-by-side panels must be built with `subplot(rows, cols, idx)` inside a single `figure();` in one block (heatmap subplots export correctly since 0.3.7). `<!-- grid: N -->` affects HTML only.
+- Heatmaps colour by signed value (0.3.7) — plot signed matrices directly; never shift them non-negative.
 - The renderer captures the active figure automatically. **Don't** call `savefig()` inside notebook code blocks.
 - Use `figure();` (not `clf;`) at the start of each plot block — **with the semicolon**: an unsuppressed `figure()` echoes its integer handle into the captured output, and the handle increments across the whole directory render, so one bare `figure()` puts a meaningless (and render-order-dependent) number in the book. Same rule for `histogram(...);`, which otherwise echoes its 2×n bin matrix.
 - If a plot block uses `hold("on")`, close it with `hold("off")` at the end. Lingering `hold("on")` state leaks into the next notebook in directory mode and inflates the captured-plot count.
@@ -157,7 +166,7 @@ Use GitHub-flavored Markdown with LaTeX math: `$inline$` and `$$block$$`. Each n
 - Always `print()` key numerical results a student should verify by hand
 - Name files descriptively: `gradient_descent.rlab`, not `script1.rlab`
 - Keep scripts short enough to read in one sitting (split if over ~60 lines)
-- Each script must run independently (no shared state between scripts)
+- Each script must run independently given `lib/`: shared code is pulled in with `run "../../lib/<name>.rlab"` (quoted, script-relative path) at the top of the script; never copy a function between scripts
 
 ---
 
@@ -186,6 +195,7 @@ Rustlab is a scientific computing CLI (`../rustlab`) with a MATLAB-like scriptin
 - String arrays: `{"a", "b", "c"}`
 - Structs: `s.field = val` auto-creates struct
 - `clear` removes all variables; `clf` clears current figure
+- Include another file: `run "path.rlab"` (quote the path — an unquoted leading `..` fails to lex); resolves relative to the calling script, or to the notebook for notebook blocks
 
 ### Function Reference (subset relevant to this tutorial)
 
@@ -253,9 +263,7 @@ title("Heatmap")
 savefig("outputs/heatmap.svg")
 ```
 
-**Subplot limitation (0.3.6):** `subplot` + `heatmap`/`imagesc` SVG export renders **only the first panel** — panels 2..n are silently dropped (line plots and histograms are fine). Until fixed upstream, give each heatmap its own figure (see lesson 09's split figures and their TODO markers).
-
-**⚠️ Signed-data limitation (0.3.6):** `heatmap`/`imagesc` color-map by **absolute value** — negative cells render with the color of their magnitude (−2 and +2 identical; a large negative renders *hot*). Never pass signed data directly: shift it non-negative first (`log10(G / g_min)`, `(PE + 1) / 2`) with a comment, or plot explicitly-labeled magnitudes. Repro + details: `docs/rustlab-issues-2026-07-12.md` §6.
+**Multi-panel heatmaps and signed data (fixed in 0.3.7):** `subplot` + `heatmap`/`imagesc` SVG export renders every panel, and heatmaps colour by signed value. The 0.3.6-era split figures and non-negative shifts were removed in Phase 11; do not reintroduce them.
 
 ---
 
@@ -289,34 +297,42 @@ When a needed function is missing from rustlab, record it here with the format:
 ### Struct-field indexing — `s.M(t, :)`
 **Needed for:** Lessons 22, 24 — every backward-pass function.
 **Purpose:** Index a matrix stored in a struct field directly. Today `acts.M(t, :)` parses as a call to a function `M(...)`, so each backward function unpacks ~18 cache fields into locals (~20 boilerplate lines × 5 scripts).
-**Current state (0.3.6):** Not supported; unpack-to-local workaround in place.
-**Example (target):** `Q_row = acts.Q(t, :);`
+**Current state (0.3.7):** Still not supported (`s.M(2, :)` → `undefined function 'M'`); also cannot destructure into fields (`[P.E, M.E] = f(...)`). `lib/transformer.rlab` unpacks cache/parameter fields to locals and uses temporaries in `adamw_step`.
+**Example (target):** `Q_row = cache.Q(t, :);`
 
 ### Lint for scalar linear-indexing of matrices — `M(i)` where a row was meant
 **Needed for:** the whole curriculum. The 2026-07-12 audit found **eight** latent instances of the pre-0.3.0 row idiom (lessons 04, 05 ×3, 07 ×2 + script, 08, 10, 15), several published with visibly-broken output (NaN probability matrices, a backward pass failing its own finite-difference check). This is the single most damaging bug class the curriculum has hit.
 **Purpose:** `rustlab run --lint` (or a default stderr note) flagging scalar linear reads of true matrices, especially `sum(M(i))` / `p = P(i)` patterns inside loops over rows.
 
-### Warning on non-finite / degenerate plot data
-**Needed for:** Lessons 05, 07 — regressions shipped silently. `heatmap`/`imagesc` accept NaN/inf (NaN now renders gray) and `bar` renders all-zero charts, all without a diagnostic; also `hline` silently ignores unrecognized colors (`"gray"`, or a style string passed in the color slot). One stderr warning each would have caught three published broken figures at render time.
+### Integer `size()` display
+**Purpose:** `print(size(X))` renders `[1×2] 8.000000 64.000000` for what is conceptually `[8, 64]`. (The single-output `svd` half of this request landed in 0.3.7.)
 
-### MATLAB-convention single-output `svd` and integer `size()` display
-**Purpose:** `s = svd(W)` currently binds `U` (first tuple element), not the singular values — silent MATLAB divergence. `print(size(X))` renders `[1×2] 8.000000 64.000000` for what is conceptually `[8, 64]`.
+### `A^k` on a square matrix is element-wise
+**Needed for:** the Phase 13 controls lessons (powers of `I − ηH`, Markov-chain `P^t`).
+**Current state (0.3.7):** `[0,1;-1,-0.5]^2 ≠ A*A` — silent wrong answers (rustlab roadmap A8). Write `A*A`, a loop, or `expm`.
 
-### Module / import system — share code across `.rlab` scripts
-**Needed for:** Lessons 22 and 24, where the full-transformer forward/backward library (`forward`, `backward`, `layernorm_fwd/bwd`, `gelu_grad`) is **duplicated verbatim** across `full_backprop.rlab`, `sft.rlab`, and `dpo.rlab` because rustlab has no way to include shared definitions and AGENTS.md requires self-contained scripts.
-**Purpose:** Let a script pull common functions from a shared file so the transformer library lives in one place.
-**Current state (0.3.6):** No `import` / `include` / `require`; each script must be self-contained.
-**Example (target):** `import "lib/transformer.rlab"` (or similar) at the top of a lesson script.
+### `<!-- solution -->` directive breaks markdown output
+**Current state (0.3.7):** emits an unclosed and duplicated `<details>` in `-f markdown` (rustlab roadmap A9). Exercises stay plain numbered lists; use hand-written `<details><summary>` HTML only for derivation-type solutions until fixed.
 
+### `run` path handling
+**Current state (0.3.7):** an unquoted `run ../x.rlab` fails to lex (`invalid number: ..`); the quoted form works. A `run` nested inside a script that a notebook runs resolves relative to the notebook directory, not the script. Both are worked around by convention (quoted paths; notebooks never `run` lesson scripts).
+
+### Markdown render captures one plot per code block
+**Current state (0.3.7):** a block with several `figure()` calls emits one SVG in `-f markdown`; `<!-- grid: N -->` is HTML-only. Side-by-side panels use `subplot`.
+
+### ~~Module / import system~~ — ✅ resolved by `run` (0.3.7, verified 2026-09-27)
+`run "file.rlab"` merges a file's functions and variables into the caller's scope, from scripts and from notebook blocks (with `--jail-root .`). `lib/transformer.rlab`, `lib/sampling.rlab`, `lib/bigram_lm.rlab` replaced ≈ 700 duplicated lines in Phase 11.
+
+### ~~Warning on non-finite / degenerate plot data~~ — ✅ landed in 0.3.7
+### ~~MATLAB-convention single-output `svd`~~ — ✅ landed in 0.3.7
 ### ~~CLI should announce itself as the `.rlab` handler~~ — ✅ landed in 0.3.6
-Resolved: `rustlab run` now prints a one-line stderr banner identifying the version and file. See the Landed ✅ → rustlab 0.3.6 section below.
 
 ---
 
 ## Required idioms (breaking changes and rules)
 
-### ⚠️ BREAKING (rustlab 0.3.6, 2026-07-11 rebuild): `cache` is a reserved word — do not use it as an identifier
-The `cache` *statement* (`cache enable`, `cache off`, …) reserves lowercase `cache` in the grammar. `cache = 5;` → `parse error: cache: unexpected token Eq`; `function [y, cache] = f(x)` → `expected identifier in function output list, got Cache` (the token's debug name is capitalized — the reserved word is lowercase). Uppercase `Cache` still parses but don't rely on it. This broke four previously-working scripts (lessons 22/24); the forward-pass cache variable is now named `acts` with `# TODO` markers to revert if upstream makes the keyword context-sensitive. Full repro + suggested upstream fix: `docs/rustlab-issues-2026-07-12.md` §1.
+### ~~`cache` is a reserved word~~ — ✅ fixed in 0.3.7 (soft keyword)
+The 0.3.6 `cache` statement had reserved the lowercase identifier; 0.3.7 made it a soft keyword. `lib/transformer.rlab` uses `cache` for the activation cache again; the `acts` rename and its `# TODO` markers were removed in Phase 11.
 
 ### ⚠️ Same-version behaviour drift: the 2026-07-11 binary still reports 0.3.6
 The July rebuild changed observable behaviour without a version bump: the `cache` reservation above, floating-point last-digit changes in reductions, and heatmap NaN handling (NaN cells now gray, colorbar excludes non-finite). `make notebooks-check` diffs against books rendered by the June build will show those deltas. When the drift guard fires with no source change, suspect a binary update — check the binary's mtime — and re-render. Details: `docs/rustlab-issues-2026-07-12.md` §5.
@@ -374,6 +390,10 @@ All currently-committed scripts and notebooks use the `while` form; new lessons 
 ## Landed ✅
 
 Resolved feature requests and fixed bugs, most-recent rustlab version first.
+
+### rustlab 0.3.7 (verified 2026-09-27; binary built from `../rustlab` main @ `edd2d64`)
+
+**Curriculum impact (Phase 11):** `cache` soft keyword; heatmaps colour by signed value; `subplot` + heatmap SVG exports all panels; bare `figure()`/`histogram()` no longer echo; single-output `svd` returns singular values; `rustlab run` exits 1 on error (so `make lesson-NN` gates CI); stderr warnings for NaN/Inf plot data and unrecognised colours (`"gray"`/hex now accepted); `run "file.rlab"` include (see the module-system entry above); column-range slicing `Q(:, a:b)` and region writes; elementwise two-argument `max`/`min`; `tic`/`toc`; integer types `int8…uint64` and `qfmt`/`quantize`/`snr` (basis for the planned Lesson 26); native complex phasors for RoPE/PE; controls and DSP toolboxes (`eig`, `expm`, `lyap`, `tf`, `bode`, `step`, `freqz`, `fft`) for Phases 12–14; `frame()` + `saveanim("x.gif")` captured into the markdown book; mermaid fences rendered offline and passed through to GitHub. Notebook I/O is jailed to the collection root — the Makefile passes `--jail-root .`. A full re-render under 0.3.7 was byte-identical to the 0.3.6 book except one lesson-04 legend label (labelled-scatter fix).
 
 ### rustlab 0.3.6
 

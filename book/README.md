@@ -16,8 +16,9 @@ only `book/README.md` (this file) is hand-written.
 
 ## Reading order
 
-Each lesson depends on the ones before it. Phase 4 onward is planned
-but not yet authored — see [`../PLAN.md`](../PLAN.md) for status.
+Each lesson depends on the ones before it. See [`../PLAN.md`](../PLAN.md)
+for phase status and the revision plan in
+[`../docs/proposal-2026-09-27-ee-controls-it-revision.md`](../docs/proposal-2026-09-27-ee-controls-it-revision.md).
 
 ### Phase 1 — Foundations
 
@@ -39,19 +40,55 @@ but not yet authored — see [`../PLAN.md`](../PLAN.md) for status.
 
 | # | Lesson | Focus |
 |---|--------|-------|
-| 07 | [Context & Naive Averaging](07-context-and-naive-averaging.md) | bag-of-tokens averaging; the limit of order-blind context |
+| 07 | [Context & Naive Averaging](07-context-and-naive-averaging.md) | bag-of-tokens averaging; the causal mixing matrix |
 | 08 | [Scaled Dot-Product Attention](08-scaled-dot-product-attention.md) | $Q, K, V$; attention scores; causal masking |
 | 09 | [Multi-Head Attention](09-multi-head-attention.md) | parallel heads, concatenation, output projection |
 
-### Phase 4 onward (planned)
+### Phase 4 — Transformer Components
 
-| # | Lesson | Status |
-|---|--------|--------|
-| 10–12 | Positional encoding, MLP block, LayerNorm & residuals | Not started |
-| 13–14 | Transformer block, full GPT architecture | Not started |
-| 15–18 | Training: backprop, AdamW, schedules, the training loop | Not started |
-| 19–20 | BPE tokenisation, perplexity & evaluation | Not started |
-| 21–22 | Sampling strategies, end-to-end capstone | Not started |
+| # | Lesson | Focus |
+|---|--------|-------|
+| 10 | [Positional Encoding](10-positional-encoding.md) | sinusoidal encoding; why attention is order-blind |
+| 11 | [Feed-Forward Block](11-feed-forward-block.md) | position-wise MLP; GELU |
+| 12 | [LayerNorm & Residuals](12-layer-norm-and-residuals.md) | normalisation; the residual stream |
+
+### Phase 5 — Full GPT Architecture
+
+| # | Lesson | Focus |
+|---|--------|-------|
+| 13 | [The Transformer Block](13-transformer-block.md) | Pre-LN block: MHA → residual → FFN → residual |
+| 14 | [Full GPT Architecture](14-full-gpt-architecture.md) | embeddings + N blocks + LM head; parameter count |
+
+### Phase 6 — Training
+
+| # | Lesson | Focus |
+|---|--------|-------|
+| 15 | [Backpropagation](15-backpropagation.md) | chain rule through attention and MLP; gradient flow |
+| 16 | [AdamW Optimizer](16-adamw-optimizer.md) | momentum, adaptive steps, decoupled weight decay |
+| 17 | [Learning-Rate Scheduling](17-learning-rate-scheduling.md) | warmup + cosine decay |
+| 18 | [The Training Loop](18-training-loop.md) | forward → loss → backward → step; diagnostics |
+
+### Phase 7 — Tokenisation & Evaluation
+
+| # | Lesson | Focus |
+|---|--------|-------|
+| 19 | [Byte Pair Encoding](19-byte-pair-encoding.md) | iterative merges; subword vocabulary |
+| 20 | [Perplexity & Evaluation](20-perplexity-and-evaluation.md) | PPL = exp(loss); train/val; overfitting |
+
+### Phase 8 — Generation, Backprop, Capstone
+
+| # | Lesson | Focus |
+|---|--------|-------|
+| 21 | [Sampling and Generation](21-sampling-and-generation.md) | autoregressive loop; greedy / temperature / top-K / top-P; KV cache |
+| 22 | [Full Backprop Through the Block](22-full-backprop-through-the-block.md) | the complete analytical backward pass; gradient check; the shared library |
+| 23 | [Putting It All Together](23-putting-it-all-together.md) | char → BPE → train the full transformer → sample at checkpoints |
+
+### Phases 9–10 — Extensions
+
+| # | Lesson | Focus |
+|---|--------|-------|
+| 24 | [Modern Architectural Variants](24-modern-architectural-variants.md) | RoPE, RMSNorm, SwiGLU, GQA |
+| 25 | [Fine-Tuning — SFT and DPO](25-fine-tuning-sft-and-dpo.md) | loss-masked SFT and catastrophic forgetting; DPO with a frozen reference |
 
 ## Local interactive view
 
@@ -65,7 +102,8 @@ any time.
 ## How this is organized
 
 The pattern (sources flat in `notebooks/`, rendered output committed to
-a top-level `book/`, standalone `.rlab` scripts in `lessons/<slug>/`) is
-documented at [`../rustlab/docs/lesson-site-pattern.md`](../../rustlab/docs/lesson-site-pattern.md)
+a top-level `book/`, standalone `.rlab` scripts in `lessons/<slug>/`,
+shared code in `lib/`) is documented at
+[`../rustlab/docs/lesson-site-pattern.md`](../../rustlab/docs/lesson-site-pattern.md)
 and shared across the rustlab course family
 ([rustlab_em](../../rustlab_em/site/) uses the same layout).
