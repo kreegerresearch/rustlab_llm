@@ -1,0 +1,62 @@
+# Script:  pe_oscillator_bank.rlab
+# System:  Sinusoidal positional encoding as an autonomous oscillator bank
+# Concept: PE_{t+1} = Phi PE_t with Phi = expm(Omega), block-diagonal rotations
+#          (Omega skew-symmetric).  Phi is orthogonal with eigenvalues on the
+#          unit circle: lossless, undamped.  The offset-3 map is recovered from
+#          the code by least squares and equals Phi^3.
+# Equations: Omega = blockdiag(w_k J), J = [0 1; -1 0];  Phi = expm(Omega);
+#            PE(t+1,:) = PE(t,:) Phi';  B_fit = argmin |P_in B - P_out|
+# Units:     w in rad/token; PE entries dimensionless
+
+run "../../lib/transformer.rlab"
+
+T = 64;
+d_model = 32;
+n_pairs = d_model / 2;
+PE = sinusoidal_pe(T, d_model);
+omega = 10000.0 .^ (-2 * (0:(n_pairs - 1)) / d_model);
+
+# === State-transition matrix ===
+J = [0, 1; -1, 0];
+Omega = zeros(d_model, d_model);
+for k = 1:n_pairs
+  c = 2 * k - 1;
+  Omega(c:(c + 1), c:(c + 1)) = omega(k) * J;
+end
+Phi = expm(Omega);
+print("Phi(1:2, 1:2) =");
+print(Phi(1:2, 1:2));
+print("  (cos w_0, sin w_0) =", cos(omega(1)), sin(omega(1)));
+print("max |PE_{t+1} - PE_t Phi'| =", max(max(abs(PE(2:T, :) - PE(1:(T - 1), :) * Phi'))));
+Phi63 = expm(63 * Omega);                   # Phi^63: A^k is element-wise in rustlab, so use expm
+print("max |PE_64 - PE_1 (Phi^63)'| =", max(abs(PE(64, :) - PE(1, :) * Phi63')));
+ev = eig(Phi);
+print("max ||eig(Phi)| - 1| =", max(abs(abs(ev) - 1)), "  |Phi' Phi - I| =", max(max(abs(Phi' * Phi - eye(d_model)))));
+
+# === Least-squares recovery of the offset-3 map, pair by pair ===
+offset = 3;
+P_in  = PE(1:(T - offset), :);
+P_out = PE((1 + offset):T, :);
+B_fit = zeros(d_model, d_model);
+for k = 1:n_pairs
+  c = 2 * k - 1;
+  Pk = P_in(:, c:(c + 1));
+  Yk = P_out(:, c:(c + 1));
+  B_fit(c:(c + 1), c:(c + 1)) = inv(Pk' * Pk) * (Pk' * Yk);
+end
+print("least-squares residual |P_in B_fit - P_out| =", max(max(abs(P_in * B_fit - P_out))));
+print("max |B_fit - (Phi^3)'| =", max(max(abs(B_fit - expm(offset * Omega)'))));
+print("numerical rank of the", T - offset, "x", d_model, "input block:", rank(P_in), " (slow columns are collinear over 64 tokens)");
+
+# === Figure: the 32 eigenvalues sit on the unit circle at angles +-w_k ===
+figure();
+hold("on")
+circ = linspace(0, 2 * pi, 200);
+plot(cos(circ), sin(circ), "color", "gray", "label", "unit circle")
+scatter(real(ev), imag(ev))
+hold("off")
+title("Eigenvalues of Phi: e^{+-j w_k}, all on the unit circle")
+xlabel("Re")
+ylabel("Im")
+savefig("pe_oscillator_eigs.svg")
+print("Saved pe_oscillator_eigs.svg");

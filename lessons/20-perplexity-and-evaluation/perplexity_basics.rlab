@@ -1,12 +1,14 @@
 # Script:  perplexity_basics.rlab
 # System:  Compute perplexity of three reference probability distributions.
-# Concept: PPL = exp(H) where H = -sum(p * log(p)) is the entropy in nats.
-#          A uniform distribution over K classes has PPL = K.  A peaked
-#          distribution has PPL between 1 and K.  A perfectly-confident
-#          distribution has PPL = 1.
+# Concept: Two objects are called perplexity.  Definition 1, the PPL of a
+#          distribution, is exp(H(q)) = 2^H(q): a uniform distribution over
+#          K classes has PPL = K, a point mass has PPL = 1.  Definition 2,
+#          the PPL of a model on data, is exp(mean -log q(x_t)) = 2^H(p,q);
+#          the bridge section and the final plot keep the two apart.
 # Equations:
-#   H(p)   = -sum_i p_i log p_i      (nats)
-#   PPL(p) = exp(H(p))
+#   H(q)   = -sum_i q_i log q_i      (nats)
+#   PPL(q) = exp(H(q))               (definition 1: a distribution)
+#   PPL    = exp(-mean log q(x_t))   (definition 2: a model on data)
 # Units:   probabilities dimensionless; H in nats; PPL dimensionless.
 
 # === Three reference distributions ===
@@ -50,24 +52,32 @@ for k = 1:length(q_targets)
   print("  q =", q, "  L =", L_q, "  PPL =", ppl_q, "  (== 1/q =", 1/q, ")");
 end
 
-# === Plot: PPL as a function of (uniform-fraction-on-correct-class) ===
-% A simple way to visualise PPL: plot exp(H) for distributions that put
-% probability p on the correct class and (1-p)/(K-1) on each of K-1 other
-% classes.  As p -> 1, PPL -> 1; as p -> 1/K, PPL -> K.
+# === Plot: one distribution, three perplexities ===
+% Put probability p on one class and (1-p)/(K-1) on each of the K-1 others.
+% Three numbers come out of the same q:
+%   2^H(q)          - the distribution's own perplexity (definition 1)
+%   1/p             - the model's PPL on data whose truth is the favoured class
+%   (K-1)/(1-p)     - the model's PPL on data whose truth is a tail class
 K = 4;
 ps = linspace(1.0 / K, 0.999, 50);
-ppl_curve = zeros(50);
+ppl_dist = zeros(50);  ppl_hit = zeros(50);  ppl_miss = zeros(50);
 for k = 1:50
-  p = ps(k);
-  rest = (1 - p) / (K - 1);
-  q = [p, rest, rest, rest];
-  ppl_curve(k) = exp(-sum(q .* log(q)));
+  p = ps(k);  rest = (1 - p) / (K - 1);
+  ppl_dist(k) = entropy_to_ppl([p, rest, rest, rest]);
+  ppl_hit(k)  = 1 / p;
+  ppl_miss(k) = 1 / rest;
 end
+print("at p = 1/K all three agree:", ppl_dist(1), ppl_hit(1), ppl_miss(1));
+print("at p = 0.999:  2^H(q) =", ppl_dist(50), "  1/p =", ppl_hit(50), "  tail case =", ppl_miss(50));
 
 figure();
-plot(ps, ppl_curve, "color", "blue", "label", "PPL(p_correct)")
-title("Perplexity as the model's confidence in the correct class grows")
-xlabel("probability assigned to the correct class")
-ylabel("PPL")
+semilogy(ps, ppl_dist, "color", "blue", "label", "2^H(q): the distribution's own PPL")
+hold("on")
+semilogy(ps, ppl_hit, "color", "green", "label", "model on data, truth = favoured class (1/p)")
+semilogy(ps, ppl_miss, "color", "red", "label", "model on data, truth = tail class")
+hold("off")
+title("One distribution, three perplexities")
+xlabel("probability assigned to the favoured class")
+ylabel("PPL (log axis)")
 savefig("perplexity_basics.svg")
 print("Saved perplexity_basics.svg");

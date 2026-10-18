@@ -19,7 +19,8 @@ are added or rewritten for a lesson, drop them in the matching
 
 Code that more than one lesson needs lives in [`../lib/`](../lib/) —
 `transformer.rlab` (block forward, trainable forward/backward, AdamW,
-schedule), `sampling.rlab`, `bigram_lm.rlab` — and is pulled in at the
+schedule), `sampling.rlab`, `bigram_lm.rlab`, `info.rlab` (entropy, KL,
+perplexity helpers) — and is pulled in at the
 top of a script with a quoted, script-relative path:
 
 ```

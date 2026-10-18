@@ -1,0 +1,43 @@
+# Script:  analogy_parallelogram.rlab
+# System:  Four hand-set token embeddings projected onto two labelled axes
+# Concept: The analogy king - man + woman ≈ queen is an approximate parallelogram:
+#          the two "femininity" displacements and the two "royalty" displacements
+#          are nearly parallel
+# Equations: E_queen - E_king ≈ E_woman - E_man
+# Units:     Embedding coordinates are dimensionless
+
+king  = [1.0,  0.1,  0.8,  0.9];
+queen = [0.9,  0.9,  0.7,  0.8];
+man   = [0.1,  0.1,  0.6,  0.4];
+woman = [0.1,  0.9,  0.5,  0.3];
+
+print("king -> queen :", queen(1:2) - king(1:2), "   man -> woman  :", woman(1:2) - man(1:2));
+print("king -> man   :", man(1:2) - king(1:2),   "   queen -> woman:", woman(1:2) - queen(1:2));
+
+# === Arrow helper: shaft plus a small head as one polyline (one legend entry) ===
+function arrow(x0, y0, x1, y1, c, lbl)
+  dx = x1 - x0;  dy = y1 - y0;  L = sqrt(dx ^ 2 + dy ^ 2);
+  ux = dx / L;   uy = dy / L;
+  hx = x1 - 0.06 * ux;  hy = y1 - 0.06 * uy;
+  plot([x0, x1, hx - 0.03 * uy, x1, hx + 0.03 * uy], [y0, y1, hy + 0.03 * ux, y1, hy - 0.03 * ux], "color", c, "label", lbl)
+end
+
+# === Figure: labelled points + the two displacement pairs ===
+figure();
+scatter([king(1)], [king(2)], "label", "king")
+hold("on")
+scatter([queen(1)], [queen(2)], "label", "queen")
+scatter([man(1)], [man(2)], "label", "man")
+scatter([woman(1)], [woman(2)], "label", "woman")
+arrow(king(1), king(2), queen(1), queen(2), "blue", "king → queen")
+arrow(man(1),  man(2),  woman(1), woman(2), "blue", "man → woman")
+arrow(king(1), king(2), man(1),   man(2),   "red",  "king → man")
+arrow(queen(1), queen(2), woman(1), woman(2), "red", "queen → woman")
+hold("off")
+title("Parallelogram in (royalty, femininity) space")
+xlabel("royalty (dim 1)")
+ylabel("femininity (dim 2)")
+xlim([-0.1, 1.5])                       # room on the right for the legend
+ylim([-0.1, 1.2])
+savefig("analogy_parallelogram.svg")
+print("Saved analogy_parallelogram.svg")

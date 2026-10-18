@@ -1,0 +1,34 @@
+# Script:  ln_attention_scores.rlab
+# System:  Attention scores fed from a residual stream of growing scale
+# Concept: The 1/sqrt(d_k) scaling keeps score variance at 1 only for a
+#          unit-variance input; LN in front of W_Q, W_K restores that at any
+#          stream scale, keeping the softmax rows informative.
+# Equations:
+#   S = (H W_Q)(H W_K)' / sqrt(d_k)          var(S) ~ s^4 for H at scale s
+#   row entropy H(A_t) in bits vs the uniform reference log2(t)
+# Units:   scores dimensionless; entropies in bits
+
+run "../../lib/transformer.rlab"      # causal_mask
+run "../../lib/info.rlab"             # row_entropies_bits
+
+# === Setup ===
+seed(8);
+T = 16;
+d = 32;
+W_Q = randn(d, d) / sqrt(d);
+W_K = randn(d, d) / sqrt(d);
+M_mask = causal_mask(T);
+scales = [1, 4, 16];
+
+# === Sweep the stream scale ===
+for i = 1:3
+  H_s   = randn(T, d) * scales(i);
+  S_raw = (H_s * W_Q) * (H_s * W_K)' / sqrt(d);
+  S_ln  = (layernorm(H_s) * W_Q) * (layernorm(H_s) * W_K)' / sqrt(d);
+  v_raw = mean(reshape(S_raw .^ 2, 1, T * T));
+  v_ln  = mean(reshape(S_ln  .^ 2, 1, T * T));
+  Hrow_raw = mean(row_entropies_bits(softmax(S_raw + M_mask)));
+  Hrow_ln  = mean(row_entropies_bits(softmax(S_ln  + M_mask)));
+  print("stream scale", scales(i), "  var(S) raw:", v_raw, " with LN:", v_ln, "  mean row entropy raw:", Hrow_raw, " with LN:", Hrow_ln, "bits");
+end
+print("uniform-attention reference: mean log2(t) =", mean(log2(1:T)), "bits");

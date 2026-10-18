@@ -71,7 +71,7 @@ dL_dS = zeros(T, T);
 for t = 1:T
   a  = A(t, :);
   da = dL_dA(t, :);
-  dL_dS(t) = a .* (da - sum(a .* da));
+  dL_dS(t, :) = a .* (da - sum(a .* da));
 end
 
 # Step 3: S = Q K' / sqrt(d_k)

@@ -1,0 +1,85 @@
+# Script:  minibatch_noise.rlab
+# System:  The Lesson 18 embedding+head model at its initial parameters; the
+#          gradient of a minibatch of B pairs drawn with replacement from the
+#          49 training pairs, compared with the full-batch gradient.
+# Concept: The minibatch gradient is the exact gradient plus a zero-mean
+#          sampling error — a sensor with additive noise.  With independent
+#          draws the noise power is proportional to 1/B and the noise sequence
+#          across steps is white (flat periodogram).  This is a model of real
+#          training (which samples without replacement within an epoch).
+# Equations:
+#   g_B = (1/B) sum_k grad L_k;   E||g_B - g||^2 ∝ 1/B
+# Units:   gradients in nats per unit parameter; power = squared norm.
+
+seed(18);
+vocab = 3;  d_emb = 4;
+E0 = randn(vocab, d_emb) * 0.3;
+W0 = randn(d_emb, vocab) * 0.3;
+corpus = zeros(60);
+pat = [1, 2, 3, 2];
+for i = 1:60
+  corpus(i) = pat(mod(i - 1, 4) + 1);
+end
+n_tr = 49;
+
+function [dE, dW] = batch_grad(idx, corpus, E, W)
+  vocab = size(E, 1);  d_emb = size(E, 2);
+  dE = zeros(vocab, d_emb);  dW = zeros(d_emb, vocab);
+  for k = 1:length(idx)
+    curr = corpus(idx(k));  nxt = corpus(idx(k) + 1);
+    h = E(curr, :);  p = softmax(h * W);
+    e_y = zeros(vocab);  e_y(nxt) = 1.0;
+    dlogits = p - e_y;
+    dW = dW + h' * dlogits;
+    dh = dlogits * W';
+    for j = 1:d_emb
+      dE(curr, j) = dE(curr, j) + dh(j);
+    end
+  end
+  dE = dE / length(idx);  dW = dW / length(idx);
+end
+
+# === Noise power vs batch size ===
+seed(181);
+Bs = [4, 8, 16, 49];
+[gE_full, gW_full] = batch_grad(1:n_tr, corpus, E0, W0);
+noise_pow = zeros(4);
+for bi = 1:4
+  acc = 0.0;
+  for r = 1:200
+    [gEb, gWb] = batch_grad(randi(n_tr, Bs(bi)), corpus, E0, W0);
+    acc = acc + sum(sum((gEb - gE_full) .^ 2)) + sum(sum((gWb - gW_full) .^ 2));
+  end
+  noise_pow(bi) = acc / 200;
+end
+print("batch size B              :", Bs);
+print("noise power E||g_B - g||^2:", noise_pow);
+print("  times B (flat if ∝ 1/B) :", noise_pow .* Bs, "   signal power ||g||^2 =", sum(sum(gE_full .^ 2)) + sum(sum(gW_full .^ 2)));
+
+# === Periodogram of one entry's noise sequence, B = 8 ===
+seqn = zeros(256);
+for r = 1:256
+  [gEb, gWb] = batch_grad(randi(n_tr, 8), corpus, E0, W0);
+  seqn(r) = gWb(2, 1) - gW_full(2, 1);
+end
+Sx = abs(fft(seqn)) .^ 2;
+print("periodogram mean, lowest quarter vs highest quarter of the band:", mean(Sx(2:33)), mean(Sx(97:128)));
+
+figure();
+subplot(1, 2, 1)
+loglog(Bs, noise_pow, "color", "blue", "label", "measured")
+hold("on")
+loglog(Bs, noise_pow(1) * Bs(1) ./ Bs, "color", "gray", "label", "1/B")
+hold("off")
+title("minibatch gradient noise power vs B")
+xlabel("B")
+ylabel("E ||g_B - g||^2")
+legend("measured", "∝ 1/B")
+subplot(1, 2, 2)
+plot((1:128) / 256, Sx(2:129), "color", "blue", "label", "periodogram")
+title("noise spectrum of one entry (B = 8): flat")
+xlabel("cycles per step")
+ylabel("power")
+legend("|X(f)|^2")
+savefig("minibatch_noise.svg")
+print("Saved minibatch_noise.svg");

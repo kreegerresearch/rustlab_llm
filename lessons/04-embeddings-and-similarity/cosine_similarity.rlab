@@ -1,10 +1,10 @@
 # Script:  cosine_similarity.rlab
 # System:  Pairwise cosine similarity between token embedding vectors
-# Concept: cos(a, b) = (a · b) / (||a|| ||b||);  S = E_norm * E_norm^T
+# Concept: cos(a, b) = (a · b) / (||a|| ||b||);  S = Ê Êᵀ (Gram matrix of unit rows)
 # Equations: cos(a,b) = sum(a.*b) / (sqrt(sum(a.^2)) * sqrt(sum(b.^2)))
 # Units:     Cosine similarity is dimensionless, in [-1, 1]
 
-# === Hand-crafted Embeddings ===
+# === Hand-crafted Embeddings (by construction) ===
 # Four tokens in a 4-dimensional space.
 # Dimensions encode: [royalty, femininity, age, authority]
 # These are illustrative — in a real model these values are learned.
@@ -20,70 +20,41 @@ print("man  :", man);
 print("woman:", woman);
 
 # === Cosine Similarity Helper ===
-# cos(a, b) = (a · b) / (||a|| * ||b||)
-# dot(a,b) = sum(a .* b)
-# norm(a)  = sqrt(sum(a .^ 2))
 function s = cos_sim(a, b)
   s = sum(a .* b) / (sqrt(sum(a .^ 2)) * sqrt(sum(b .^ 2)))
 end
 
-# === Pairwise Similarities ===
-s_kk = cos_sim(king,  king);
+# === Three scalar cosines ===
 s_kq = cos_sim(king,  queen);
 s_km = cos_sim(king,  man);
-s_kw = cos_sim(king,  woman);
-s_qk = cos_sim(queen, king);
-s_qq = cos_sim(queen, queen);
-s_qm = cos_sim(queen, man);
 s_qw = cos_sim(queen, woman);
-s_mk = cos_sim(man,   king);
-s_mq = cos_sim(man,   queen);
-s_mm = cos_sim(man,   man);
-s_mw = cos_sim(man,   woman);
-s_wk = cos_sim(woman, king);
-s_wq = cos_sim(woman, queen);
-s_wm = cos_sim(woman, man);
-s_ww = cos_sim(woman, woman);
+print("king  / queen (high — both royal)     :", s_kq);
+print("king  / man   (moderate — same gender):", s_km);
+print("queen / woman (moderate — same gender):", s_qw);
 
-print("Cosine similarity matrix (king, queen, man, woman):");
-S = [s_kk, s_kq, s_km, s_kw; s_qk, s_qq, s_qm, s_qw; s_mk, s_mq, s_mm, s_mw; s_wk, s_wq, s_wm, s_ww];
+# === Matrix form: S = Ê Êᵀ delivers all 16 entries at once ===
+E4 = [king; queen; man; woman];          # 4 x 4: one embedding per row
+row_norms = sqrt(sum(E4 .^ 2, 2));        # ||E_i|| for each row
+En = E4 ./ row_norms;                     # Ê — unit-length rows
+S = En * En';                             # S_ij = cos(E_i, E_j)
+print("Cosine similarity matrix S (king, queen, man, woman):");
 print(S);
 
-print("king  / queen (should be high — both royal):", s_kq);
-print("king  / man   (moderate — same gender)      :", s_km);
-print("queen / woman (moderate — same gender)      :", s_qw);
-print("man   / woman (low  — different on most dims):", s_mw);
-
-# === Verify Symmetry ===
-# S_ij == S_ji  =>  max(|S - S'|) should be ~0
-sym_err = max(reshape(abs(S - transpose(S)), 1, 16));
+# === Verify: symmetry, unit diagonal, data range ===
+sym_err = max(max(abs(S - S')));
 print("Symmetry check max|S - S'| (should be ~0):", sym_err);
+print("min(S) =", min(min(S)), " (king/woman) — the heatmap colour scale starts here, not at -1");
 
-# === Analogy Arithmetic: king - man + woman ≈ queen ===
-# king - man + woman  (vector arithmetic in embedding space)
+# === Analogy Arithmetic: king - man + woman ≈ queen (by construction) ===
 analogy = king - man + woman;
 print("king - man + woman vector:", analogy);
-
-# Cosine similarity of the analogy result to each token
-sim_to_king  = cos_sim(analogy, king);
-sim_to_queen = cos_sim(analogy, queen);
-sim_to_man   = cos_sim(analogy, man);
-sim_to_woman = cos_sim(analogy, woman);
-
-print("Similarity of (king - man + woman) to:");
-print("  king :", sim_to_king);
-print("  queen:", sim_to_queen);
-print("  man  :", sim_to_man);
-print("  woman:", sim_to_woman);
+print("Similarity of (king - man + woman) to king/queen/man/woman:",
+      cos_sim(analogy, king), cos_sim(analogy, queen), cos_sim(analogy, man), cos_sim(analogy, woman));
 print("Closest token should be 'queen'.");
 
 # === Heatmap of Similarity Matrix ===
-# Bright = similar (cos ~1), dark = dissimilar (cos ~0 or negative).
-# Both axes index the same vocabulary, so labelled heatmap turns each cell
-# into a direct lookup of cos(row token, col token).
 vocab = {"king", "queen", "man", "woman"};
-
 figure();
-heatmap(vocab, vocab, S, "Cosine Similarity: king, queen, man, woman", "viridis")
+heatmap(vocab, vocab, S, "Cosine Similarity S: king, queen, man, woman", "viridis")
 savefig("cosine_similarity.svg")
 print("Saved cosine_similarity.svg")

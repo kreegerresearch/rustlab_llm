@@ -1,0 +1,58 @@
+# Script:  loss_histogram.rlab
+# System:  The trained Lesson 18 LM (lib/bigram_lm.rlab) scored token by
+#          token on a fresh 200-token stretch of the period-4 source.
+# Concept: The per-token loss -log2 q(x_{t+1} | x_t) is the self-information
+#          of each token under the model.  Its histogram is the cheapest
+#          model diagnostic; its mean is the cross-entropy and its standard
+#          deviation is sqrt(varentropy), which sets the confidence interval
+#          of a perplexity estimate and hence how long a held-out set must be.
+# Equations:
+#   l_t   = -log2 q(x_{t+1} | x_t)               (bits)
+#   CE    = mean(l_t);  PPL = 2^CE
+#   SE    = std(l_t) / sqrt(N);  95% CI on CE = CE +/- 1.96 SE
+#   dPPL / PPL = dCE_nats  =>  N for +/-1% PPL = (1.96 sigma_nats / 0.01)^2
+# Units:   losses in bits (nats where stated); N in tokens.
+
+run "../../lib/bigram_lm.rlab"
+run "../../lib/info.rlab"
+
+# === 1. Train the model (same seed and split as the notebook) ===
+pat = [1, 2, 3, 2];
+corpus = zeros(60);
+for i = 1:60
+  corpus(i) = pat(mod(i - 1, 4) + 1);
+end
+seed(20);
+[E, W] = train_bigram_lm(corpus(1:50), 3, 4, 600, 0.15, 0.015, 60);
+
+# === 2. Per-token self-information on a 200-token held-out stream ===
+held = zeros(200);
+for i = 1:200
+  held(i) = pat(mod(i - 1, 4) + 1);
+end
+N = 199;
+losses = zeros(N);
+for t = 1:N
+  q = softmax(E(held(t), :) * W);
+  losses(t) = -log2(q(held(t + 1)));
+end
+print("mean(losses) =", mean(losses), "bits = CE;  PPL = 2^mean =", 2 ^ mean(losses));
+print("std(losses)  =", std(losses), "bits = sqrt(varentropy)");
+print("median       =", median(losses), "  min", min(losses), "  max", max(losses));
+
+# === 3. Confidence interval and the length a held-out set needs ===
+se_bits = std(losses) / sqrt(N);
+print("CE =", mean(losses), "+/-", 1.96 * se_bits, "bits (95%)  ->  PPL in [", ...
+      2 ^ (mean(losses) - 1.96 * se_bits), ",", 2 ^ (mean(losses) + 1.96 * se_bits), "]");
+sigma_nats = std(losses) * log(2);
+print("tokens for +/-1% PPL: this model", ceil((1.96 * sigma_nats / 0.01) ^ 2), ...
+      "  a real LM with sigma = 2.5 nats:", ceil((1.96 * 2.5 / 0.01) ^ 2));
+
+# === 4. Histogram ===
+figure();
+histogram(losses, 20);
+title("Per-token self-information under the trained model (199 held-out tokens)")
+xlabel("-log2 q(x_{t+1} | x_t)  [bits]")
+ylabel("count")
+savefig("loss_histogram.svg")
+print("Saved loss_histogram.svg");

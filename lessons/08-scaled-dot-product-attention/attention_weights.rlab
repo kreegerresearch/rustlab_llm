@@ -39,15 +39,11 @@ print("Scaled scores S (T × T):");
 print(S);
 
 # === Causal mask ===
-# M[t, i] = -1e9 for i > t;  0 otherwise.
-# Large negative (not literal -inf) avoids NaN in exp().
+# M[t, i] = -1e9 for i > t;  0 otherwise.  A finite stand-in for -inf: with a
+# causal mask the diagonal is always visible, so exp(-inf) = 0 would be fine;
+# the finite value covers fully-masked (padding) rows and low-precision dtypes.
 NEG_INF = -1.0e9;
-M = zeros(T, T);
-for i = 1:T
-  for j = (i + 1):T
-    M(i, j) = NEG_INF;
-  end
-end
+M = NEG_INF * (1 - cumsum(eye(T), 1));   # 0 on / below the diagonal, -1e9 above
 S_masked = S + M;
 
 print("Masked scores (upper triangle → -1e9):");
@@ -60,6 +56,12 @@ A = softmax(S_masked);
 
 print("Attention weights A = softmax_row(S_masked):");
 print(A);
+
+# === Read the design back off A ===
+print("A(2,1) =", A(2, 1), " (query 2 asked for feature 1; uniform would give 0.5)");
+print("A(3,2) =", A(3, 2), " (query 3 asked for feature 2, which key 2 advertises)");
+print("A(4,1) =", A(4, 1), " (token 1 retrieved from three positions back; uniform 0.25)");
+print("A(5,:) =", A(5, :), " (half-and-half query ties t1, t2, t4)");
 
 # === Verify row sums ===
 row_sums = zeros(T);

@@ -1,63 +1,83 @@
 # Script:  gradient_descent.rlab
-# System:  Gradient descent on MSE loss for  y = w*x + b
-# Concept: Iterative parameter update: w ← w - η * ∂L/∂w;  b ← b - η * ∂L/∂b
-# Equations: ∂L/∂w = (2/N)*sum((w*x+b-y)*x);  ∂L/∂b = (2/N)*sum(w*x+b-y)
-# Units:     w,b dimensionless; L in squared y-units; η (learning rate) dimensionless
+# System:  Gradient descent on MSE loss for  y_hat = w*x + b
+# Concept: The update w <- w - eta dL/dw, b <- b - eta dL/db decays each Hessian mode by
+#          1 - eta lambda_i per step; at eta = 0.05 the slow mode (0.985/step) leaves
+#          5 % of its error after 200 steps, along the slow eigenvector.
+# Equations: dL/dw = (2/N) sum((w x + b - y) x);  dL/db = (2/N) sum(w x + b - y)
+#            e_k = sum_i c_i (1 - eta lambda_i)^k v_i
+# Units:     w, b dimensionless; L in squared y-units; eta dimensionless
 
-# === Dataset ===
-# y = 2x  (true relationship: w*=2, b*=0)
+# === Dataset and Hessian ===
 x = [1.0, 2.0, 3.0, 4.0];
 y = [2.0, 4.0, 6.0, 8.0];
 npts = 4.0;
-lr = 0.05;
-n_steps = 200;
+H = (2.0 / npts) * [sum(x .* x), sum(x); sum(x), npts];
+[V, D] = eig(H);  V = real(V);  lam = real(diag(D));
+i_fast = argmax(lam);  i_slow = argmin(lam);
+lam_fast = lam(i_fast);  lam_slow = lam(i_slow);
+v_fast = V(:, i_fast);   v_slow = V(:, i_slow);
 
 # === Gradient descent loop ===
-w = 0.0;
-b = 0.0;
-
-w_path    = zeros(n_steps + 1);
-b_path    = zeros(n_steps + 1);
-loss_path = zeros(n_steps + 1);
-
-w_path(1)    = w;
-b_path(1)    = b;
-loss_path(1) = mean((w * x + b - y) .^ 2);
-
-print("Starting gradient descent: w=0, b=0, lr=0.05");
-print("True optimum: w*=2, b*=0");
-
+lr = 0.05;
+n_steps = 200;
+w = 0.0;  b = 0.0;
+w_path = zeros(n_steps + 1);  b_path = zeros(n_steps + 1);  loss_path = zeros(n_steps + 1);
+w_path(1) = w;  b_path(1) = b;  loss_path(1) = mean((w * x + b - y) .^ 2);
 for step = 1:n_steps
-  pred     = w * x + b;
-  residual = pred - y;
+  residual = w * x + b - y;
   dw = (2.0 / npts) * sum(residual .* x);
   db = (2.0 / npts) * sum(residual);
   w -= lr * dw;
   b -= lr * db;
-  w_path(step + 1)    = w;
-  b_path(step + 1)    = b;
+  w_path(step + 1) = w;  b_path(step + 1) = b;
   loss_path(step + 1) = mean((w * x + b - y) .^ 2);
 end
+print("After", n_steps, "steps: w =", w, "  b =", b, "  loss =", loss_path(n_steps + 1), "  (true optimum w=2, b=0)");
+print("Step-1 hand check: w_1 =", w_path(2), "  b_1 =", b_path(2));
 
-print("After", n_steps, "steps:");
-print("  w =", w, "  (true w* = 2)");
-print("  b =", b, "  (true b* = 0)");
-print("  Loss =", loss_path(n_steps + 1));
+# === Slow-mode prediction of the remaining error ===
+e0   = [0.0 - 2.0; 0.0 - 0.0];
+coef = V' * e0;
+rho_slow = 1.0 - lr * lam_slow;
+e_pred = v_slow * (coef(i_slow) * rho_slow ^ n_steps);
+print("poles:", 1.0 - lr * lam_fast, 1.0 - lr * lam_slow, "   rho_slow^200 =", rho_slow ^ n_steps);
+print("predicted error (slow mode only) =", [e_pred(1), e_pred(2)], "   actual =", [w - 2.0, b]);
+print("slow-mode time constant =", -1.0 / log(rho_slow), "steps");
 
-# === Loss curve ===
+# === Loss curve on a log axis with the slow-mode line ===
+steps  = 0:n_steps;
+L_slow = 0.5 * lam_slow * (coef(i_slow) * rho_slow .^ steps) .^ 2;
 figure();
-plot(loss_path, "color", "blue", "label", "MSE loss")
 hold("on")
-hline(0.0, "gray", "minimum")
-title("Gradient Descent: Loss vs. Step")
-xlabel("Step")
-ylabel("MSE Loss")
+semilogy(steps, loss_path, "color", "blue", "label", "MSE loss")
+semilogy(steps, L_slow, "color", "red", "label", "slow mode only", "style", "dashed")
+title("Gradient descent at eta = 0.05: two decay regimes")
+xlabel("step k")
+ylabel("MSE loss (log scale)")
 legend()
+hold("off")
 savefig("loss_curve.svg")
 print("Saved loss_curve.svg");
 
-# === Gradient descent path in (w, b) space ===
+# === Path over the level-set ellipses ===
+phi = linspace(0, 2 * pi, 100);
 figure();
-scatter(w_path, b_path, "Gradient Descent Path in (w,b) Space — converges to (2, 0)")
+hold("on")
+for c = [0.03, 0.3, 3.0, 30.0]
+  ew = 2.0 + v_fast(1) * sqrt(2 * c / lam_fast) * cos(phi) + v_slow(1) * sqrt(2 * c / lam_slow) * sin(phi);
+  eb =       v_fast(2) * sqrt(2 * c / lam_fast) * cos(phi) + v_slow(2) * sqrt(2 * c / lam_slow) * sin(phi);
+  plot(ew, eb, "color", "gray", "label", sprintf("L = %g", c))
+end
+plot([2 - 2 * v_slow(1), 2 + 2 * v_slow(1)], [-2 * v_slow(2), 2 * v_slow(2)], "color", "green", "label", "slow eigenvector", "style", "dashed")
+plot([2 - 0.5 * v_fast(1), 2 + 0.5 * v_fast(1)], [-0.5 * v_fast(2), 0.5 * v_fast(2)], "color", "orange", "label", "fast eigenvector", "style", "dashed")
+plot(w_path, b_path, "color", "red", "label", "GD path, eta = 0.05")
+scatter(w_path(1:3), b_path(1:3), "color", "red", "label", "steps 0, 1, 2")
+xlim([-0.5, 3.5])
+ylim([-3.0, 3.0])
+title("GD path over the level-set ellipses of L(w, b)")
+xlabel("w")
+ylabel("b")
+legend()
+hold("off")
 savefig("gd_path.svg")
 print("Saved gd_path.svg");

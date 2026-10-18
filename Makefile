@@ -24,7 +24,7 @@ Q ?= Who is the woman?
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
-	@echo "  lesson-NN          Run .rlab scripts for one lesson (e.g. make lesson-01; 01–25)"
+	@echo "  lesson-NN          Run .rlab scripts for one lesson (e.g. make lesson-01; 01–26)"
 
 all: notebooks html ## Regenerate the rendered book/ and the interactive HTML build
 
@@ -123,3 +123,5 @@ clean: ## Delete the interactive HTML build and .rlab script artefacts
 	rm -f $(BOOK)/*.html
 	rm -f lessons/*/*.svg lessons/*/*.html lessons/*/*.png lessons/*/*.gif
 	rm -f notebooks/*.svg notebooks/*.html notebooks/*.png notebooks/*.gif
+	rm -rf $(BOOK)/plots/*/.cache
+	rm -f $(BOOK)/plots/*/anim-[0-9].gif $(BOOK)/plots/*/anim-[0-9][0-9].gif

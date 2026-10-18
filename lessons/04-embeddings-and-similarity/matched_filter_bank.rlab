@@ -1,0 +1,42 @@
+# Script:  matched_filter_bank.rlab
+# System:  One query embedding correlated against a bank of token templates
+# Concept: The dot product is a zero-lag correlator / matched-filter output; cosine
+#          is the normalised form.  Scaling the query scales the raw bank, not the cosine.
+# Equations: dots = q * E4';  coss = (q/||q||) * Ê';  cos(10q, k) = cos(q, k)
+# Units:     Dot products in (embedding units)^2; cosines dimensionless in [-1, 1]
+
+king  = [1.0,  0.1,  0.8,  0.9];
+queen = [0.9,  0.9,  0.7,  0.8];
+man   = [0.1,  0.1,  0.6,  0.4];
+woman = [0.1,  0.9,  0.5,  0.3];
+vocab = {"king", "queen", "man", "woman"};
+
+function s = cos_sim(a, b)
+  s = sum(a .* b) / (sqrt(sum(a .^ 2)) * sqrt(sum(b .^ 2)))
+end
+
+# === Template bank ===
+E4 = [king; queen; man; woman];
+En = E4 ./ sqrt(sum(E4 .^ 2, 2));        # unit-length rows
+
+# === Correlate king against every template ===
+dots = king * E4';                       # raw correlator (matched-filter) outputs
+coss = (king / norm(king)) * En';     # normalised outputs = cosines
+print("raw correlator outputs (king . row):", dots);
+print("normalised (cosine)   (king , row):", coss);
+
+# === Norm effects: amplitude x10 ===
+king10 = 10 * king;
+print("10*king . queen =", sum(king10 .* queen), "  (was", sum(king .* queen), ")");
+print("cos(10*king, queen) =", cos_sim(king10, queen), "  (was", cos_sim(king, queen), ")");
+
+# === Figure: the bank, raw and normalised ===
+figure();
+subplot(1, 2, 1)
+bar(vocab, dots, "Matched-filter bank: king . template")
+ylim([0, 2.6])
+subplot(1, 2, 2)
+bar(vocab, coss, "Normalised (cosine) bank")
+ylim([0, 1.1])
+savefig("matched_filter_bank.svg")
+print("Saved matched_filter_bank.svg")

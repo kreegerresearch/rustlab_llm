@@ -84,15 +84,14 @@ print("==== Output ====");
 print("H_out shape:                     ", size(H_out));
 print("|H_in| =", norm(H_in), "  |H_mid| =", norm(H_mid), "  |H_out| =", norm(H_out));
 
-# === Visualise the residual stream at each stage ===
+# === Visualise the input and the two corrections the block adds (signed) ===
+feat = {"1", "2", "3", "4", "5", "6", "7", "8"};   # channel labels
+tok  = {"1", "2", "3", "4"};                       # token (time) labels
 figure();
 subplot(1, 3, 1)
-imagesc(H_in, "viridis")
-title("H_in (T=4, d_model=8)")
+heatmap(feat, tok, H_in, "H_in", "viridis")
 subplot(1, 3, 2)
-imagesc(H_mid, "viridis")
-title("H_mid (after MHA + residual)")
+heatmap(feat, tok, A_out, "MHA correction A_out", "viridis")
 subplot(1, 3, 3)
-imagesc(H_out, "viridis")
-title("H_out (after FFN + residual)")
+heatmap(feat, tok, F_out, "FFN correction F_out", "viridis")
 savefig("block_forward.svg")

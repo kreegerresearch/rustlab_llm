@@ -12,7 +12,7 @@
 #                          Sign-aware, matching HF RepetitionPenaltyLogitsProcessor:
 #                          multiplying a negative logit (rather than dividing it)
 #                          keeps the penalty pushing every token *down*.
-#   sampling step:         x_{t+1} ~ softmax(z' / T)  (then optional top-K / top-P)
+#   sampling step:         x_{t+1} ~ softmax(z' / tau)  (then optional top-K / top-P)
 # Units:   logits in nats; probabilities dimensionless.
 
 # Shared code: the Lesson 18 trainer and the Lesson 21 sampling helpers.
@@ -61,7 +61,7 @@ end
 
 # === 4. The unified generation loop ===
 # strategy is one of: "greedy", "temperature", "topK", "topP".
-function seq = generate(x0, n_new, E, W, strategy, T_temp, K_top, P_top, penalty, window)
+function seq = generate(x0, n_new, E, W, strategy, tau, K_top, P_top, penalty, window)
   seq = zeros(n_new + 1);
   seq(1) = x0;
   vocab = size(W)(2);
@@ -79,13 +79,13 @@ function seq = generate(x0, n_new, E, W, strategy, T_temp, K_top, P_top, penalty
     if strategy == "greedy"
       seq(t + 1) = argmax(logits);
     elseif strategy == "temperature"
-      seq(t + 1) = sample_categorical(softmax(logits / T_temp));
+      seq(t + 1) = sample_categorical(softmax(logits / tau));
     elseif strategy == "topK"
-      p = softmax(logits / T_temp);
+      p = softmax(logits / tau);
       q = topk_mass(p, K_top);
       seq(t + 1) = sample_categorical(q);
     elseif strategy == "topP"
-      p = softmax(logits / T_temp);
+      p = softmax(logits / tau);
       q = topp_mass(p, P_top);
       seq(t + 1) = sample_categorical(q);
     end
@@ -103,12 +103,12 @@ end
 
 seed(101);
 print("=== Generation gallery (12 tokens, prompt 'a') ===");
-print("greedy        :", seq_to_str(generate(1, 12, E, W, "greedy",     1.0, 0, 0.0, 1.0, 0), names));
-print("temp T=1.0    :", seq_to_str(generate(1, 12, E, W, "temperature", 1.0, 0, 0.0, 1.0, 0), names));
-print("temp T=0.5    :", seq_to_str(generate(1, 12, E, W, "temperature", 0.5, 0, 0.0, 1.0, 0), names));
-print("temp T=2.0    :", seq_to_str(generate(1, 12, E, W, "temperature", 2.0, 0, 0.0, 1.0, 0), names));
-print("top-K=2 T=1.0 :", seq_to_str(generate(1, 12, E, W, "topK",        1.0, 2, 0.0, 1.0, 0), names));
-print("top-P=0.9 T=1 :", seq_to_str(generate(1, 12, E, W, "topP",        1.0, 0, 0.9, 1.0, 0), names));
+print("greedy          :", seq_to_str(generate(1, 12, E, W, "greedy",     1.0, 0, 0.0, 1.0, 0), names));
+print("temp tau=1.0    :", seq_to_str(generate(1, 12, E, W, "temperature", 1.0, 0, 0.0, 1.0, 0), names));
+print("temp tau=0.5    :", seq_to_str(generate(1, 12, E, W, "temperature", 0.5, 0, 0.0, 1.0, 0), names));
+print("temp tau=2.0    :", seq_to_str(generate(1, 12, E, W, "temperature", 2.0, 0, 0.0, 1.0, 0), names));
+print("top-K=2 tau=1.0 :", seq_to_str(generate(1, 12, E, W, "topK",        1.0, 2, 0.0, 1.0, 0), names));
+print("top-P=0.9 tau=1 :", seq_to_str(generate(1, 12, E, W, "topP",        1.0, 0, 0.9, 1.0, 0), names));
 
 # === 6. Repetition penalty in action.  Greedy without penalty mode-collapses
 # ===  to a 2-cycle (e.g. "abababa..."); with penalty=2.0 over a window of 4
@@ -128,9 +128,9 @@ p_t05  = softmax(logits_b / 0.5);
 
 figure();
 bar([p_raw; p_pen; p_t05]')
-title("P(. | b) under (raw, penalty on 'a', temp 0.5)")
+title("P(. | b) under (raw, penalty on 'a', tau 0.5)")
 xlabel("token (1=a, 2=b, 3=c)")
 ylabel("probability")
-legend("raw", "penalty[a]=2", "T=0.5")
+legend("raw", "penalty[a]=2", "tau=0.5")
 savefig("controls_and_gallery.svg")
 print("Saved controls_and_gallery.svg");

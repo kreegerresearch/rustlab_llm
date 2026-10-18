@@ -1,45 +1,38 @@
 # Script:  multi_head_weights.rlab
 # System:  Multi-head self-attention — four heads with different attention patterns
 # Concept: Run H independent scaled dot-product attentions in parallel on the
-#          same sequence.  Each head has its own Q_h, K_h (and V_h), so each
-#          can specialise in a different kind of relationship: first-token,
-#          previous-token, self, or uniform.
-# Equations: A_h = softmax_row((Q_h K_h^T) / sqrt(d_k) + M)    for h = 1..H
-# Units:     Real-valued reals; A entries in [0, 1]
+#          same sequence.  Each head has its own Q_h, K_h, so each realises a
+#          different causal filter: first-sample hold, unit delay z^-1,
+#          identity, growing box.  Rank and row entropy measure what a head
+#          can do.  Heads 2-3 hand-write position into Q/K (Lesson 10 shows
+#          where a real model gets it); head 1 keys on content.
+# Equations: A_h = softmax_row((Q_h K_h^T) / sqrt(d_k) + M)   for h = 1..H
+#            rank(Q_h K_h^T) <= d_k;   H_t = -sum_i A_h(t,i) log2 A_h(t,i)
+# Units:     A entries dimensionless in [0, 1]; entropies in bits
+
+run "../../lib/info.rlab"
+run "../../lib/transformer.rlab"
 
 # === Dimensions ===
 T = 6;         # sequence length
 H = 4;         # number of heads
 d_k = 2;       # per-head key/query dimension
 scale = 1.0 / sqrt(d_k);
+M = causal_mask(T);          # shared additive causal mask (0 / -1e9)
 
-# Large-negative mask used by all heads (shared causal constraint).
-NEG_INF = -1.0e9;
-M = zeros(T, T);
-for i = 1:T
-  for j = (i + 1):T
-    M(i, j) = NEG_INF;
-  end
+function A = causal_attention_weights(Q, K, scale, M)
+  S = Q * K' * scale;
+  A = softmax(S + M);        # row-wise softmax of the masked scores
 end
 
-# === Hand-set Q, K for each head ===
-# Each head encodes a different pattern.  In a real model Q_h = X*W_Q^h with
-# learned W_Q^h — the hand-set values below mimic what learning would discover.
-
-# --- Head 1: "attend to the first token" --------------------------------
-# K row 1 alone carries a strong dim-1 signal; every query asks for dim 1.
+# === Head 1: "attend to the first token" (content head) ===
 K1 = zeros(T, d_k);
 K1(1, 1) = 3.0;
-
 Q1 = zeros(T, d_k);
-for t = 1:T
-  Q1(t, 1) = 1.0;
-end
+Q1(:, 1) = ones(T, 1);
 
-# --- Head 2: "attend to the previous token" -----------------------------
-# Encode position i on the unit circle: K_i = 3 * [cos(2πi/T), sin(2πi/T)].
-# Query at t asks for position t-1:     Q_t = 3 * [cos(2π(t-1)/T), sin(2π(t-1)/T)].
-# Dot product is maximised when i = t-1.
+# === Heads 2-3: position hand-written onto the unit circle (positional heads) ===
+# K_i = 3 [cos(2 pi i/T), sin(2 pi i/T)]; head 2 queries position t-1, head 3 position t.
 K2 = zeros(T, d_k);
 Q2 = zeros(T, d_k);
 for i = 1:T
@@ -51,90 +44,39 @@ for t = 1:T
   Q2(t, 2) = 3.0 * sin(2.0 * pi * (t - 1) / T);
 end
 
-# --- Head 3: "attend to self" -------------------------------------------
-# Same position encoding for K, and Q_t equals K_t — dot product max at i = t.
-K3 = K2;
-Q3 = K2;
-
-# --- Head 4: "uniform over past" (the Lesson 07 default) ----------------
-# All scores zero → softmax gives uniform weights across the causal triangle.
+# === Head 4: "uniform over past" (the Lesson 07 default) ===
 Q4 = zeros(T, d_k);
 K4 = zeros(T, d_k);
 
-# === Compute attention weights for each head ===
-# Helper: we repeat the same 5-step recipe per head.
-# (A function would be cleaner, but rustlab functions need a matrix return.)
-
-function A = causal_attention_weights(Q, K, scale, M, T)
-  S = Q * K' * scale;
-  % softmax(M) does per-row softmax of the whole T×T block (dim=2 default).
-  A = softmax(S + M);
-end
-
-A1 = causal_attention_weights(Q1, K1, scale, M, T);
-A2 = causal_attention_weights(Q2, K2, scale, M, T);
-A3 = causal_attention_weights(Q3, K3, scale, M, T);
-A4 = causal_attention_weights(Q4, K4, scale, M, T);
-
-print("Head 1 — 'first-token' attention:");
+# === Attention weights ===
+A1 = causal_attention_weights(Q1, K1, scale, M);
+A2 = causal_attention_weights(Q2, K2, scale, M);
+A3 = causal_attention_weights(K2, K2, scale, M);
+A4 = causal_attention_weights(Q4, K4, scale, M);
+print("Head 1 - first token:");
 print(A1);
-print("Head 2 — 'previous-token' attention:");
+print("Head 2 - previous token:");
 print(A2);
-print("Head 3 — 'self' attention:");
+print("Head 3 - self:");
 print(A3);
-print("Head 4 — 'uniform-over-past' attention:");
+print("Head 4 - uniform over past:");
 print(A4);
 
-# === Sanity checks ===
-# Each row sums to 1; upper triangle is ~0.
-for h = 1:H
-  print("--- Head", h, "---");
-  if h == 1
-    A = A1;
-  elseif h == 2
-    A = A2;
-  elseif h == 3
-    A = A3;
-  else
-    A = A4;
-  end
-  row_sums = zeros(T);
-  for t = 1:T
-    row_sums(t) = sum(A(t, :));
-  end
-  print("  Row sums (each should be 1):", row_sums);
-end
+# === Checks: rows sum to 1; head 4 row 4 is the prefix average ===
+row_sums = [sum(A1, 2); sum(A2, 2); sum(A3, 2); sum(A4, 2)];
+print("max |row sum - 1| over all four heads:", max(abs(row_sums - 1)));
+print("Head 4 row 4 (expect [0.25 0.25 0.25 0.25 0 0]):", A4(4, :));
 
-# === Verify pattern: Head 1 — every row concentrates on column 1 ===
-# For rows 2..T, A1(t, 1) should be the largest entry in row t.
-max_col_matches = 0;
-for t = 2:T
-  row = A1(t, :);
-  if argmax(row) == 1
-    max_col_matches = max_col_matches + 1;
-  end
-end
-print("Head 1: rows whose max is at column 1 (should be", T - 1, "):", max_col_matches);
+# === Rank of each score matrix (<= d_k = 2) ===
+print("rank(Q_h K_h') for heads 1..4:", rank(Q1 * K1'), rank(Q2 * K2'), rank(K2 * K2'), rank(Q4 * K4'));
 
-# === Verify pattern: Head 3 — row t (t > 1) concentrates on column t (self) ===
-# For row t the strongest causal attendee should be t itself.
-self_matches = 0;
-for t = 2:T
-  if argmax(A3(t, :)) == t
-    self_matches = self_matches + 1;
-  end
-end
-print("Head 3: rows whose max is at column t (self) (should be", T - 1, "):", self_matches);
+# === Per-row entropies in bits against the log2 t ceiling ===
+Hs = [row_entropies_bits(A1)', row_entropies_bits(A2)', row_entropies_bits(A3)', row_entropies_bits(A4)'];
+print("columns: t, log2 t, head 1, head 2, head 3, head 4  (bits)");
+print([(1:T)', log2(1:T)', Hs]);
 
-# === Verify pattern: Head 4 — rows are uniform over their causal support ===
-# Row t has t equal entries of 1/t.  Check row 4: should be [0.25, 0.25, 0.25, 0.25, 0, 0].
-print("Head 4: row 4 (expect [0.25, 0.25, 0.25, 0.25, 0, 0]):", A4(4, :));
-
-# === Plot the four heads as a 2×2 heatmap grid ===
-# Both axes are token positions t1..tT.  Categorical labels via heatmap()
-# make the causal "row t lights up only columns 1..t" structure self-evident.
+# === Figure 1: the four heads as a 2x2 heatmap grid ===
 positions = {"t1", "t2", "t3", "t4", "t5", "t6"};
-
 figure();
 subplot(2, 2, 1)
 heatmap(positions, positions, A1, "Head 1 — first token", "viridis")
@@ -145,4 +87,20 @@ heatmap(positions, positions, A3, "Head 3 — self", "viridis")
 subplot(2, 2, 4)
 heatmap(positions, positions, A4, "Head 4 — uniform", "viridis")
 savefig("multi_head_attention.svg")
-print("Saved multi_head_attention.svg");
+
+# === Figure 2: row 4 of each head = the filter taps seen at output time 4 ===
+figure();
+subplot(1, 4, 1)
+stem(1:T, A1(4, :), "color", "blue")
+title("head 1: first-sample hold")
+subplot(1, 4, 2)
+stem(1:T, A2(4, :), "color", "blue")
+title("head 2: unit delay z^-1")
+subplot(1, 4, 3)
+stem(1:T, A3(4, :), "color", "blue")
+title("head 3: identity")
+subplot(1, 4, 4)
+stem(1:T, A4(4, :), "color", "blue")
+title("head 4: growing box")
+savefig("multi_head_taps.svg")
+print("Saved multi_head_attention.svg, multi_head_taps.svg");

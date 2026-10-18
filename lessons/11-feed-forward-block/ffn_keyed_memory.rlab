@@ -1,0 +1,53 @@
+# Script:  ffn_keyed_memory.rlab
+# System:  FFN sublayer read as a keyed memory and as a static nonlinearity
+# Concept: (1) FFN(x) = sum_m GELU(x . k_m + b_m) v_m — columns of W1 are keys,
+#          rows of W2 are values; (2) the per-token Jacobian W1 diag(GELU') W2
+#          is an operating-point-dependent gain; (3) a deterministic map cannot
+#          raise mutual information (data-processing), checked on a discrete toy
+# Equations:
+#   J_FFN(x) = W1 diag(GELU'(x W1 + b1)) W2        (row convention)
+#   I(Y; X) = H(X) + H(Y) - H(X, Y)                (bits)
+# Units:   activations dimensionless; information in bits
+
+run "../../lib/transformer.rlab"      # gelu_grad
+run "../../lib/info.rlab"             # entropy_bits
+
+# === Same small FFN as ffn_forward.rlab ===
+seed(11);
+T = 5;
+d_model = 4;
+d_ff = 4 * d_model;
+H  = randn(T, d_model);
+W1 = randn(d_model, d_ff) * sqrt(2.0 / d_model);
+b1 = zeros(d_ff);
+W2 = randn(d_ff, d_model) * sqrt(2.0 / d_ff);
+b2 = zeros(d_model);
+ones_T = ones(T);
+hidden_pre  = H * W1 + outer(ones_T, b1);
+hidden_post = gelu(hidden_pre);
+out         = hidden_post * W2 + outer(ones_T, b2);
+
+# === Slot-sum identity for token 2 ===
+acc = zeros(d_model);
+for m = 1:d_ff
+  acc = acc + hidden_post(2, m) * W2(m, :);
+end
+print("max | slot sum - out(2,:) | =", max(abs(acc - out(2, :))));
+
+# === Per-token Jacobian: which gates are open sets the gain ===
+for t = 1:T
+  g_t = gelu_grad(hidden_pre(t, :));
+  s_t = svd(W1 * diag(g_t) * W2);
+  print("token", t, " open gates (gain > 1/2):", sum(g_t > 0.5), " J singular values:", s_t);
+end
+
+# === Data-processing check on a discrete toy ===
+P_xy = [0.9, 0.1; 0.7, 0.3; 0.3, 0.7; 0.1, 0.9] / 4;          # rows x = 1..4, columns y = 1..2
+P_perm  = P_xy([4, 2, 1, 3], :);                              # injective f
+P_merge = [P_xy(1, :); P_xy(2, :) + P_xy(3, :); P_xy(4, :)];  # f merges x2 and x3
+I_xy    = entropy_bits(sum(P_xy, 2)')    + entropy_bits(sum(P_xy))    - entropy_bits(reshape(P_xy, 1, 8));
+I_perm  = entropy_bits(sum(P_perm, 2)')  + entropy_bits(sum(P_perm))  - entropy_bits(reshape(P_perm, 1, 8));
+I_merge = entropy_bits(sum(P_merge, 2)') + entropy_bits(sum(P_merge)) - entropy_bits(reshape(P_merge, 1, 6));
+print("I(Y; X)              =", I_xy, "bits");
+print("I(Y; f(X)) injective =", I_perm, "bits");
+print("I(Y; f(X)) merging   =", I_merge, "bits");

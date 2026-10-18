@@ -17,7 +17,7 @@ This file guides AI coding tools working in this repository.
 
 Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts and integrated notebooks that produce visualisations. The series builds from raw probability and linear algebra to a complete GPT-style decoder — nothing is a black box.
 
-**Curriculum status:** 25 lessons. Phases 1–8 (Lessons 01–23) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end: Lesson 22 derives the full analytical backward pass through the Lesson 13 block (the shared `lib/transformer.rlab`), and the Lesson 23 capstone trains the full architecture end-to-end (PPL → 1.00008 on a corpus whose optimal-bigram floor is ≈ 1.47). Phase 9 (Lesson 24) covers post-2020 architectural variants — RoPE, RMSNorm, SwiGLU, GQA — as drop-in swaps. Phase 10 (Lesson 25) applies the backward pass to SFT and DPO. Phase 11 (2026-09-27) moved the toolchain to rustlab 0.3.7, introduced `lib/`, and renumbered 22–25. Phases 12–15 — the re-centring of every lesson on the Signals / Systems / Information lenses plus new lessons 00 and 26 — are specified in `docs/proposal-2026-09-27-ee-controls-it-revision.md` and tracked in `PLAN.md`. Phase 16 (2026-10-18) adds the standalone Sherlock tutorial (`tutorial/sherlock/`, `lib/gpt.rlab`), which trains, fine-tunes and distils a real character-level GPT outside the notebook pipeline.
+**Curriculum status:** 27 notebooks (Lessons 00–26), all complete. Lesson 00 is the course map. Phases 1–8 (Lessons 01–23) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end: Lesson 22 derives the full analytical backward pass through the Lesson 13 block (the shared `lib/transformer.rlab`), and the Lesson 23 capstone trains the full architecture end-to-end (PPL → 1.00008 on a corpus whose optimal-bigram floor is ≈ 1.47). Phase 9 (Lesson 24) covers RoPE, RMSNorm, SwiGLU, GQA; Phase 10 (Lesson 25) SFT and DPO; Lesson 26 quantisation and fixed-point inference. Phases 11–15 (2026-09-27) moved the toolchain to rustlab 0.3.7, introduced `lib/`, renumbered 22–25, and re-centred every lesson on the **Engineering Lenses** (Signals / Systems / Information, see below) per `docs/proposal-2026-09-27-ee-controls-it-revision.md`; the record is in `PLAN.md`. A standalone, `make`-driven tutorial (`tutorial/sherlock/`, Phase 16) pre-trains, fine-tunes, distils and queries a character-level GPT on *The Adventures of Sherlock Holmes* with `lib/gpt.rlab`; `docs/sherlock-performance-and-rustlab-requests.md` records its throughput and the upstream asks.
 
 **Learning goal:** Derive every core LLM algorithm — tokenisation, attention, transformer blocks, training, fine-tuning, and inference — with working code and plots at each step. Follows the architecture of [nanoGPT](https://github.com/karpathy/nanoGPT) through Phase 8 and extends it through Phases 9–10.
 
@@ -33,7 +33,7 @@ This repo follows the [Rustlab lesson-site pattern](../rustlab/docs/lesson-site-
 
 ```
 notebooks/
-  README.md              # editor-facing notes (skipped by renderer)
+  _authoring.md          # editor-facing notes (`_` partials are not rendered; since rustlab 0.3.9 a README.md *would* be)
   NN-topic-slug.md       # source notebooks — prose + math + ```rustlab``` blocks
 
 lessons/
@@ -47,6 +47,7 @@ lib/
                          # transformer_forward/backward + AdamW + schedule (L22/23/25)
   sampling.rlab          # sample_categorical, topk_mass, topp_mass (L21/23)
   bigram_lm.rlab         # train_bigram_lm — the Lesson 18 model used by L20/21
+  info.rlab              # entropy_bits/nats, cross_entropy_bits, kl_bits, row_entropies_bits, ppl_from_nats
   gpt.rlab               # trainable decoder-only GPT of any depth / head count (L14 forward,
                          # L15/22 backward, AdamW, schedule, clipping, generation, encode/decode)
                          # — used only by tutorial/sherlock/; API summary in its header
@@ -84,13 +85,13 @@ make notebooks          # render book/<slug>.md from notebooks/<slug>.md (markdo
 make html               # render book/index.html + per-notebook html (gitignored)
 make notebooks-check    # CI drift guard: fails if book/ is out of sync with sources
 make validate           # lint rendered markdown via `rustlab-notebook validate` (markdownlint-cli2)
-make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–25; fails on the first script error)
+make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–26; fails on the first script error)
 make clean              # delete the interactive HTML build and .rlab artefacts
 make sherlock-data      # Sherlock tutorial step 0: python3 prepare_corpus.py -> data/ids.csv, data/vocab.rlab
 make sherlock-train     # step 1: pre-train (also sherlock-generate / -sft / -distill / -bench / -test / -clean)
 ```
 
-The notebook render is directory-mode: `rustlab-notebook render notebooks --format markdown --output book --jail-root .` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The `--jail-root .` is required so notebook blocks may `run "../lib/<name>.rlab"` (0.3.7 jails notebook file I/O to the collection root by default). The hand-written `book/README.md` is preserved (the renderer skips files named `README.md` on input). Note: as of rustlab 0.3.4 (May 2026) the renderer is a separate binary `rustlab-notebook` — the old `rustlab notebook ...` subcommand has been removed. `make notebooks` is updated accordingly.
+The notebook render is directory-mode: `rustlab-notebook render notebooks --format markdown --output book --jail-root .` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The `--jail-root .` is required so notebook blocks may `run "../lib/<name>.rlab"` (0.3.7 jails notebook file I/O to the collection root by default). The hand-written `book/README.md` is preserved because the source tree has no `README.md` (rustlab 0.3.9 renders a source `README.md` as a notebook and would overwrite the landing page; the editor notes therefore live in `notebooks/_authoring.md`). Note: as of rustlab 0.3.4 (May 2026) the renderer is a separate binary `rustlab-notebook` — the old `rustlab notebook ...` subcommand has been removed. `make notebooks` is updated accordingly.
 
 `make validate` shells out to `rustlab-notebook validate -f markdown notebooks`, which re-renders every notebook to a temp dir and pipes it through `markdownlint-cli2` using the project-root `.markdownlint-cli2.jsonc` (mirrors rustlab's own noise floor plus `MD024: { siblings_only: true }` so the curriculum's repeated `### Theory` H3s under distinct H2 parents pass). Install the linter with `npm i -g markdownlint-cli2`; without it, validate reports SKIPPED rather than failing. HTML / LaTeX / PDF validation are opt-in via `-f html|latex|pdf` and require additional linters (`vnu` + JRE, `chktex`, `qpdf`/`pdfinfo`).
 
@@ -159,6 +160,61 @@ Use GitHub-flavored Markdown with LaTeX math: `$inline$` and `$$block$$`. Each n
 - Name every variable and state units explicitly.
 - Connect math to intuition: explain *why* the result looks the way it does.
 - Call out common misconceptions explicitly.
+
+---
+
+## Engineering Lenses (the course's organising device, Phases 12–15)
+
+The course teaches LLM design from **signals and systems**, **modern control / dynamical systems**, and **information theory**. Every lesson 01–26 therefore closes its concept content with one fixed H2, placed before `## Key Takeaways`:
+
+```
+## Engineering Lenses
+### Signals
+### Systems
+### Information
+```
+
+Rules:
+
+- **Each H3 answers a fixed question.** *Signals*: what is the signal (its axis, units, scale) and what operation acts on it (filter, transform, modulation, normalisation) — with a frequency-domain view when that is meaningful. *Systems*: what is the state, what is the update law, is it stable and what sets its time constant or damping, where is the feedback. *Information*: what bits are created, moved, or destroyed here; what is the floor, bound, or budget — **computed on the lesson's own data**.
+- **Every claim opens with a bold honesty label**: `**Exact.**` (a formal equivalence), `**Model.**` (a faithful simplification), or `**Analogy.**` (intuition only, not an identity). Never let an analogy read as an identity.
+- **Every H3 that is present contains at least one executed rustlab block** (a computation or a figure). Prose-only lenses are not allowed. A lens with nothing exact or model-grade to say is omitted, and the H2 carries one sentence saying so (e.g. "No signals reading adds to this lesson.").
+- The former `## Connection to Information Theory` sections migrate into `### Information`, converted from assertion to computation.
+- **Budget:** the lenses add at most one H2 per lesson (typically 40–120 lines); anything larger becomes an exercise or a forward reference. A rewritten lesson should not grow by more than about 40 % in lines.
+- **Figures:** under every figure, one `> [!TIP]` line saying what to look for. Side-by-side panels use `subplot` in one block (one captured plot per block). Signed data is plotted signed.
+- **Diagrams:** architectural lessons carry a ```` ```mermaid ```` signal-flow / block diagram with tensor shapes on the edges. Use `flowchart LR` or `TD`, short node labels, and quote any label containing parentheses, `|`, or `#` (`A["H (T × d)"]`). The markdown renderer passes the fence through to GitHub; the HTML renderer draws it offline.
+- **Demonstrations must demonstrate:** a hand-built "interpretable" matrix is printed and the prose names the entry that proves the claim; a figure described in prose exists in the notebook.
+- **Shared helpers:** `lib/info.rlab` (`entropy_bits`, `entropy_nats`, `cross_entropy_bits`, `kl_bits`, `row_entropies_bits`, `ppl_from_nats`) — include with the hidden `run "../lib/info.rlab"` block once the concept has been derived in that lesson (Lesson 02 derives entropy inline first).
+
+### Notation (fixed in Lesson 00 — every lesson follows it)
+
+| Symbol | Meaning |
+|---|---|
+| $T$ | sequence length; tokens index discrete time $t = 1, \dots, T$ and are the **rows** of every token matrix |
+| $d$, $d_{\text{model}}$, $d_k$, $d_{\text{ff}}$ | feature widths; features are the **columns** (channels) |
+| $\mathbf{X}, \mathbf{H} \in \mathbb{R}^{T \times d}$ | token / residual-stream matrix; row $t$ is token $t$; layers act by right-multiplication $\mathbf{X}\mathbf{W}$ with $\mathbf{W} \in \mathbb{R}^{d_{\text{in}} \times d_{\text{out}}}$ — math and code agree |
+| $\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V, \mathbf{W}_O, \mathbf{W}_1, \mathbf{W}_2, \mathbf{W}_U, \mathbf{E}$ | learned projections, FFN weights, LM head, embedding |
+| $\mathbf{A}$ | attention / mixing matrix: rows = query time $t$, columns = key time $i \le t$ (Lesson 07's uniform version is the special case $\mathbf{A} = \mathbf{W}_{\text{avg}}$) |
+| $\tau$ | softmax temperature — never $T$ |
+| $\mathbf{P}$ | bigram transition matrix (row-stochastic); $\boldsymbol{\Pi}$ a permutation matrix |
+| $\mathcal{L}$ | loss, computed in **nats** in code; prose may report **bits** ($\div \ln 2$) when labelled; perplexity $= e^{\mathcal{L}_{\text{nats}}} = 2^{\mathcal{L}_{\text{bits}}}$ — state the base once per lesson |
+| $\bar{\mathbf{x}} = \partial \mathcal{L} / \partial \mathbf{x}$ | adjoint (= the costate $\boldsymbol{\lambda}$ of optimal control; Lesson 15 says so once) |
+| $\eta$, $\beta_1$, $\beta_2$, $\mu$ | learning rate, Adam moment decays, heavy-ball momentum |
+| indices | 1-based in prose, tables, and code; categorical plot axes carry 1-based labels |
+
+### Exercise solutions
+
+Exercises stay plain numbered lists. For derivation-type exercises only, a hand-written HTML block follows the item (GitHub renders it collapsed):
+
+```
+<details><summary>Solution</summary>
+
+…markdown…
+
+</details>
+```
+
+Do not use the `<!-- solution -->` directive — it is broken in markdown output (rustlab roadmap A9).
 
 ---
 
@@ -327,6 +383,20 @@ When a needed function is missing from rustlab, record it here with the format:
 
 ### `<!-- solution -->` directive breaks markdown output
 **Current state (0.3.7):** emits an unclosed and duplicated `<details>` in `-f markdown` (rustlab roadmap A9). Exercises stay plain numbered lists; use hand-written `<details><summary>` HTML only for derivation-type solutions until fixed.
+
+### Plotting and language quirks found during the 2026-09-27 rewrite (0.3.7)
+- `hline`/`yline` called after `plot`/`bar`/`semilogy` **replaces** the series unless `hold("on")` is active — always `hold("on")` before adding reference lines (this had blanked `gqa.rlab`'s curve).
+- The SVG backend drops `plot`/`scatter` series overlaid on `contour`/`contourf`/`imagesc` (all call orders); draw level sets as `plot` lines or use two figures.
+- `quiver` needs gridded origins and rescales shaft lengths to the grid; one or two arrows at a point render wrong. Arrows are drawn as short `plot` polylines.
+- `hold("on")` must be re-issued after each `subplot(...)`.
+- `svd` has an absolute floor ≈ 1e-8 (`svd(diag([1, 1e-9, 1e-12]))` → `[1, 0, 0]`); do not report σ_min below it.
+- `V(:, i)'` does not transpose a column slice (it stays a vector); `M(:, j)'` likewise; use `reshape` or `dot`. `diag(D)` returns a row.
+- Indexed compound assignment `C(i, j) += 1` does not parse — write it out.
+- Integer-class matrix `*` is element-wise (`int32(A) * int32(B)` = `A .* B`).
+- `snr` and `histogram` reject 1×n matrices — pass `randn(n)` vectors or `reshape`.
+- `print` accepts at most 16 arguments; there is no `vline` (draw a two-point series).
+- Template interpolation: `${expr}` immediately followed by `\times$` or `> 1$`, and the `$${expr}$$` form, are not expanded — put a space or reword.
+- Wikilinks inside `> [!NOTE]`/`[!TIP]` callouts are **not** transformed by the markdown renderer — use plain `[text](NN-slug.md)` links there.
 
 ### `run` path handling
 **Current state (0.3.7):** an unquoted `run ../x.rlab` fails to lex (`invalid number: ..`); the quoted form works. A `run` nested inside a script that a notebook runs resolves relative to the notebook directory, not the script. Both are worked around by convention (quoted paths; notebooks never `run` lesson scripts).
