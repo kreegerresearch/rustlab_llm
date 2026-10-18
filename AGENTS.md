@@ -17,7 +17,7 @@ This file guides AI coding tools working in this repository.
 
 Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts and integrated notebooks that produce visualisations. The series builds from raw probability and linear algebra to a complete GPT-style decoder — nothing is a black box.
 
-**Curriculum status:** 25 lessons. Phases 1–8 (Lessons 01–23) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end: Lesson 22 derives the full analytical backward pass through the Lesson 13 block (the shared `lib/transformer.rlab`), and the Lesson 23 capstone trains the full architecture end-to-end (PPL → 1.00008 on a corpus whose optimal-bigram floor is ≈ 1.47). Phase 9 (Lesson 24) covers post-2020 architectural variants — RoPE, RMSNorm, SwiGLU, GQA — as drop-in swaps. Phase 10 (Lesson 25) applies the backward pass to SFT and DPO. Phase 11 (2026-09-27) moved the toolchain to rustlab 0.3.7, introduced `lib/`, and renumbered 22–25. Phases 12–15 — the re-centring of every lesson on the Signals / Systems / Information lenses plus new lessons 00 and 26 — are specified in `docs/proposal-2026-09-27-ee-controls-it-revision.md` and tracked in `PLAN.md`.
+**Curriculum status:** 25 lessons. Phases 1–8 (Lessons 01–23) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end: Lesson 22 derives the full analytical backward pass through the Lesson 13 block (the shared `lib/transformer.rlab`), and the Lesson 23 capstone trains the full architecture end-to-end (PPL → 1.00008 on a corpus whose optimal-bigram floor is ≈ 1.47). Phase 9 (Lesson 24) covers post-2020 architectural variants — RoPE, RMSNorm, SwiGLU, GQA — as drop-in swaps. Phase 10 (Lesson 25) applies the backward pass to SFT and DPO. Phase 11 (2026-09-27) moved the toolchain to rustlab 0.3.7, introduced `lib/`, and renumbered 22–25. Phases 12–15 — the re-centring of every lesson on the Signals / Systems / Information lenses plus new lessons 00 and 26 — are specified in `docs/proposal-2026-09-27-ee-controls-it-revision.md` and tracked in `PLAN.md`. Phase 16 (2026-10-18) adds the standalone Sherlock tutorial (`tutorial/sherlock/`, `lib/gpt.rlab`), which trains, fine-tunes and distils a real character-level GPT outside the notebook pipeline.
 
 **Learning goal:** Derive every core LLM algorithm — tokenisation, attention, transformer blocks, training, fine-tuning, and inference — with working code and plots at each step. Follows the architecture of [nanoGPT](https://github.com/karpathy/nanoGPT) through Phase 8 and extends it through Phases 9–10.
 
@@ -47,6 +47,15 @@ lib/
                          # transformer_forward/backward + AdamW + schedule (L22/23/25)
   sampling.rlab          # sample_categorical, topk_mass, topp_mass (L21/23)
   bigram_lm.rlab         # train_bigram_lm — the Lesson 18 model used by L20/21
+  gpt.rlab               # trainable decoder-only GPT of any depth / head count (L14 forward,
+                         # L15/22 backward, AdamW, schedule, clipping, generation, encode/decode)
+                         # — used only by tutorial/sherlock/; API summary in its header
+
+tutorial/
+  sherlock/              # standalone tutorial (Phase 16): config.rlab, prepare_corpus.py (Python,
+    README.md            #   stdlib only), train / generate / sft / qa_pairs / distill / benchmark
+    data/adventures.txt  #   .rlab, test_gpt_lib.rlab; corpus committed, ids.csv / vocab.rlab /
+    checkpoints/         #   checkpoints / figures / logs gitignored. Driven by `make sherlock-*`.
 
 book/                    # rendered output for GitHub display
   README.md              # hand-written GitHub landing page
@@ -57,7 +66,7 @@ book/                    # rendered output for GitHub display
 
 PLAN.md                  # phase status, handoff notes
 README.md                # project overview + lesson roadmap
-Makefile                 # notebooks / html / lesson-NN / clean
+Makefile                 # notebooks / html / lesson-NN / sherlock-* / clean
 ```
 
 There is no per-lesson `lesson.md` — the notebook *is* the lesson (theory, code, plots, exercises in one file). When `.rlab` scripts mirror notebook code blocks, they live under `lessons/<slug>/` and call `savefig("foo.svg")` next to themselves (artefacts gitignored).
@@ -77,11 +86,15 @@ make notebooks-check    # CI drift guard: fails if book/ is out of sync with sou
 make validate           # lint rendered markdown via `rustlab-notebook validate` (markdownlint-cli2)
 make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–25; fails on the first script error)
 make clean              # delete the interactive HTML build and .rlab artefacts
+make sherlock-data      # Sherlock tutorial step 0: python3 prepare_corpus.py -> data/ids.csv, data/vocab.rlab
+make sherlock-train     # step 1: pre-train (also sherlock-generate / -sft / -distill / -bench / -test / -clean)
 ```
 
 The notebook render is directory-mode: `rustlab-notebook render notebooks --format markdown --output book --jail-root .` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The `--jail-root .` is required so notebook blocks may `run "../lib/<name>.rlab"` (0.3.7 jails notebook file I/O to the collection root by default). The hand-written `book/README.md` is preserved (the renderer skips files named `README.md` on input). Note: as of rustlab 0.3.4 (May 2026) the renderer is a separate binary `rustlab-notebook` — the old `rustlab notebook ...` subcommand has been removed. `make notebooks` is updated accordingly.
 
 `make validate` shells out to `rustlab-notebook validate -f markdown notebooks`, which re-renders every notebook to a temp dir and pipes it through `markdownlint-cli2` using the project-root `.markdownlint-cli2.jsonc` (mirrors rustlab's own noise floor plus `MD024: { siblings_only: true }` so the curriculum's repeated `### Theory` H3s under distinct H2 parents pass). Install the linter with `npm i -g markdownlint-cli2`; without it, validate reports SKIPPED rather than failing. HTML / LaTeX / PDF validation are opt-in via `-f html|latex|pdf` and require additional linters (`vnu` + JRE, `chktex`, `qpdf`/`pdfinfo`).
+
+**Standalone tutorial.** `tutorial/sherlock/` is a `make`-driven set of scripts, not a notebook: `sherlock-data` runs `python3 prepare_corpus.py data/adventures.txt` once (rustlab cannot read text files or convert characters to codes, so this step is Python, standard library only), and every other `sherlock-*` target is `cd tutorial/sherlock && rustlab run <script> --plot none` so the scripts' relative paths (`config.rlab`, `data/`, `checkpoints/`, `../../lib/gpt.rlab`) resolve. All knobs are fields of the struct `C` in `tutorial/sherlock/config.rlab`, which ends with `run "preset.rlab"` so a preset copied from `presets/` (`make sherlock-preset PRESET=quick|large|default`, `make sherlock-quick`) has the last word; `make sherlock-ask Q="…"` writes `question.rlab` and runs `ask.rlab` against the SFT checkpoint. The default run (811 k parameters, 3,000 steps) took 1,216 s at 2,527 tok/s on a 14-core laptop and reached 2.203 held-out bits/char. After any change to `lib/gpt.rlab`, run `make sherlock-test` (finite-difference gradient check on every parameter block). The tutorial page is `tutorial/sherlock/README.md`; measurements and rustlab requests are in `docs/sherlock-performance-and-rustlab-requests.md`.
 
 Single script:
 ```bash
@@ -166,6 +179,7 @@ Use GitHub-flavored Markdown with LaTeX math: `$inline$` and `$$block$$`. Each n
 - Always `print()` key numerical results a student should verify by hand
 - Name files descriptively: `gradient_descent.rlab`, not `script1.rlab`
 - Keep scripts short enough to read in one sitting (split if over ~60 lines)
+- Scripts under `tutorial/` follow every rule above (header block, `# ===` sections, printed results, library via quoted `run`) but **may exceed 60 lines**: each is a complete program (data → model → loop → curves → sample) rather than one concept, and splitting it would hide the pipeline the tutorial exists to show
 - Each script must run independently given `lib/`: shared code is pulled in with `run "../../lib/<name>.rlab"` (quoted, script-relative path) at the top of the script; never copy a function between scripts
 
 ---

@@ -1,0 +1,194 @@
+# Script:  distill.rlab
+# System:  Knowledge distillation (Hinton et al., 2015) from the pre-trained
+#          Sherlock GPT (teacher, checkpoints/ckpt_latest.npz) into a
+#          student one-eighth its size, compared against an identical
+#          student trained from scratch on hard targets alone.
+# Concept: The teacher's softened next-character distribution carries more
+#          information per position than the one-hot target ("dark
+#          knowledge": which wrong characters are plausible).  The student
+#          minimises a mix of the temperature-scaled KL to the teacher and
+#          the ordinary cross-entropy; only the upstream gradient at the
+#          logits changes, the backward pass is the library's.
+# Equations: p_T = softmax(z / T);  L = alpha T^2 KL(p_T^teacher || p_T^student) + (1 - alpha) CE
+#            dL/dz_student = alpha T (p_T^student - p_T^teacher) / n + (1 - alpha)(softmax(z) - onehot) / n
+# Units:   losses in nats/char (bits/char = nats / ln 2); temperature dimensionless; time in s.
+
+run "../../lib/gpt.rlab"
+run "config.rlab"
+run "data/vocab.rlab"
+
+# === 1. Distillation knobs ===
+C_kd = struct();
+# The student is half the teacher's width and depth (64 / 2 at the defaults),
+# so the comparison still makes sense when a preset changes the teacher.
+C_kd.d_model = max(32, floor(C.d_model / 2));  C_kd.n_layer = max(1, floor(C.n_layer / 2));
+C_kd.n_head = C.n_head;  C_kd.d_ff = 4 * C_kd.d_model;
+C_kd.n_steps = 600;  C_kd.batch = 8;
+C_kd.eta_max = 2.0e-3;  C_kd.eta_min = 2.0e-4;  C_kd.warmup = 60;
+C_kd.T_kd = 2.0;     # softening temperature
+C_kd.alpha = 0.5;    # weight of the soft (teacher) term; 0 = hard targets only
+C_kd.log_every = 50;  C_kd.eval_every = 100;  C_kd.eval_windows = 16;
+C_kd.init_std = C.init_std;  C_kd.clip_norm = C.clip_norm;
+C_kd.beta1 = C.beta1;  C_kd.beta2 = C.beta2;  C_kd.eps_adam = C.eps_adam;  C_kd.weight_decay = C.weight_decay;
+C_kd.ckpt_in = C.ckpt_dir + "/ckpt_latest.npz";
+C_kd.ckpt_out = C.ckpt_dir + "/ckpt_student.npz";
+
+# === 2. Data and teacher ===
+ids_all = load(C.ids_csv);
+N_all = length(ids_all);
+n_val = floor(N_all * C.val_frac);
+ids_train = ids_all(1:(N_all - n_val));
+ids_val = ids_all((N_all - n_val + 1):N_all);
+
+theta_t = load(C_kd.ckpt_in, "theta");
+cfgv = load(C_kd.ckpt_in, "cfgv");
+step_t = load(C_kd.ckpt_in, "step");
+cfg_t = gpt_config(cfgv(1), cfgv(2), cfgv(3), cfgv(4), cfgv(5), cfgv(6));
+Pt = gpt_unflatten(theta_t, cfg_t);
+T = cfg_t.Tmax - 1;
+cfg_s = gpt_config(cfg_t.V, C_kd.d_model, C_kd.n_layer, C_kd.n_head, C_kd.d_ff, cfg_t.Tmax);
+print("teacher:", gpt_n_params(cfg_t), "params (pre-training step", step_t, ")   student:", gpt_n_params(cfg_s), ...
+      "params   ratio", gpt_n_params(cfg_t) / gpt_n_params(cfg_s));
+
+# === 3. Helpers: windows, held-out loss, the distillation gradient ===
+function W = sample_windows(ids, B, T)
+  W = zeros(B, T + 1);
+  for b = 1:B
+    s = floor(rand() * (length(ids) - T - 1)) + 1;
+    W(b, :) = ids(s:(s + T));
+  end
+end
+
+function L = eval_loss(ids, n_w, T, P, cfg)
+  stride = floor((length(ids) - T - 1) / n_w);
+  L = 0.0;
+  for w = 1:n_w
+    s = (w - 1) * stride + 1;
+    L = L + gpt_loss(ids(s:(s + T)), P, cfg);
+  end
+  L = L / n_w;
+end
+
+# Soft + hard loss at the student's logits zs given teacher logits zt.
+function L = kd_loss(ids, zs, zt, Tkd, alpha)
+  n = size(zs)(1) - 1;
+  Ps_T = softmax(zs(1:n, :) / Tkd);  Pt_T = softmax(zt(1:n, :) / Tkd);
+  Ps = softmax(zs(1:n, :));
+  L_soft = sum(sum(Pt_T .* (log(Pt_T + 1e-12) - log(Ps_T + 1e-12)))) / n;
+  L_hard = 0.0;
+  for t = 1:n
+    L_hard = L_hard - log(Ps(t, ids(t + 1)));
+  end
+  L = alpha * Tkd ^ 2 * L_soft + (1 - alpha) * L_hard / n;
+end
+
+# Its gradient: gpt_dlogits' job for the mixed objective.
+function dl = kd_dlogits(ids, zs, zt, Tkd, alpha)
+  T = size(zs)(1);  V = size(zs)(2);  n = T - 1;
+  Ps_T = softmax(zs(1:n, :) / Tkd);  Pt_T = softmax(zt(1:n, :) / Tkd);
+  Ps = softmax(zs(1:n, :));
+  OH = zeros(n, V);
+  for t = 1:n
+    OH(t, ids(t + 1)) = 1.0;
+  end
+  dl = zeros(T, V);
+  dl(1:n, :) = (alpha * Tkd) * (Ps_T - Pt_T) / n + (1 - alpha) * (Ps - OH) / n;
+end
+
+# One window for parmap: teacher forward (no gradient), student forward and
+# backward.  Returns [flat grad, hard CE, mixed KD loss].
+function g = kd_grad_flat(ids, Pt, Ps, cfg_t, cfg_s, Tkd, alpha)
+  mask = ones(length(ids) - 1);
+  [zt, Lt, ct] = gpt_forward(ids, mask, Pt, cfg_t);
+  [zs, Ls, cs] = gpt_forward(ids, mask, Ps, cfg_s);
+  G = gpt_backward(ids, kd_dlogits(ids, zs, zt, Tkd, alpha), cs, Ps, cfg_s);
+  g = [gpt_flatten(G, cfg_s), Ls, kd_loss(ids, zs, zt, Tkd, alpha)];
+end
+
+# Train a fresh student for K.n_steps; alpha = 0 is the hard-target control.
+function [theta, h_ce, h_kd, v_step, v_loss] = train_student(ids_train, ids_val, Pt, cfg_t, cfg_s, K, alpha, tag)
+  T = cfg_s.Tmax - 1;  B = K.batch;  Tkd = K.T_kd;
+  theta = gpt_flatten(gpt_init(cfg_s, K.init_std), cfg_s);
+  m_adam = zeros(length(theta));  v_adam = zeros(length(theta));
+  wd_mask = gpt_wd_mask(cfg_s);
+  h_ce = zeros(K.n_steps);  h_kd = zeros(K.n_steps);  v_step = [];  v_loss = [];
+  mask = ones(T);
+  tic;
+  for step = 1:K.n_steps
+    eta_t = gpt_lr(step, K.n_steps, K.warmup, K.eta_max, K.eta_min);
+    P = gpt_unflatten(theta, cfg_s);
+    W = sample_windows(ids_train, B, T);
+    if alpha > 0
+      Gm = parmap(@(b) kd_grad_flat(W(b, :), Pt, P, cfg_t, cfg_s, Tkd, alpha), 1:B);
+    else
+      Gm = parmap(@(b) [gpt_grad_flat(W(b, :), mask, P, cfg_s), 0.0], 1:B);
+    end
+    n_th = size(Gm)(2) - 2;
+    g = sum(Gm(:, 1:n_th), 1) / B;
+    h_ce(step) = mean(Gm(:, n_th + 1));  h_kd(step) = mean(Gm(:, n_th + 2));
+    [g, gn] = gpt_clip(g, K.clip_norm);
+    [theta, m_adam, v_adam] = gpt_adamw(theta, g, m_adam, v_adam, eta_t, step, ...
+                                        K.beta1, K.beta2, K.eps_adam, K.weight_decay, wd_mask);
+    if mod(step, K.log_every) == 0
+      k0 = step - K.log_every + 1;
+      print(sprintf("%s step %4d | hard CE %.4f nats (%.3f bits/char) | KD loss %.4f | |g| %.3f | eta %.2e | %5.0f s", ...
+                    tag, step, mean(h_ce(k0:step)), mean(h_ce(k0:step)) / log(2), mean(h_kd(k0:step)), gn, eta_t, toc));
+    end
+    if mod(step, K.eval_every) == 0
+      Lv = eval_loss(ids_val, K.eval_windows, T, gpt_unflatten(theta, cfg_s), cfg_s);
+      v_step = [v_step, step];  v_loss = [v_loss, Lv];
+      print(sprintf("%s          held-out %.4f nats (%.3f bits/char)", tag, Lv, Lv / log(2)));
+    end
+  end
+end
+
+# === 4. Trust but verify: finite-difference check of kd_dlogits ===
+seed(C.seed + 20);
+w0 = sample_windows(ids_train, 1, 11);                 # one 12-token window
+zt0 = randn(12, cfg_t.V);  zs0 = randn(12, cfg_t.V);
+dl0 = kd_dlogits(w0(1, :), zs0, zt0, C_kd.T_kd, C_kd.alpha);
+eps_fd = 1e-5;
+zp = zs0;  zp(5, 7) = zp(5, 7) + eps_fd;
+zm = zs0;  zm(5, 7) = zm(5, 7) - eps_fd;
+num = (kd_loss(w0(1, :), zp, zt0, C_kd.T_kd, C_kd.alpha) - kd_loss(w0(1, :), zm, zt0, C_kd.T_kd, C_kd.alpha)) / (2 * eps_fd);
+print(sprintf("kd_dlogits check at (5,7): analytic %.6e  numeric %.6e  rel err %.2e", dl0(5, 7), num, ...
+              abs(num - dl0(5, 7)) / (abs(num) + abs(dl0(5, 7)) + 1e-12)));
+
+# === 5. Teacher baseline, then the two students ===
+L_teacher = eval_loss(ids_val, C_kd.eval_windows, T, Pt, cfg_t);
+print(sprintf("teacher held-out loss: %.4f nats (%.3f bits/char)", L_teacher, L_teacher / log(2)));
+print("--- distilled student: alpha =", C_kd.alpha, " T =", C_kd.T_kd, " ---");
+seed(C.seed + 21);
+[theta_kd, ce_kd, kd_kd, vs_kd, vl_kd] = train_student(ids_train, ids_val, Pt, cfg_t, cfg_s, C_kd, C_kd.alpha, "KD  ");
+t_kd = toc;
+print("--- hard-target student: alpha = 0 (same init, same windows) ---");
+seed(C.seed + 21);
+[theta_hd, ce_hd, kd_hd, vs_hd, vl_hd] = train_student(ids_train, ids_val, Pt, cfg_t, cfg_s, C_kd, 0.0, "hard");
+t_hd = toc;
+
+# === 6. Report, checkpoint, curves ===
+L_kd = eval_loss(ids_val, C_kd.eval_windows, T, gpt_unflatten(theta_kd, cfg_s), cfg_s);
+L_hd = eval_loss(ids_val, C_kd.eval_windows, T, gpt_unflatten(theta_hd, cfg_s), cfg_s);
+print("");
+print(sprintf("%-22s %9s %10s %10s", "model", "params", "nats/char", "bits/char"));
+print(sprintf("%-22s %9d %10.4f %10.3f", "teacher", gpt_n_params(cfg_t), L_teacher, L_teacher / log(2)));
+print(sprintf("%-22s %9d %10.4f %10.3f", "distilled student", gpt_n_params(cfg_s), L_kd, L_kd / log(2)));
+print(sprintf("%-22s %9d %10.4f %10.3f", "hard-target student", gpt_n_params(cfg_s), L_hd, L_hd / log(2)));
+print(sprintf("distillation gain: %+.4f nats (%+.3f bits/char) vs hard targets; gap to teacher %.3f bits/char   (%.0f s + %.0f s)", ...
+              L_hd - L_kd, (L_hd - L_kd) / log(2), (L_kd - L_teacher) / log(2), t_kd, t_hd));
+cfgv_s = [cfg_s.V, cfg_s.d, cfg_s.L, cfg_s.H, cfg_s.dff, cfg_s.Tmax];
+save(C_kd.ckpt_out, "theta", theta_kd, "cfgv", cfgv_s, "step", C_kd.n_steps);
+
+figure();
+plot(1:C_kd.n_steps, ce_kd / log(2), "color", "blue", "label", "distilled: train CE")
+hold("on")
+plot(1:C_kd.n_steps, ce_hd / log(2), "color", "red", "label", "hard targets: train CE")
+plot(vs_kd, vl_kd / log(2), "color", "blue", "style", "dashed", "label", "distilled: held-out")
+plot(vs_hd, vl_hd / log(2), "color", "red", "style", "dashed", "label", "hard targets: held-out")
+hline(L_teacher / log(2), "gray", "teacher held-out")
+hold("off")
+title("Student loss (bits per character)")
+xlabel("step"); ylabel("bits / char")
+legend("distilled train", "hard train", "distilled held-out", "hard held-out", "teacher")
+savefig("distill_curves.svg")
+print("Saved", C_kd.ckpt_out, "and distill_curves.svg");

@@ -1,0 +1,15 @@
+# Preset: large — an overnight run.  ~3.9 M parameters; at today's
+# throughput (see docs/sherlock-performance-and-rustlab-requests.md)
+# expect several hours.  Lower n_steps for a shorter run.
+C.d_model    = 192;
+C.n_layer    = 6;
+C.n_head     = 6;
+C.d_ff       = 768;
+C.T          = 128;
+C.n_steps    = 20000;
+C.batch      = 14;
+C.warmup     = 500;
+C.eta_max    = 1.5e-3;
+C.eta_min    = 1.5e-4;
+C.eval_every = 500;
+C.ckpt_every = 1000;

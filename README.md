@@ -125,6 +125,7 @@ make notebooks          # regenerate book/<slug>.md from notebooks/<slug>.md
 make html               # build book/index.html for local Plotly view (gitignored)
 make notebooks-check    # CI drift guard
 make lesson-06          # run lesson 06's .rlab scripts (pattern target: lesson-NN for any 01–25)
+make sherlock-train     # standalone Sherlock tutorial (sherlock-data / -train / -generate / -sft / -distill / -bench)
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
@@ -136,6 +137,25 @@ rustlab                 # interactive REPL
 ```
 
 Standalone scripts call `savefig("foo.svg")` next to themselves (gitignored). Each `.rlab` script runs on its own — you can run any single script without running previous ones first. Code shared between lessons (the transformer forward/backward, AdamW, sampling helpers, the Lesson 18 bigram trainer) lives in `lib/*.rlab` and is pulled in with `run "../../lib/<name>.rlab"`; notebooks do the same with `run "../lib/<name>.rlab"`.
+
+---
+
+## Standalone tutorial: train your own Sherlock GPT
+
+[`tutorial/sherlock/`](tutorial/sherlock/) takes the curriculum's components off the toy corpora. It pre-trains a character-level GPT (811 k parameters by default: $d = 128$, 4 layers, 4 heads, context 128) on *The Adventures of Sherlock Holmes*, samples from it, fine-tunes it on hand-written Q/A pairs with prompt masking, and distils it into a 2-layer student. The model is [`lib/gpt.rlab`](lib/gpt.rlab) — the Lesson 14 architecture with the Lesson 15/22 backward pass generalised to any depth and head count — and every knob lives in [`tutorial/sherlock/config.rlab`](tutorial/sherlock/config.rlab).
+
+```sh
+make sherlock-data       # one-time corpus step (Python 3, standard library only)
+make sherlock-train      # pre-train: about 20 minutes at the defaults
+make sherlock-generate   # three samples from the checkpoint
+make sherlock-sft        # supervised fine-tuning + forgetting probe
+make sherlock-ask Q="Who is the woman?"   # ask the fine-tuned model
+make sherlock-distill    # distil into a 2-layer student
+make sherlock-bench      # throughput at several model sizes
+make sherlock-quick      # select the 2-3 minute preset for every stage (make sherlock-preset PRESET=default to go back)
+```
+
+Expect word-shaped, Sherlock-flavoured text after the 20-minute default run (2.2 bits per character; spelling and names need a longer run or more books), memorised answers after SFT, and no reasoning — this is a 0.8 M-parameter character model. The tutorial page — parameter table, what every printed number means and what good values look like, resuming, scaling to the full canon, troubleshooting — is [`tutorial/sherlock/README.md`](tutorial/sherlock/README.md). Measured throughput and what rustlab would need to go faster are in [`docs/sherlock-performance-and-rustlab-requests.md`](docs/sherlock-performance-and-rustlab-requests.md).
 
 ---
 
@@ -155,13 +175,17 @@ lib/
   transformer.rlab     # shared block forward, trainable forward/backward, AdamW, schedule
   sampling.rlab        # sample_categorical, top-K, top-P
   bigram_lm.rlab       # the Lesson 18 trainer used by Lessons 20–21
+  gpt.rlab             # multi-layer, multi-head trainable GPT used by tutorial/sherlock/
+tutorial/
+  sherlock/            # standalone tutorial: config, prepare_corpus.py, train / generate / sft / distill,
+                       # test_gpt_lib.rlab, benchmark.rlab, data/adventures.txt (see its README.md)
 book/
   README.md            # hand-written GitHub landing page
   NN-topic-slug.md     # rendered notebook with inline SVG plots (committed)
   plots/NN-topic-slug/ # captured figures (committed)
   index.html           # auto-generated local entry page (gitignored)
   *.html               # interactive Plotly per-notebook (gitignored)
-Makefile               # notebooks / html / lesson-NN / clean
+Makefile               # notebooks / html / lesson-NN / sherlock-* / clean
 PLAN.md                # phase status and handoff notes
 AGENTS.md              # project conventions, Rustlab language reference
 ```
