@@ -462,7 +462,7 @@ Scaling holds exactly (deviation $0$) and superposition to $1.4e-14$ (round-off)
 
 ### Information
 
-**Exact.** The bigram floor is not a property of any model; it is the **conditional entropy of the corpus**, $H(\text{next} \mid \text{cur})$, and the trigram floor is $H(\text{next} \mid \text{cur}, \text{prev})$. Their difference is the conditional mutual information $I(\text{next}; \text{prev} \mid \text{cur})$ — the number of nats per pair that *only* a channel to the previous token can recover. Both are computed from counts with `entropy_nats` from `lib/info.rlab`:
+**Exact.** The bigram floor is not a property of any model; it is the **conditional entropy of the corpus**, $H(\text{next} \mid \text{cur})$, and the trigram floor is $H(\text{next} \mid \text{cur}, \text{prev})$. Their difference is the conditional mutual information $I(\text{next}; \text{prev} \mid \text{cur})$ — the number of nats per pair that *only* a channel to the previous token can recover. Both are computed from (context, next) counts by `cond_entropy_nats`, a short helper defined in this notebook's hidden setup block on top of `entropy_nats` from `lib/info.rlab`:
 
 ```rustlab
 H_cur      = cond_entropy_nats(ids, 1, vocab);
@@ -526,7 +526,7 @@ The optimal bigram assigns the empirical conditional frequencies, $P(\cdot \mid 
 
 </details>
 
-3. **Forward-difference V-curve.** Repeat the ε sweep with the one-sided difference $(L(\theta + \varepsilon) - L(\theta))/\varepsilon$. Show that the truncation branch now has slope $+1$ instead of $+2$ and that the optimum moves from $u^{1/3}$ to $u^{1/2} \approx 1.5 \times 10^{-8}$.
+3. **Forward-difference V-curve.** Repeat the ε sweep with the one-sided difference $(L(\theta + \varepsilon) - L(\theta))/\varepsilon$. Show that the truncation branch now has slope $+1$ instead of $+2$ and that the optimum moves from $u^{1/3}$ to $u^{1/2} \approx 1.05 \times 10^{-8}$ (with $u = 2^{-53} \approx 1.1 \times 10^{-16}$).
 4. **Trainable positional embedding.** Derive $\bar{\mathbf{PE}}$ and write the lines you would add to `transformer_backward` and `adamw_step` to train it.
 
 <details><summary>Solution</summary>

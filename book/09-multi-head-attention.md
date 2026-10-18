@@ -121,7 +121,7 @@ Head 4 row 4: [1×6]  0.250000  0.250000  0.250000  0.250000  0.000000  0.000000
 
 <!-- rustlab:output-end -->
 
-Head 4 row 4 is $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case is exactly the Lesson 07 averaging matrix. Computed: 0.250, 0.250, 0.250, 0.250, 0.000, 0.000.
+Head 4 row 4 is $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case is exactly the Lesson 07 averaging matrix.
 
 ### Example — Four head-attention heatmaps
 
@@ -216,6 +216,13 @@ O = O_concat * W_O;
 
 print("Concat = [O_1, O_2]:", O_concat);
 print("O = Concat * W_O:", O);
+concat_shape = size(O_concat);
+out_shape    = size(O);
+print("Concat shape =", concat_shape, "   O shape =", out_shape);
+n_qkv = 3 * d_model * d_model;
+n_wo  = d_model * d_model;
+n_tot = n_qkv + n_wo;
+print("parameters: W_Q, W_K, W_V =", n_qkv, "  W_O =", n_wo, "  total =", n_tot);
 ```
 
 <!-- rustlab:output-start -->
@@ -230,6 +237,8 @@ O = Concat * W_O: Matrix(4x4)
   [0.500000, 0.000000, -0.500000, 0.500000]
   [1.331611, 0.000000, -0.333333, 0.333333]
   [0.251717, 0.996564, -0.250000, 0.250000]
+Concat shape = [1×2]  4.000000  4.000000    O shape = [1×2]  4.000000  4.000000
+parameters: W_Q, W_K, W_V = 48   W_O = 16   total = 64
 ```
 
 <!-- rustlab:output-end -->
@@ -339,7 +348,7 @@ max |Concat*W_O - sum_h A_h X W_V^h W_O^(h)| = 0
 
 The identity holds exactly (maximum deviation 0).
 
-**Exact.** *Impulse responses.* Row $t$ of $\mathbf{A}_h$ is the impulse response seen at output time $t$. The four heads are four textbook causal filters: head 1 holds the first sample (a DC hold), head 2 is the unit delay $z^{-1}$, head 3 is the identity, head 4 is Lesson 07's growing box. Attention can realise any causal filter with non-negative taps summing to one — and, unlike a fixed filter, choose the taps per input.
+**Model.** *Impulse responses.* Row $t$ of $\mathbf{A}_h$ is the impulse response seen at output time $t$. The four heads approach four textbook causal filters as the key gain grows: head 1 a hold on the first sample (a DC hold), head 2 the unit delay $z^{-1}$, head 3 the identity, head 4 Lesson 07's growing box. At the gain used here the row-4 entropies of $1.25$ / $0.47$ / $0.24$ bits (Information lens below) show heads 1–3 as soft versions of those filters; only head 4 is exact. Attention can realise any causal filter with non-negative taps summing to one — and, unlike a fixed filter, choose the taps per input.
 
 ```rustlab
 figure();

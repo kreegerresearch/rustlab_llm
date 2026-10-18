@@ -155,7 +155,7 @@ ylim([0, 1])
 <!-- rustlab:output-end -->
 
 > [!TIP]
-> All four panels share the $[0, 1]$ scale. The tallest stem is always token 1 — temperature never reorders — but by $\tau = 5$ the four stems are within a factor of 1.6 of each other, heading for the flat $0.25$ line.
+> All four panels share the $[0, 1]$ scale. The tallest stem is always token 1 — temperature never reorders — but by $\tau = 5$ the four stems are within a factor of about 1.65 of each other, heading for the flat $0.25$ line.
 
 ### Example — Animation: from argmax to uniform
 

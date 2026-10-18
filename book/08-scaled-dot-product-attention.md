@@ -18,7 +18,7 @@ One renaming, stated once: Lesson 07's mixing matrix $\mathbf{W}$ is called $\ma
 
 ## Background
 
-Embeddings as dense row vectors and the dot product as a correlator from [04-embeddings-and-similarity](04-embeddings-and-similarity.md). Softmax, entropy and probability row-normalisation from [02-probability-and-softmax](02-probability-and-softmax.md) and [03-cross-entropy-loss](03-cross-entropy-loss.md). Linear layers from [06-linear-layers-and-gradient-descent](06-linear-layers-and-gradient-descent.md), where a layer was written $\mathbf{y} = \mathbf{W}\mathbf{x} + \mathbf{b}$ with $\mathbf{x}$ a column vector. Here rows are tokens, so we right-multiply instead: $\mathbf{X}\mathbf{W}$ applies the same linear map to every row of $\mathbf{X}$ at once. Causal prefix averaging as a time-varying FIR filter from [07-context-and-naive-averaging](07-context-and-naive-averaging.md). Entropies are computed with `lib/info.rlab`.
+Embeddings as dense row vectors and the dot product as a correlator from [04-embeddings-and-similarity](04-embeddings-and-similarity.md). Softmax, entropy and probability row-normalisation from [02-probability-and-softmax](02-probability-and-softmax.md) and [03-cross-entropy-loss](03-cross-entropy-loss.md). Linear layers from [06-linear-layers-and-gradient-descent](06-linear-layers-and-gradient-descent.md), where a layer was written $\mathbf{y} = \mathbf{x}\mathbf{W} + \mathbf{b}$ with $\mathbf{x}$ a row vector. Here rows are tokens, and the same right-multiplication applies to every row of $\mathbf{X}$ at once: $\mathbf{X}\mathbf{W}$ applies one linear map to the whole sequence. Causal prefix averaging as a time-varying FIR filter from [07-context-and-naive-averaging](07-context-and-naive-averaging.md). Entropies are computed with `lib/info.rlab`.
 
 ## Queries, Keys, Values
 
@@ -182,6 +182,33 @@ Matrix(5x5)
 
 <!-- rustlab:output-end -->
 
+```rustlab
+row_sums = zeros(T);
+for t = 1:T
+  row_sums(t) = sum(A(t, :));
+end
+A_1_1 = A(1, 1);
+
+max_upper = 0.0;
+for i = 1:T
+  for j = (i + 1):T
+    if A(i, j) > max_upper
+      max_upper = A(i, j);
+    end
+  end
+end
+print("A(1,1) =", A_1_1, "   row sums =", row_sums);
+print("largest upper-triangle entry =", max_upper);
+```
+
+<!-- rustlab:output-start -->
+```text
+A(1,1) = 1    row sums = [1×5]  1.000000  1.000000  1.000000  1.000000  1.000000
+largest upper-triangle entry = 0
+```
+
+<!-- rustlab:output-end -->
+
 Now read the design back. Row 2 puts $0.73$ on $t_1$ (query 2 asked for feature 1; key 1 has it) against $0.5$ under uniform averaging. Row 3 puts $0.58$ on $t_2$, the key advertising feature 2. Row 4 puts $0.43$ on $t_1$ — a token **three positions back**, retrieved by content, against the $0.25$ that Lesson 07's $1/4$ would give; its own half-strength key earns it $0.26$. Row 5's half-and-half query ties $t_1$, $t_2$ and $t_4$ at $0.24$ each. Token 1 can only attend to itself, so $A_{1,1} = 1.0000$; every row sums to 1; the largest entry in the upper triangle is $0.00e+00$ — zero, as causality requires.
 
 ### Example — Three-stage pipeline heatmap
@@ -298,6 +325,19 @@ Matrix(5x4)
 
 <!-- rustlab:output-end -->
 
+```rustlab
+diff_row1 = max(abs(O(1, :) - V2(1, :)));
+n_params_qkv = 3 * d_model * d_k;
+print("max |O(1, :) - V(1, :)| =", diff_row1, "   params 3 * d_model * d_k =", n_params_qkv);
+```
+
+<!-- rustlab:output-start -->
+```text
+max |O(1, :) - V(1, :)| = 0    params 3 * d_model * d_k = 72
+```
+
+<!-- rustlab:output-end -->
+
 Query 4 (`it`) meets key 1 (`mat`) with score $2 \cdot 3 / \sqrt{4} = 3$ and every other visible key with score 0, so $A_{4,1} = e^{3}/(e^{3} + 3) = 0.870$: **token 4 retrieves token 1**, three positions back, against the $0.25$ uniform averaging would give. That is content-based retrieval — the thing Lesson 07 could not do. Row 2's verb finds its subject ($0.95$ on `mat`), row 3's adjective does too ($0.91$), and row 5's second verb has *two* candidate subjects and splits $0.465$ / $0.465$ between `mat` and `it` — attention represents the ambiguity instead of guessing. In the output, row 4 is $0.87$ of `mat`'s value plus three slivers of $0.043$: the `it` row now carries the noun's content. Row 1 of $\mathbf{O}$ equals row 1 of $\mathbf{V}$ (token 1 attends only to itself): $\max|\mathbf{O}_1 - \mathbf{V}_1| = 0.00e+00$. The block's learnable parameters are $3 \cdot d_{\text{model}} \cdot d_k = 3 \cdot 6 \cdot 4 = 72$ — a count that does **not** depend on the sequence length $T$.
 
 ### Example — Attention weights and output heatmaps
@@ -362,7 +402,7 @@ max|A(W_Q = W_K = 0) - W_avg| = 0
 
 <!-- rustlab:output-end -->
 
-**Exact** (as a functional description). *Associative memory.* Keys are addresses, values are contents, the query is a probe, and the read-out is a convex combination of contents weighted by address match. Row 4 above is one lookup: probe "a noun" → address `mat` → content $\mathbf{v}_1$, with $0.87$ fidelity; row 5 is a probe that matches two addresses.
+**Model.** *Associative memory.* Keys are addresses, values are contents, the query is a probe, and the read-out is a convex combination of contents weighted by address match. Row 4 above is one lookup: probe "a noun" → address `mat` → content $\mathbf{v}_1$, with $0.87$ fidelity; row 5 is a probe that matches two addresses.
 
 **Analogy.** Because the taps of the FIR filter are computed from the signal itself, attention behaves like an adaptive filter — but there is no error-driven tap update at inference time; the adaptation is instantaneous and feed-forward.
 

@@ -123,7 +123,7 @@ What matters per mode is therefore the **contraction factor** $\lvert 1 - \eta_t
 
 ### Example — Three runs through one helper
 
-A noisy quadratic surrogate with curvature 10 in $\theta_1$ and 1 in $\theta_2$, so the fast mode's stability limit is $\eta < 2/10 = 0.2$. One helper, `run_sgd`, takes the schedule as a function of $t$ and returns the loss curve, the $\eta_t$ actually used, and the per-step gradient signal-to-noise ratio (used under the Information lens). Three calls: a constant $\eta = 0.25$ above the limit, a constant $\eta = 0.02$ well below it, and warmup + cosine (peak $0.18$, floor $0.02$). Seed, noise and step order are unchanged from the earlier version of this lesson, so the printed numbers are the same.
+A noisy quadratic surrogate with curvature 10 in $\theta_1$ and 1 in $\theta_2$, so the fast mode's stability limit is $\eta < 2/10 = 0.2$. One helper, `run_sgd`, takes the schedule as a function of $t$ and returns the loss curve, the $\eta_t$ actually used, and the per-step gradient signal-to-noise ratio (used under the Information lens). Three calls: a constant $\eta = 0.25$ above the limit, a constant $\eta = 0.02$ well below it, and warmup + cosine (peak $0.18$, floor $0.02$).
 
 ```rustlab
 seed(17);
@@ -298,6 +298,52 @@ Patterns to notice:
 
 ## Engineering Lenses
 
+### Signals
+
+**Exact.** For the quadratic model, gradient noise enters each mode's recursion as $e_{t+1} = (1 - \eta\lambda)\,e_t - \eta\,\xi_t$ with $\xi_t$ white of variance $\sigma^2$ — a one-pole filter driven by white noise. Its steady-state output variance is
+
+$$\operatorname{Var}\,e = \frac{\eta^2\sigma^2}{1 - (1 - \eta\lambda)^2} = \frac{\eta\,\sigma^2}{\lambda\,(2 - \eta\lambda)}, \qquad \text{excess loss per mode } \tfrac{1}{2}\lambda\,\operatorname{Var}\,e = \frac{\eta\,\sigma^2}{2\,(2 - \eta\lambda)}.$$
+
+The noise floor is **proportional to $\eta$** (until $\eta\lambda$ approaches 2, where the denominator collapses). That is what the decay buys: a run that ends at $\eta_{\min} = \eta_{\max}/10$ ends with a floor ten times lower than it had at the peak. Check it by sweeping a constant $\eta$ and measuring the mean excess loss over the second half of a long run:
+
+```rustlab
+seed(171);
+etas_sw = logspace(-2, log10(0.19), 6);
+meas = zeros(6);  pred = zeros(6);
+for i = 1:6
+  e = etas_sw(i);
+  [Lc, ec, sc] = run_sgd(@(t) e, 4000, sigma, init);
+  meas(i) = mean(Lc(2002:4001)) - 1.0;
+  pred(i) = e * sigma ^ 2 / (2 * (2 - e * lam_fast)) + e * sigma ^ 2 / (2 * (2 - e * lam_slow));
+end
+figure();
+loglog(etas_sw, pred, "color", "gray",  "label", "theory")
+hold("on")
+loglog(etas_sw, meas, "color", "green", "label", "measured")
+hold("off")
+title("steady-state excess loss vs constant eta (sigma = 0.3)")
+xlabel("eta")
+ylabel("E[L] - 1")
+legend("sum over modes of eta sigma^2 / (2 (2 - eta lambda))", "measured, steps 2001-4000")
+print("eta      :", etas_sw);
+print("measured :", meas);
+print("predicted:", pred);
+```
+
+<!-- rustlab:output-start -->
+```text
+eta      : [1×6]  0.010000  0.018020  0.032471  0.058513  0.105439  0.190000
+measured : [1×6]  0.000477  0.000740  0.001554  0.003433  0.008106  0.083488
+predicted: [1×6]  0.000463  0.000855  0.001615  0.003217  0.007522  0.090224
+```
+
+![plot 4](plots/17-learning-rate-scheduling/plot-4-aa86edb1.svg)
+
+<!-- rustlab:output-end -->
+
+> [!TIP]
+> Slope $+1$ on log–log axes — the floor is linear in $\eta$ — with the upturn at the right end as $\eta$ approaches the fast mode's limit $0.2$. The measured points follow the formula with no fitted constant.
+
 ### Systems
 
 **Exact.** Per mode the state is the error $e_t$ along that eigen-direction, the update law is $e_{t+1} = (1 - \eta_t\lambda_i)\,e_t$, and the total gain after $t$ steps is the running product of the contraction factors plotted above. The product is what decides convergence, so plot its logarithm: the constant-high run's fast mode climbs by $\log_{10} 1.5$ per step, the constant-low run's slow mode falls by only $\log_{10} 0.98$, and the schedule's fast mode passes through the deadbeat zero (clipped at $10^{-12}$ per step so the log axis survives).
@@ -340,7 +386,7 @@ log10 gain after 300 steps, fast mode (0.25 / 0.02 / schedule): 52.8273777167044
 log10 gain after 300 steps, slow mode (0.25 / 0.02 / schedule): -37.48162098248998 -2.632177292251555 -13.841331073768968
 ```
 
-![plot 4](plots/17-learning-rate-scheduling/plot-4-d9a3046f.svg)
+![plot 5](plots/17-learning-rate-scheduling/plot-5-d9a3046f.svg)
 
 <!-- rustlab:output-end -->
 
@@ -348,52 +394,6 @@ log10 gain after 300 steps, slow mode (0.25 / 0.02 / schedule): -37.481620982489
 > Left: red rises by 53 decades — the noiseless fast mode of the $\eta = 0.25$ run would be $10^{53}$ times its starting error. Right: the slow mode is where the constant-low run loses — $0.98^{300}$ is only $2.6$ decades, while the schedule buys $14$.
 
 **Analogy.** Warmup is often called a *soft start*, after the ramped supply that limits inrush current while a motor's state is still unknown. The picture is right about *why* (limit the first kick while the plant state — the loss surface's local curvature and $\hat{\mathbf{v}}$ — is unknown) but it is only a picture: there is no current, no flux, and no conserved quantity being protected. The exact content is the contraction factor above and the sign-descent first step at the top of the lesson.
-
-### Signals
-
-**Exact (for the quadratic model).** Gradient noise enters each mode's recursion as $e_{t+1} = (1 - \eta\lambda)\,e_t - \eta\,\xi_t$ with $\xi_t$ white of variance $\sigma^2$ — a one-pole filter driven by white noise. Its steady-state output variance is
-
-$$\operatorname{Var}\,e = \frac{\eta^2\sigma^2}{1 - (1 - \eta\lambda)^2} = \frac{\eta\,\sigma^2}{\lambda\,(2 - \eta\lambda)}, \qquad \text{excess loss per mode } \tfrac{1}{2}\lambda\,\operatorname{Var}\,e = \frac{\eta\,\sigma^2}{2\,(2 - \eta\lambda)}.$$
-
-The noise floor is **proportional to $\eta$** (until $\eta\lambda$ approaches 2, where the denominator collapses). That is what the decay buys: a run that ends at $\eta_{\min} = \eta_{\max}/10$ ends with a floor ten times lower than it had at the peak. Check it by sweeping a constant $\eta$ and measuring the mean excess loss over the second half of a long run:
-
-```rustlab
-seed(171);
-etas_sw = logspace(-2, log10(0.19), 6);
-meas = zeros(6);  pred = zeros(6);
-for i = 1:6
-  e = etas_sw(i);
-  [Lc, ec, sc] = run_sgd(@(t) e, 4000, sigma, init);
-  meas(i) = mean(Lc(2002:4001)) - 1.0;
-  pred(i) = e * sigma ^ 2 / (2 * (2 - e * lam_fast)) + e * sigma ^ 2 / (2 * (2 - e * lam_slow));
-end
-figure();
-loglog(etas_sw, pred, "color", "gray",  "label", "theory")
-hold("on")
-loglog(etas_sw, meas, "color", "green", "label", "measured")
-hold("off")
-title("steady-state excess loss vs constant eta (sigma = 0.3)")
-xlabel("eta")
-ylabel("E[L] - 1")
-legend("sum over modes of eta sigma^2 / (2 (2 - eta lambda))", "measured, steps 2001-4000")
-print("eta      :", etas_sw);
-print("measured :", meas);
-print("predicted:", pred);
-```
-
-<!-- rustlab:output-start -->
-```text
-eta      : [1×6]  0.010000  0.018020  0.032471  0.058513  0.105439  0.190000
-measured : [1×6]  0.000477  0.000740  0.001554  0.003433  0.008106  0.083488
-predicted: [1×6]  0.000463  0.000855  0.001615  0.003217  0.007522  0.090224
-```
-
-![plot 5](plots/17-learning-rate-scheduling/plot-5-aa86edb1.svg)
-
-<!-- rustlab:output-end -->
-
-> [!TIP]
-> Slope $+1$ on log–log axes — the floor is linear in $\eta$ — with the upturn at the right end as $\eta$ approaches the fast mode's limit $0.2$. The measured points follow the formula with no fitted constant.
 
 ### Information
 

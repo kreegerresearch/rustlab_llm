@@ -58,11 +58,13 @@ L_4     = -log(0.25);
 L_half  = -log(0.5);
 L_high  = -log(0.9);
 L_vhigh = -log(0.99);
+print("nats:", L_50k, L_4, L_half, L_high, L_vhigh);
 print("bits:", L_50k / log(2), L_4 / log(2), L_half / log(2), L_high / log(2), L_vhigh / log(2));
 ```
 
 <!-- rustlab:output-start -->
 ```text
+nats: 10.819778284410283 1.3862943611198906 0.6931471805599453 0.10536051565782628 0.01005033585350145
 bits: 15.609640474436812 2 1 0.15200309344504997 0.01449956969511509
 ```
 
@@ -177,7 +179,18 @@ z2_grid = linspace(-3.0, 5.0, n);
 [Z1, Z2] = meshgrid(z1_grid, z2_grid);
 
 L_surface = -Z1 + log(exp(Z1) + exp(Z2) + 1.0);
+L_flat = reshape(L_surface, 1, n * n);
+L_min = min(L_flat);
+L_max = max(L_flat);
+print("L_surface on the grid: min =", L_min, "  max =", L_max);
 ```
+
+<!-- rustlab:output-start -->
+```text
+L_surface on the grid: min = 0.00704851041106469   max = 8.007048510411064
+```
+
+<!-- rustlab:output-end -->
 
 Range on the grid: loss spans $[0.007, 8.007]$ nats — near-zero when $z_1$ dominates, linearly large when the distractor $z_2$ wins.
 
@@ -249,13 +262,15 @@ margin = linspace(-6.0, 6.0, 121);        % z_c - LSE(other logits)
 p_c    = 1.0 ./ (1.0 + exp(-margin));      % forward: p_hat_c as a function of the margin
 g_c    = p_c - 1.0;                        % backward: dL/dz_c
 L_c    = -log(p_c);                        % the loss itself, for contrast
+print("margin -6: loss =", L_c(1), "nats   dL/dz_c =", g_c(1));
 
 figure();
 hold("on")
+plot(margin, L_c, "color", "green", "label", "L = -log p_c  (loss)")
 plot(margin, p_c, "color", "blue", "label", "p_c  (forward)")
 plot(margin, g_c, "color", "red", "label", "dL/dz_c = p_c - 1  (backward)")
 hline(-1.0, "gray", "saturation at -1")
-title("Forward probability and backward error signal vs. logit margin")
+title("Loss, forward probability and backward error signal vs. logit margin")
 xlabel("logit margin  z_c - LSE(others)")
 ylabel("value")
 legend()
@@ -263,12 +278,16 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/03-cross-entropy-loss/plot-3-63032427.svg)
+```text
+margin -6: loss = 6.00247568513773 nats   dL/dz_c = -0.9975273768433652
+```
+
+![plot 3](plots/03-cross-entropy-loss/plot-3-94e9c545.svg)
 
 <!-- rustlab:output-end -->
 
 > [!TIP]
-> The red error signal is a shifted sigmoid that flattens onto the grey rail at $-1$ for large negative margins, while (previous figure) the loss over the same margins keeps climbing linearly. Being very wrong costs loss without buying a larger gradient.
+> The red error signal is a shifted sigmoid that flattens onto the grey rail at $-1$ for large negative margins, while the green loss over the same margins keeps climbing linearly. Being very wrong costs loss without buying a larger gradient.
 
 At a margin of $-6$ the loss is $6.00$ nats but the gradient is $-0.9975$ — already at the rail.
 
@@ -330,7 +349,7 @@ NLL - (y-y_hat)^2/2: [1×5]  0.918939  0.918939  0.918939  0.918939  0.918939
 
 The difference is the constant $\tfrac{1}{2}\log 2\pi = 0.9189$ at every prediction — it shifts the loss but not its gradient, so minimising Gaussian NLL and minimising squared error select the same parameters.
 
-**Exact.** *Maximum likelihood is minimum description length.* Minimising $-\sum_t \log_2 \hat p_{x_t}$ minimises the number of bits needed to transmit the corpus under the model, so a better language model is a better compressor of its training distribution; the mechanism (arithmetic coding) and the bits-per-character bookkeeping are in [20-perplexity-and-evaluation](20-perplexity-and-evaluation.md). Modern reporting uses **bits per byte** or **bits per character**; Shannon's own experiments put English at roughly 0.6–1.3 bits per character,[^shannon] and the best current models sit near the low end of that range. [05-bigram-language-model](05-bigram-language-model.md) introduces **perplexity** $= e^{\mathcal{L}_{\text{nats}}} = 2^{\mathcal{L}_{\text{bits}}}$ — the same bound read as an effective alphabet size.
+**Model.** *Maximum likelihood is minimum description length* — for a fixed model class, since ML minimises only the data term of the description length, not the cost of the model itself. Minimising $-\sum_t \log_2 \hat p_{x_t}$ minimises the number of bits needed to transmit the corpus under the model, so a better language model is a better compressor of its training distribution; the mechanism (arithmetic coding) and the bits-per-character bookkeeping are in [20-perplexity-and-evaluation](20-perplexity-and-evaluation.md). Modern reporting uses **bits per byte** or **bits per character**; Shannon's own experiments put English at roughly 0.6–1.3 bits per character,[^shannon] and the best current models sit near the low end of that range. [05-bigram-language-model](05-bigram-language-model.md) introduces **perplexity** $= e^{\mathcal{L}_{\text{nats}}} = 2^{\mathcal{L}_{\text{bits}}}$ — the same bound read as an effective alphabet size.
 
 [^shannon]: C. E. Shannon, "Prediction and Entropy of Printed English", *Bell System Technical Journal* 30(1), 1951.
 
@@ -374,11 +393,11 @@ Run with `make lesson-03` (or `rustlab run lessons/03-cross-entropy-loss/<name>.
 3. **Sequence loss.** A model processes a 3-token sequence and assigns probabilities $[0.8, 0.3, 0.6]$ to the correct tokens. Compute the mean cross-entropy loss $\mathcal{L}_{\text{avg}}$.
 4. **Where the $1/\hat{p}_c$ goes.** Starting from $d\mathcal{L}/d\hat{p}_c = -1/\hat{p}_c$ and the softmax Jacobian $\partial \hat{p}_c / \partial z_j = \hat{p}_c(\mathbf{1}[j = c] - \hat{p}_j)$, apply the chain rule and show that $\partial \mathcal{L}/\partial z_j = \hat{p}_j - \mathbf{1}[j = c]$. At which step does the unbounded factor cancel?
 
-<details><summary>Solution</summary>
+    <details><summary>Solution</summary>
 
-$\partial \mathcal{L}/\partial z_j = (d\mathcal{L}/d\hat{p}_c)(\partial \hat{p}_c/\partial z_j) = -\tfrac{1}{\hat{p}_c}\cdot \hat{p}_c(\mathbf{1}[j = c] - \hat{p}_j) = \hat{p}_j - \mathbf{1}[j = c]$. The $\hat{p}_c$ in the Jacobian cancels the $1/\hat{p}_c$ from the log immediately — the unbounded factor never survives to the logits.
+    $\partial \mathcal{L}/\partial z_j = (d\mathcal{L}/d\hat{p}_c)(\partial \hat{p}_c/\partial z_j) = -\tfrac{1}{\hat{p}_c}\cdot \hat{p}_c(\mathbf{1}[j = c] - \hat{p}_j) = \hat{p}_j - \mathbf{1}[j = c]$. The $\hat{p}_c$ in the Jacobian cancels the $1/\hat{p}_c$ from the log immediately — the unbounded factor never survives to the logits.
 
-</details>
+    </details>
 
 5. **Loss curve units.** Modify `cross_entropy_surface.rlab` to plot $-\log_2(\hat{p}_c)$ instead of natural log. How does the shape change? What is the unit of the resulting loss? At what probability does the loss equal 1 bit?
 

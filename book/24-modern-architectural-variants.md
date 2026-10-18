@@ -239,7 +239,7 @@ pairs that never complete one cycle in training: 18 of 64
 <!-- rustlab:output-end -->
 
 > [!IMPORTANT]
-> Within the trained range an offset of 10 between positions 8990 and 9000 is *exactly* the offset of 10 between 90 and 100, so a longer prompt reuses trained behaviour for every query–key pair whose offset stays below $T_{\max}$. Offsets beyond $T_{\max}$ are new inputs: the fast pairs have wrapped hundreds of times and say nothing about them, and the $18$ slowest pairs never completed a single cycle during training (the slowest has a wavelength of 54410 \approx 2\pi \cdot 10^4$ tokens $\gg 4096$), so an offset of 6000 puts them at a phase the model has never seen. That is why vanilla RoPE does not extrapolate zero-shot and why context extension **rescales the carriers** — position interpolation, NTK-aware scaling, YaRN — rather than hoping.
+> Within the trained range an offset of 10 between positions 8990 and 9000 is *exactly* the offset of 10 between 90 and 100, so a longer prompt reuses trained behaviour for every query–key pair whose offset stays below $T_{\max}$. Offsets beyond $T_{\max}$ are new inputs: the fast pairs have wrapped hundreds of times and say nothing about them, and the $18$ slowest pairs never completed a single cycle during training (the slowest has a wavelength $\lambda_{\max} = 2\pi \cdot \text{base}^{(d-2)/d} = 54410$ tokens, i.e. $\approx 5.4 \times 10^4 \gg 4096$), so an offset of 6000 puts them at a phase the model has never seen. That is why vanilla RoPE does not extrapolate zero-shot and why context extension **rescales the carriers** — position interpolation, NTK-aware scaling, YaRN — rather than hoping.
 
 ## RMSNorm
 
@@ -757,7 +757,7 @@ SiLU(u) .* v  — amplitude at bins 5, 15, 25, 35, 45: 0.11778570696201043 0.25 
 
 ### Systems
 
-**Exact (as an upper bound).** The KV cache is the generator's state along time ([21-sampling-and-generation](21-sampling-and-generation.md)), and the decode loop must read the whole state once per step. The state read, not the arithmetic, is the throughput constraint: tokens/s per sequence $\le BW / (N_{\text{weights}} + B \cdot N_{\text{cache}})$. For the LLaMA-2-70B shape (weights $70 \times 10^9 \times 2$ bytes) on one H100-class memory system:
+**Exact.** As an upper bound: the KV cache is the generator's state along time ([21-sampling-and-generation](21-sampling-and-generation.md)), and the decode loop must read the whole state once per step. The state read, not the arithmetic, is the throughput constraint: tokens/s per sequence $\le BW / (N_{\text{weights}} + B \cdot N_{\text{cache}})$. For the LLaMA-2-70B shape (weights $70 \times 10^9 \times 2$ bytes) on one H100-class memory system:
 
 ```rustlab
 W_bytes = 70e9 * 2;
@@ -792,7 +792,7 @@ batch at which the MHA cache equals the weights: 6.51925802230835   GQA: 52.1540
 <!-- rustlab:output-end -->
 
 > [!TIP]
-> At $B = 1$ the weights dominate and the three curves nearly coincide. The knee of each curve is where $B \cdot N_{\text{cache}}$ overtakes the weights — at $B \approx 6.5$ for MHA, $B \approx 52$ for GQA — and beyond it the ceiling falls as $1/B$. GQA moves the knee out by $H / H_{\text{kv}} = 8$: at $B = 32$ it is worth 3.7\times$ in per-sequence throughput, which is the operational reason it exists. Sliding-window attention caps $N_{\text{cache}}$ at $W$ rows so that the knee stops moving with the prompt length.
+> At $B = 1$ the weights dominate and the three curves nearly coincide. The knee of each curve is where $B \cdot N_{\text{cache}}$ overtakes the weights — at $B \approx 6.5$ for MHA, $B \approx 52$ for GQA — and beyond it the ceiling falls as $1/B$. GQA moves the knee out by $H / H_{\text{kv}} = 8$: at $B = 32$ it is worth a factor of $3.7$ in per-sequence throughput, which is the operational reason it exists. Sliding-window attention caps $N_{\text{cache}}$ at $W$ rows so that the knee stops moving with the prompt length.
 
 ### Information
 
@@ -890,11 +890,11 @@ Run all with `make lesson-24` (or `rustlab run lessons/24-modern-architectural-v
 1. **RoPE at a larger base.** LLaMA-3 uses base $= 500\,000$ with $d_{\text{head}} = 128$ and trains at $T_{\max} = 8192$. Recompute the wavelength table: how many pairs complete no cycle in training, and what does that do to the number of *useful* carriers at short offsets?
 2. **RoPE backward.** Derive $\partial \mathcal{L} / \partial \mathbf{q}$ given $\bar{\mathbf{q}}' = \partial \mathcal{L} / \partial \text{RoPE}(\mathbf{q}, m)$. Why is the backward rotation the forward rotation with the opposite sign?
 
-<details><summary>Solution</summary>
+    <details><summary>Solution</summary>
 
-$\text{RoPE}(\mathbf{q}, m) = \mathbf{R}(m)\,\mathbf{q}$ is linear in $\mathbf{q}$, so the adjoint is the transpose: $\bar{\mathbf{q}} = \mathbf{R}(m)^\top \bar{\mathbf{q}}'$. Each $2 \times 2$ block is a rotation, and a rotation's transpose is its inverse, $\mathbf{R}_2(\phi)^\top = \mathbf{R}_2(-\phi)$; hence $\bar{\mathbf{q}} = \mathbf{R}(-m)\,\bar{\mathbf{q}}'$ — the upstream gradient rotated *backwards* by the same angles. In phasor form: multiply each pair of the gradient by $e^{-jm\theta_k}$. Magnitudes are preserved, so RoPE neither amplifies nor attenuates gradients.
+    $\text{RoPE}(\mathbf{q}, m) = \mathbf{R}(m)\,\mathbf{q}$ is linear in $\mathbf{q}$, so the adjoint is the transpose: $\bar{\mathbf{q}} = \mathbf{R}(m)^\top \bar{\mathbf{q}}'$. Each $2 \times 2$ block is a rotation, and a rotation's transpose is its inverse, $\mathbf{R}_2(\phi)^\top = \mathbf{R}_2(-\phi)$; hence $\bar{\mathbf{q}} = \mathbf{R}(-m)\,\bar{\mathbf{q}}'$ — the upstream gradient rotated *backwards* by the same angles. In phasor form: multiply each pair of the gradient by $e^{-jm\theta_k}$. Magnitudes are preserved, so RoPE neither amplifies nor attenuates gradients.
 
-</details>
+    </details>
 
 3. **Why RMSNorm without bias.** Test the claim that the bias $\beta$ in LayerNorm is unused at scale: train a Lesson 18-style model with and without the bias on the same corpus. What changes?
 4. **SwiGLU vs GELU at fixed params.** Modify `swiglu.rlab` to set $d_{\text{ff}}$ exactly so the parameter counts match within 1 unit. What does that pick give for $d_{\text{model}} = 8$? For $d_{\text{model}} = 4096$?

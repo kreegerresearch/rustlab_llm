@@ -49,7 +49,15 @@ y = [2.0, 4.0, 6.0, 8.0];
 % Loss at true parameters (w=2, b=0) and at initial parameters (w=0, b=0)
 L_true = mean((2.0 * x + 0.0 - y) .^ 2);
 L_init = mean((0.0 * x + 0.0 - y) .^ 2);
+print("L(2, 0) =", L_true, "   L(0, 0) =", L_init);
 ```
+
+<!-- rustlab:output-start -->
+```text
+L(2, 0) = 0    L(0, 0) = 30
+```
+
+<!-- rustlab:output-end -->
 
 At the optimum, $\mathcal{L}(2, 0) = 0.000$ — zero loss because $y = 2x$ exactly. Starting from $(w, b) = (0, 0)$ the loss is $30.00$, the distance we need gradient descent to close.
 
@@ -107,6 +115,8 @@ b_grid = linspace(-3.0, 3.0, n_grid);
 [W_mesh, B_mesh] = meshgrid(w_grid, b_grid);
 L_matrix = 7.5 * W_mesh .^ 2 + B_mesh .^ 2 + 5.0 * W_mesh .* B_mesh - 30.0 * W_mesh - 10.0 * B_mesh + 30.0;
 min_loss_flat = min(reshape(L_matrix, 1, n_grid * n_grid));
+L_check = 7.5 * 4.0 + 0.0 + 5.0 * 2.0 * 0.0 - 30.0 * 2.0 - 10.0 * 0.0 + 30.0;   % analytic L(2, 0) = 7.5*4 - 60 + 30
+print("analytic L(2, 0) =", L_check, "   min over the grid =", min_loss_flat);
 
 figure();
 contourf(W_mesh, B_mesh, L_matrix, 20)
@@ -116,6 +126,10 @@ ylabel("b")
 ```
 
 <!-- rustlab:output-start -->
+```text
+analytic L(2, 0) = 0    min over the grid = 0.0014056643065352148
+```
+
 ![plot 1](plots/06-linear-layers-and-gradient-descent/plot-1-3489e12c.svg)
 
 <!-- rustlab:output-end -->
@@ -540,7 +554,8 @@ print("linear layer after", n_bi, "steps:", loss_bi(n_bi) / log(2), "bits   gap 
 
 figure();
 hold("on")
-plot(1:n_bi, loss_bi / log(2), "color", "blue", "label", "bigram linear layer, GD")
+loss_curve = [log(3.0), loss_bi];               % step 0 = uniform logits (loss log|V|); loss_bi(k) is logged after update k
+plot(0:n_bi, loss_curve / log(2), "color", "blue", "label", "bigram linear layer, GD")
 hline(floor_bits, "red", "H(X_t+1 | X_t) = 0.5 bit")
 hline(log2(3), "gray", "log2 |V| = uniform start")
 title("Cross-entropy of the learned bigram layer vs. the conditional-entropy floor")
@@ -558,12 +573,12 @@ conditional-entropy floor = 0.5 bits = 0.34657359027997264 nats
 linear layer after 300 steps: 0.5048516431306489 bits   gap = 0.004851643130648897 bits
 ```
 
-![plot 7](plots/06-linear-layers-and-gradient-descent/plot-7-a6f25370.svg)
+![plot 7](plots/06-linear-layers-and-gradient-descent/plot-7-e59c4fa6.svg)
 
 <!-- rustlab:output-end -->
 
 > [!TIP]
-> The curve falls from $\log_2 3 = 1.585$ bits toward the red floor and flattens $0.005$ bit above it: gradient descent rediscovers the count table's $0.5$ bit per token, and nothing that sees only the current token can go lower.
+> The curve starts on the grey line at $\log_2 3 = 1.585$ bits (step 0, uniform logits), falls toward the red floor, and flattens $0.005$ bit above it: gradient descent rediscovers the count table's $0.5$ bit per token, and nothing that sees only the current token can go lower.
 
 ## Key Takeaways
 

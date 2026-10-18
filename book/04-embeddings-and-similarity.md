@@ -90,12 +90,14 @@ h3 = e3 * E;
 diff = max(abs(h3 - E(3, :)));       % E(3, :) is row 3; E(3) would be a single scalar
 print("Embedded representation h3:", h3);
 print("Row 3 of E:              ", E(3, :));
+print("max |h3 - E(3, :)| =", diff);
 ```
 
 <!-- rustlab:output-start -->
 ```text
 Embedded representation h3: [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
 Row 3 of E:               [1×6]  -0.040899  -0.063393  0.001728  -0.080328  -0.099360  0.002251
+max |h3 - E(3, :)| = 0
 ```
 
 <!-- rustlab:output-end -->
@@ -417,4 +419,4 @@ Run all with `make lesson-04` (or `rustlab run lessons/04-embeddings-and-similar
 
 ## What's next
 
-[05-bigram-language-model](05-bigram-language-model.md) builds the first **language model** of the series: a count-based bigram model that learns next-token probabilities from the Lesson 01 corpus and samples text from them. The lookup-table structure of this lesson reappears — a $|\mathcal{V}| \times |\mathcal{V}|$ matrix indexed by the current token — this time storing transition probabilities rather than learned vectors.
+[05-bigram-language-model](05-bigram-language-model.md) builds the first **language model** of the series: a count-based bigram model that learns next-token probabilities from a three-letter toy corpus and samples text from them. The lookup-table structure of this lesson reappears — a $|\mathcal{V}| \times |\mathcal{V}|$ matrix indexed by the current token — this time storing transition probabilities rather than learned vectors.

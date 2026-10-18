@@ -160,7 +160,7 @@ sqrt(T * d_model), the norm of an (8 × 64) matrix of unit-variance entries: 22.
 
 <!-- rustlab:output-end -->
 
-The shape stays $(T, d_{\text{model}}) = (8, 64)$ across all $N$ blocks — that is the entire reason the architecture is stackable. The *scale* does not stay put: $\|\mathbf{H}^{(N)}\| = 70.1$ for an $8 \times 64$ matrix, whereas unit-variance entries would give $\sqrt{512} = 22.6$. The stream grew from $\|\mathbf{H}^{(0)}\| = 16.2$ to $39.5 \to 51.5 \to 62.8 \to 70.1$ — about $3\times$ over four blocks, [Lesson 13](13-transformer-block.md)'s accumulation story continued. That growth is exactly why $\mathrm{LN}_f$ exists: without it the logit scale, and therefore the effective softmax temperature ([Lesson 02](02-probability-and-softmax.md)), would depend on depth and on initialisation.
+The shape stays $(T, d_{\text{model}}) = (8, 64)$ across all $N$ blocks — that is the entire reason the architecture is stackable. The *scale* does not stay put: $\|\mathbf{H}^{(N)}\| = 70.1$ for an $8 \times 64$ matrix, whereas unit-variance entries would give $\sqrt{512} = 22.6$. The stream grew from $\|\mathbf{H}^{(0)}\| = 16.2$ to $39.5 \to 51.5 \to 62.8 \to 70.1$ — about $4.3\times$ over four blocks, [Lesson 13](13-transformer-block.md)'s accumulation story continued. That growth is exactly why $\mathrm{LN}_f$ exists: without it the logit scale, and therefore the effective softmax temperature ([Lesson 02](02-probability-and-softmax.md)), would depend on depth and on initialisation.
 
 ### Example — Final LayerNorm and LM head
 
@@ -386,7 +386,7 @@ GPT-2 small: embedding share = 0.3102609533099152   blocks share = 0.68340504867
 <!-- rustlab:output-end -->
 
 > [!TIP]
-> The picture inverts relative to the toy: at $|\mathcal{V}| = 50{,}257$ the embedding alone is 31.0 % of GPT-2 small — nearly a third of the model, and it would be two thirds without weight tying. Deeper stacks tilt the balance back toward the blocks (Exercise 1 finds the crossover depth).
+> The picture inverts relative to the toy: at $|\mathcal{V}| = 50{,}257$ the embedding alone is 31.0 % of GPT-2 small — nearly a third of the model, and it would be nearly half without weight tying. Deeper stacks tilt the balance back toward the blocks (Exercise 1 finds the crossover depth).
 
 ## Compute Budget: FLOPs per Token
 
@@ -434,13 +434,13 @@ GPT-2 small: crossover T* = 4 d_model = 3072   (its context is 1024 )
 
 <!-- rustlab:output-end -->
 
-At $T = 8$ the toy spends 2.0 % of its forward FLOPs on attention scores; its crossover is $T^\ast = 256$. GPT-2 small at its full $T = 1024$ context spends 15 % — its crossover is $T^\ast = 3072$, three times its context, so GPT-2 is firmly weight-bound. Contexts of $32$k–$128$k tokens, forty to a hundred times $T^\ast$, are why long-context inference is an attention problem.
+At $T = 8$ the toy spends 2.0 % of its forward FLOPs on attention scores; its crossover is $T^\ast = 256$. GPT-2 small at its full $T = 1024$ context spends 15 % — its crossover is $T^\ast = 3072$, three times its context, so GPT-2 is firmly weight-bound. Contexts of $32$k–$128$k tokens, ten to forty times $T^\ast$, are why long-context inference is an attention problem.
 
 ## Engineering Lenses
 
 ### Signals
 
-**Exact (with weight tying).** When $\mathbf{W}_U = \mathbf{E}^\top$, the logit for token $v$ at position $t$ is $z_{t,v} = \langle \mathbf{h}_f(t), \mathbf{e}_v \rangle$: the LM head is a **bank of $|\mathcal{V}|$ correlators** — a matched-filter bank whose templates are the embedding rows ([Lesson 04](04-embeddings-and-similarity.md)'s dot product as correlation) — followed by softmax, the Gibbs normalisation of [Lesson 02](02-probability-and-softmax.md). The temperature $\tau$ that [Lesson 21](21-sampling-and-generation.md) puts in front of the softmax rescales every correlator output at once. **Model.** With an untied $\mathbf{W}_U$ (as in the forward pass above) the head is still a filter bank, but its templates are learned separately from the embeddings.
+**Exact.** With weight tying: when $\mathbf{W}_U = \mathbf{E}^\top$, the logit for token $v$ at position $t$ is $z_{t,v} = \langle \mathbf{h}_f(t), \mathbf{e}_v \rangle$: the LM head is a **bank of $|\mathcal{V}|$ correlators** — a matched-filter bank whose templates are the embedding rows ([Lesson 04](04-embeddings-and-similarity.md)'s dot product as correlation) — followed by softmax, the Gibbs normalisation of [Lesson 02](02-probability-and-softmax.md). The temperature $\tau$ that [Lesson 21](21-sampling-and-generation.md) puts in front of the softmax rescales every correlator output at once. **Model.** With an untied $\mathbf{W}_U$ (as in the forward pass above) the head is still a filter bank, but its templates are learned separately from the embeddings.
 
 ```rustlab
 Z_tied = H_f * E_tok';                                 % logits under weight tying: <h_f(t), e_v> for every v
@@ -541,7 +541,7 @@ The biases are initialised to zero. LayerNorm parameters initialise as $\gamma =
 
 The reason is a variance argument. Each $d$-dimensional matmul multiplies the activation variance by $n_{\text{in}} \sigma^2$, where $\sigma^2$ is the per-weight variance. With naive $\mathcal{N}(0, 1)$ weights ($\sigma^2 = 1$) at $d_{\text{model}} = 768$, that is a factor of $768$ *per projection* — activations blow up after the very first matmul, and the gradients with them. The fan-in-aware scales above are chosen so $n_{\text{in}} \sigma^2 \approx 1$ (or $\approx 2$ for the GELU case), holding the variance roughly constant across each matmul; Pre-LN then resets the scale at the entry to every sublayer, which is what tames the *accumulation* across a deep stack. Initialisation is the *most* often-skipped detail when porting a transformer implementation between frameworks; many "untrainable" implementations have a single line-of-code bug in this section.
 
-These lessons do not use one fixed scale; each matrix is initialised for its own fan-in. The attention and LM-head projections use $1/\sqrt{d_{\text{model}}}$ (so the $\mathbf{Q}\mathbf{K}^\top$ scores start at unit scale), the two FFN matrices use He scaling $\sqrt{2/n_{\text{in}}}$ (matched to the GELU that follows), and the token embedding uses a flat $0.1$. Combined with Pre-LN's per-block renormalisation, this keeps activations well-behaved at the shallow depths ($N \le 4$) these toy models use — though, as the printed norms show, "well-behaved" still means a $3\times$ growth over four blocks. Production-scale code at $N = 12$ and beyond should add the nanoGPT residual-projection rescaling ($1/\sqrt{2N}$) above.
+These lessons do not use one fixed scale; each matrix is initialised for its own fan-in. The attention and LM-head projections use $1/\sqrt{d_{\text{model}}}$ (so the $\mathbf{Q}\mathbf{K}^\top$ scores start at unit scale), the two FFN matrices use He scaling $\sqrt{2/n_{\text{in}}}$ (matched to the GELU that follows), and the token embedding uses a flat $0.1$. Combined with Pre-LN's per-block renormalisation, this keeps activations well-behaved at the shallow depths ($N \le 4$) these toy models use — though, as the printed norms show, "well-behaved" still means a $4.3\times$ growth over four blocks. Production-scale code at $N = 12$ and beyond should add the nanoGPT residual-projection rescaling ($1/\sqrt{2N}$) above.
 
 ## Sidebar: Weight Tying (in practice)
 
@@ -565,12 +565,12 @@ The gradient back through the LM head and back through the embedding lookup both
 - **Representation alignment.** Both $E$ and $W_U$ map between "token id" and "$d_{\text{model}}$-dim vector". Tying forces them to use the same coordinate system; the model cannot learn two unrelated representations for the same vocabulary.
 - **Slight regularisation.** Half the parameters can't co-adapt independently; the model has less surface area to overfit.
 
-The downside is one extra constraint on what the model can express. Empirically this is a net win at every scale that has been tested for autoregressive LMs. The lessons keep $E$ and $W_U$ separate for pedagogical clarity (the LM head as a distinct layer is easier to read) — production code should tie them.
+The downside is one extra constraint on what the model can express. Empirically it has been a net win for small and mid-sized autoregressive LMs; at the largest scales the saving matters less and several recent families (LLaMA 2/3, Mistral) leave the two matrices untied. The lessons keep $E$ and $W_U$ separate for pedagogical clarity (the LM head as a distinct layer is easier to read) — production code should tie them.
 
 ## Key Takeaways
 
 - A GPT decoder is `ids → embed + PE → N × Block → LN_f → W_U → logits`. Every component you've already studied; only the wiring is new.
-- The residual stream stays at width $d_{\text{model}}$ throughout — that is what makes blocks stackable — but not at constant *scale*: it grew $3\times$ over four blocks here, which is what $\mathrm{LN}_f$ and the $1/\sqrt{2N}$ init are for.
+- The residual stream stays at width $d_{\text{model}}$ throughout — that is what makes blocks stackable — but not at constant *scale*: it grew $4.3\times$ over four blocks here, which is what $\mathrm{LN}_f$ and the $1/\sqrt{2N}$ init are for.
 - The model is **causal end-to-end**: changing token $t$ leaves the logits at positions $< t$ bit-identical.
 - **Parameter formula**: $n \approx N \cdot 12 d_{\text{model}}^2 + 2 |\mathcal{V}| d_{\text{model}}$. Block params scale as depth × width², embedding/LM-head as vocab × width. It reproduces GPT-2 small's 124M to within 0.03 % — the residual is exactly the attention biases the formula omits ($12 \times 4 \cdot 768 = 36{,}864$) — and covers the GPT-2/3 family.
 - **Compute**: $\approx 2 n_{\text{params}}$ FLOPs per token forward, $\approx 6 n_{\text{params}}$ per training token, plus $4 T d_{\text{model}}$ per layer for attention scores; attention overtakes the FFN only beyond $T^\ast = 4 d_{\text{model}}$.
