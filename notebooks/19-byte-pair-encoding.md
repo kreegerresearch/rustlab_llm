@@ -228,7 +228,7 @@ Three things separate the algorithm above from a tokeniser you can ship.
 
 **Special tokens.** A few ids are reserved and never produced by a merge. **EOS (end-of-sequence)** marks where a document ends; it is trained on like any other token, so a model learns to *predict* it, and the generation loop of [[21-sampling-and-generation]] stops when it is sampled. GPT-2's `<|endoftext|>` plays this role (and separates documents in the training stream). **BOS** marks a beginning; **pad** fills a batch of unequal sequences to a common $T$ and is masked out of attention and loss. Chat models add role markers the same way.
 
-**Pre-tokenisation.** Before any merge is counted, the text is split by a regular expression into chunks — roughly words, numbers, and punctuation, each carrying its leading space — and merges are learned and applied *within chunks only*. No token ever spans a whitespace boundary. That is why the space in our corpus never entered a merge until the word itself was one token, why `abracadabra abracadabra` encodes as two identical runs, and why real vocabularies are not cluttered with cross-word fragments such as `e th`.
+**Pre-tokenisation.** Before any merge is counted, the text is split by a regular expression into chunks — roughly words, numbers, and punctuation, each carrying its leading space — and merges are learned and applied *within chunks only*, so in a production tokeniser no token ever spans a whitespace boundary. That is why `abracadabra abracadabra` encodes as two identical runs and why real vocabularies are not cluttered with cross-word fragments such as `e th`. This notebook has **no** pre-tokeniser: the space stayed out of merges 1–7 only because its pair counts were the lowest (two occurrences each, against three or six for every within-word pair), and once each word was a single token, merges 8–10 fused straight across the spaces — exactly the cross-word fragments a pre-tokeniser forbids.
 
 ## Connection to Earlier Lessons
 
@@ -296,7 +296,7 @@ hold("off")
 ```
 
 > [!TIP]
-> Left: every merge shortens the sequence, but the first three (count 6 each) do most of the work and the last ones remove a token or two — diminishing returns as a curve, not a claim. Right: the total falls, jumps where the id width grows (at $|\mathcal{V}| = 9$ and $17$), bottoms out at $k^\ast = ${k_star}$ merges with ${bits_min}$ bits, and then rises as the dictionary outweighs the data it describes. That minimum is the MDL-optimal vocabulary for this corpus.
+> Left: every merge shortens the sequence, but the first three (count 6 each) do most of the work and the last ones remove a token or two — diminishing returns as a curve, not a claim. Right: the total falls, jumps where the id width grows (at $|\mathcal{V}| = 9$ — the next step, at $17$, lies outside the plotted $k \le 10$), bottoms out at $k^\ast = ${k_star}$ merges with ${bits_min}$ bits, and then rises as the dictionary outweighs the data it describes. That minimum is the MDL-optimal vocabulary for this corpus.
 
 The BPE minimum sits *below* the dashed order-0 bound of ${bits_order0:%.1f}$ bits. That is not a violation: the bound applies to codes that treat characters as independent, and a dictionary code wins precisely by exploiting the repetition that an order-0 code cannot see. The floor a dictionary cannot beat is the corpus's entropy rate — close to zero for one word repeated three times.
 
@@ -359,7 +359,7 @@ Run all with `make lesson-19` (or `rustlab run lessons/19-byte-pair-encoding/<na
 | `tpw` (tokens per word) | `[3, 1, 1, 2, 2, 1]` |
 | `H_char` | `2.240` bits/char |
 | `bits_ascii`, `bits_fixed`, `bits_order0`, `bits_huff` | `280`, `105`, `78.4`, `80` |
-| `bits_total`, k = 0..10 | `105, 93, 81, 92, 88, 84, 80, 76, 76, 80, 105` |
+| `bits_total`, k = 0..10 | `105, 93, 81, 92, 88, 84, 80, 76, 76, 80, 84` |
 | `k_star`, `bits_min` | `7`, `76` |
 | `H_tok`, `N_tok * H_tok` | `1.435` bits/token, `15.8` bits (vs `78.4` for characters) |
 | `pmi_ra`, `m_count(1) * pmi_ra` | `1.264` bits, `7.6` bits (actual saving of merge 1: `12`) |

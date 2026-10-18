@@ -280,7 +280,6 @@ print("final ||theta||   Adam:", norm(theta_adam), "   AdamW:", norm(theta_aw));
 
 % Level sets of L = 1/2 (200 x^2 + y^2) under the three paths.  The level c is
 % x = ±sqrt((2c - y^2) / 200), drawn with plot() and clipped to the window.
-% TODO: use contour() + hold once contour overlays keep line series in SVG export (rustlab 0.3.7 drops them).
 function bowl_levels(a, levels, y_lo, y_hi)
   for c = levels
     yv = linspace(max(-sqrt(2 * c), y_lo), min(sqrt(2 * c), y_hi), 80);
@@ -435,7 +434,7 @@ print("AdamW leak pole 1 - eta lambda at (0.1, 0.1):", 1 - eta_b * lambda_wd, " 
 > [!TIP]
 > All three heavy-ball pairs lie on the same circle of radius $\sqrt{\mu} = 0.949$ — the decay rate is curvature-independent from $a = ${a_crit:%.2f}$ up to $a = ${a_max:%.0f}$. Only the angle changes: $5°$ (a slow 71-step swing), $26°$ (the 14-step ripple of the momentum demo), $93°$ (a 4-step ring). SGD's poles spread from $0.99$ (a 100-step time constant) to $-1$ (marginal).
 
-**Exact (as normalisation).** Adam's $1/\sqrt{\hat{\mathbf{v}}_t}$ is a diagonal preconditioner that divides each coordinate's update by its own recent RMS gradient: a per-coordinate automatic gain control, or equivalently the normalised-LMS step, whose output level is unit regardless of the input level. At $t = 1$ this is visible in closed form (printed above): $\hat{\mathbf{m}}_1/\sqrt{\hat{\mathbf{v}}_1} = \mathbf{g}_1/\lvert\mathbf{g}_1\rvert = \operatorname{sign}(\mathbf{g}_1)$, so every coordinate moves by exactly $\eta$ whatever its gradient. **Model.** The common gloss "$1/\sqrt{\hat{\mathbf{v}}}$ approximates the inverse Hessian" is a simplification: $\sqrt{\hat v}$ has the units of a gradient, not a curvature — it is the square root of the diagonal empirical Fisher (Information lens below). **Exact.** Decoupled weight decay is a leak: $\theta \leftarrow (1 - \eta\lambda)\theta$ has pole $1 - \eta\lambda$ and time constant $1/(\eta\lambda)$, and "decoupled" means the leak sits outside the preconditioner, so its pole is the same for every coordinate (printed above for the weight-decay demo: $0.99$, a 100-step time constant).
+**Exact.** As normalisation: Adam's $1/\sqrt{\hat{\mathbf{v}}_t}$ is a diagonal preconditioner that divides each coordinate's update by its own recent RMS gradient: a per-coordinate automatic gain control, or equivalently the normalised-LMS step, whose output level is unit regardless of the input level. At $t = 1$ this is visible in closed form (printed above): $\hat{\mathbf{m}}_1/\sqrt{\hat{\mathbf{v}}_1} = \mathbf{g}_1/\lvert\mathbf{g}_1\rvert = \operatorname{sign}(\mathbf{g}_1)$, so every coordinate moves by exactly $\eta$ whatever its gradient. **Model.** The common gloss "$1/\sqrt{\hat{\mathbf{v}}}$ approximates the inverse Hessian" is a simplification: $\sqrt{\hat v}$ has the units of a gradient, not a curvature — it is the square root of the diagonal empirical Fisher (Information lens below). **Exact.** Decoupled weight decay is a leak: $\theta \leftarrow (1 - \eta\lambda)\theta$ has pole $1 - \eta\lambda$ and time constant $1/(\eta\lambda)$, and "decoupled" means the leak sits outside the preconditioner, so its pole is the same for every coordinate (printed above for the weight-decay demo: $0.99$, a 100-step time constant).
 
 
 ### Information
@@ -503,7 +502,7 @@ Run all with `make lesson-16` (or `rustlab run lessons/16-adamw-optimizer/<name>
 | `theta_c`, `theta_d` (coupled vs decoupled decay) | `(0.909, 2.500)` vs `(0.967, 4.740)` |
 | `norm(theta_adam)`, `norm(theta_aw)` (overlay) | `0.165` vs `0.024` |
 | bias correction $1 - \beta_1$ at $t = 1$; $1 - \beta_2^{100}$ | `0.1`; `0.095` (still a 10× rescale — not negligible) |
-| EMA $-3$ dB corners, $\beta = 0.9 / 0.99 / 0.999$ | `1.6e-2` / `1.7e-3` / `2.4e-4` cycles per step ($\approx (1-\beta)/2\pi$); DC gain `1.000`; heavy-ball DC gain `10` |
+| EMA $-3$ dB corners, $\beta = 0.9 / 0.99 / 0.999$ | `1.7e-2` / `1.6e-3` / `1.8e-4` cycles per step ($\approx (1-\beta)/2\pi$); DC gain `1.000`; heavy-ball DC gain `10` |
 | critical-damping / instability curvature at $\eta = 0.01$, $\mu = 0.9$ | $a = $ `0.263` / `380` |
 | `snr_rms(2)`, `sqrt(v_hat(1)/v_hat(2))` (noisy run, $\beta_2 = 0.95$) | `≈ 0.24` (white-noise value `0.229`); `≈ 3.4` (Hessian ratio 200) |
 

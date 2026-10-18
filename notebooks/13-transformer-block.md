@@ -210,7 +210,7 @@ heatmap(feat, tok, F_out, "FFN correction F_out", "viridis")
 ```
 
 > [!TIP]
-> Rows are tokens $t = 1..4$, columns channels $1..8$; colour is the signed value. The MHA correction has a visible *column* structure (channels 5–6 light up for every token — $\mathbf{W}_O$ writes its output into the same channels regardless of $t$), while the FFN correction varies row by row. Neither panel resembles $\mathbf{H}_{\text{in}}$: the block adds new content instead of rescaling what was there.
+> Rows are tokens $t = 1..4$, columns channels $1..8$; colour is the signed value. The MHA correction has a visible *column* structure (channels 1 and 5 light up for every token — $\mathbf{W}_O$ writes its output into the same channels regardless of $t$), while the FFN correction varies row by row. Neither panel resembles $\mathbf{H}_{\text{in}}$: the block adds new content instead of rescaling what was there.
 
 ## The Two Mixing Axes
 
@@ -338,7 +338,7 @@ For our toy $d_{\text{model}} = 8$ the block has ${n_block} parameters under the
 
 ### Signals
 
-**Exact.** Each row of an attention matrix is a **causal, non-negative, unit-DC-gain FIR tap vector** along the time axis: $A_h(t, i) = 0$ for $i > t$ (causal), $A_h(t, i) \ge 0$ and $\sum_i A_h(t, i) = 1$ (unit DC gain). Row $t$ of the head output is the filter $\sum_{i \le t} A_h(t, i)\,\mathbf{V}_h(i, :)$ — [[07-context-and-naive-averaging|Lesson 07]]'s uniform prefix average is the special case $A_h(t, i) = 1/t$. Two consequences follow from the row sums alone: attention cannot amplify a constant (a constant $\mathbf{V}$ passes through unchanged), and it cannot invert sign. What makes it more than an FIR filter is that the taps are *computed from the signal* ([[08-scaled-dot-product-attention|Lesson 08]]) — a time-varying filter whose coefficients change with every input. **Exact.** The FFN is memoryless along time: a static nonlinearity applied per sample (row), as the perturbation test showed. **Analogy.** LN → $\mathbf{W}_1$ → GELU → $\mathbf{W}_2$ per row has the *shape* of a Wiener–Hammerstein cascade (linear – static nonlinear – linear), which is useful vocabulary and nothing more.
+**Exact.** Each row of an attention matrix is a **causal, non-negative, unit-DC-gain FIR tap vector** along the time axis: $A_h(t, i) = 0$ for $i > t$ (causal), $A_h(t, i) \ge 0$ and $\sum_i A_h(t, i) = 1$ (unit DC gain). Row $t$ of the head output is the filter $\sum_{i \le t} A_h(t, i)\,\mathbf{V}_h(i, :)$ — [[07-context-and-naive-averaging|Lesson 07]]'s uniform prefix average is the special case $A_h(t, i) = 1/t$. Two consequences follow from the row sums alone: attention cannot amplify a constant (a constant $\mathbf{V}$ passes through unchanged), and it cannot invert sign. What makes it more than an FIR filter is that the taps are *computed from the signal* ([[08-scaled-dot-product-attention|Lesson 08]]) — a time-varying filter whose coefficients change with every input. **Exact.** The FFN is memoryless along time: a static nonlinearity applied per sample (row), as the perturbation test showed. **Model.** LN → $\mathbf{W}_1$ → GELU → $\mathbf{W}_2$ per row is a Wiener–Hammerstein cascade (linear – static nonlinear – linear), the block-oriented model [[11-feed-forward-block|Lesson 11]] uses for the FFN; the vocabulary carries over, the identification tools only partly.
 
 ```rustlab
 c1 = 1:d_k;                       % head 1's columns
@@ -422,13 +422,13 @@ ylabel("sigma_max")
 ```
 
 > [!TIP]
-> Left: as initialised, eight blocks multiply the stream norm by ${n_u(9) / n_u(1):%.1f}; with the $1/\sqrt{2N}$ branch scaling the same weights give ${n_s(9) / n_s(1):%.1f}. Right: the per-block gain starts above 2 for the unscaled stack and settles near 1.3 once the stream is large relative to the branches; the scaled stack sits near 1.3 from the first block. No block has gain below 1 — the identity path guarantees $\sigma_{\max}(\mathbf{J}) \ge 1 - \|\partial f\|$, which is the "gradient highway" of Lesson 12 read forwards.
+> Left: as initialised, eight blocks multiply the stream norm by ${n_u(9) / n_u(1):%.1f}; with the $1/\sqrt{2N}$ branch scaling the same weights give ${n_s(9) / n_s(1):%.1f}. Right: the per-block gain starts above 2 for the unscaled stack and settles near 1.3 once the stream is large relative to the branches; the scaled stack sits near 1.3 from the first block. Every block measured here has $\sigma_{\max}(\mathbf{J}) \ge 1$; the identity path does not guarantee that, but it does pin every singular value of $\mathbf{J} = \mathbf{I} + \partial f$ into $[\,1 - \|\partial f\|,\; 1 + \|\partial f\|\,]$, so a small branch keeps the block's gain near $1$ in every direction — the "gradient highway" of Lesson 12 read forwards.
 
 ### Information
 
 **Model.** A transformer is a **conditional-entropy refinement pipeline**. The bigram baseline ([[05-bigram-language-model|Lesson 05]]) achieves $H(X_{t+1} \mid X_t)$; a stack of blocks can only do better by extracting information from the longer context, and in the limit of unlimited capacity and data it approaches the true $H(X_{t+1} \mid X_{1..t})$ of the source. How much each block lowers the achieved conditional entropy is an empirical question — the scaling laws of [[14-full-gpt-architecture|Lesson 14]] — not a fixed amount per layer. The two sublayers play different roles in that pipeline: attention is the only place mutual information between *past* tokens and the next token can enter row $t$ (it is the only row-mixing map — the perturbation test); the FFN cannot add information about $X_{t+1}$ that was not already in row $t$ (data-processing inequality, [[11-feed-forward-block|Lesson 11]]) — it re-shapes the row so the next block's attention can extract a different fragment. Multi-head attention splits the extraction into $H$ parallel channels that share the residual stream and are not, in general, orthogonal ([[09-multi-head-attention|Lesson 09]]). The residual stream is the lossless backbone ([[12-layer-norm-and-residuals|Lesson 12]]): $\mathbf{H}_{\text{in}}$ is preserved through `H_in + sublayer(LN(H_in))` no matter what the sublayer does.
 
-**Exact.** Each attention row is a distribution over $t$ keys, so its entropy is at most $\log_2 t$ bits; the deficit $\log_2 t - H(\mathbf{A}_{t,:})$ is how far the head has moved from uniform prefix averaging ([[08-scaled-dot-product-attention|Lesson 08]]'s row entropy). At random initialisation the deficits are small — the heads route almost nothing yet:
+**Exact.** Each attention row is a distribution over $t$ keys, so its entropy is at most $\log_2 t$ bits; the deficit $\log_2 t - H(\mathbf{A}_{t,:})$ is how far the head has moved from uniform prefix averaging ([[08-scaled-dot-product-attention|Lesson 08]]'s row entropy). At random initialisation the deficits are modest but not zero — head 2 stays near the ceiling, while head 1 already concentrates its weight at $t = 2$ (the $0.94$ tap printed under the Signals lens); neither pattern has been *learned* yet:
 
 ```rustlab
 bound = log2(1:T);
@@ -449,7 +449,7 @@ ylabel("bits")
 ```
 
 > [!TIP]
-> Both heads sit within a fraction of a bit of the $\log_2 t$ ceiling at every position: at initialisation the block is close to Lesson 07's prefix average, and the routing information (the gap to the grey line) is what training will buy.
+> Head 2 sits within half a bit of the $\log_2 t$ ceiling at every position; head 1 falls $0.67$ bits short at $t = 2$ ($0.33$ of a possible $1$ bit) and $0.3$–$0.5$ bits short after that. At initialisation the block is still closer to Lesson 07's prefix average than to a routed one, and the routing information (the gap to the grey line) is what training will shape.
 
 ## Sidebar: Dropout
 

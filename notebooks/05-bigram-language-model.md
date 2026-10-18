@@ -340,7 +340,7 @@ hold("off")
 
 ### Information
 
-**Exact.** The **entropy rate** of the stationary chain is the row entropies averaged under $\boldsymbol{\pi}$, and the maximum-likelihood $\mathbf{P}$ makes the training cross-entropy equal to it — MLE *is* minimum cross-entropy:
+**Exact.** The **entropy rate** of the stationary chain is the row entropies averaged under $\boldsymbol{\pi}$, and the maximum-likelihood $\mathbf{P}$ makes the training cross-entropy equal to it — MLE *is* minimum cross-entropy. The two agree to the last digit here because the corpus is a closed walk (it starts and ends on `a`), so the empirical frequency of the current token is exactly the stationary $\boldsymbol{\pi}$:
 
 ```rustlab
 H_rate  = sum(pi_st .* H_rows);
@@ -418,4 +418,4 @@ As $k \to 0$ the smoothed matrix approaches $\mathbf{P}$ and $|\lambda_2| \to 1$
 
 ## What's next
 
-[[06-linear-layers-and-gradient-descent]] replaces the count table with a **learned linear layer** $y = Wx + b$ and shows how **gradient descent** drives the parameters toward the same optimum the count-based estimator finds analytically. The transition from "look up" to "learn" is the conceptual jump from a classical n-gram model to a neural one — every subsequent lesson uses gradient descent.
+[[06-linear-layers-and-gradient-descent]] replaces the count table with a **learned linear layer** $\mathbf{y} = \mathbf{x}\mathbf{W} + \mathbf{b}$ and shows how **gradient descent** drives the parameters toward the same optimum the count-based estimator finds analytically. The transition from "look up" to "learn" is the conceptual jump from a classical n-gram model to a neural one — every subsequent lesson uses gradient descent.

@@ -47,7 +47,8 @@ print("linear layer after", n_bi, "steps:", loss_bi(n_bi) / log(2), "bits   gap 
 
 figure();
 hold("on")
-plot(1:n_bi, loss_bi / log(2), "color", "blue", "label", "bigram linear layer, GD")
+loss_curve = [log(3.0), loss_bi];               # step 0 = uniform logits (loss log|V|); loss_bi(k) is logged after update k
+plot(0:n_bi, loss_curve / log(2), "color", "blue", "label", "bigram linear layer, GD")
 hline(floor_bits, "red", "H(X_t+1 | X_t) = 0.5 bit")
 hline(log2(3), "gray", "log2 |V| = uniform start")
 title("Cross-entropy of the learned bigram layer vs. the conditional-entropy floor")

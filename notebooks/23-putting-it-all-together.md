@@ -244,9 +244,7 @@ flowchart LR
 > [!IMPORTANT]
 > "Mini-GPT" here means **the full GPT recipe applied to a small model**. Every component — char tokens, BPE, embeddings, attention, FFN, LN, residuals, AdamW, warmup+cosine, PPL, sampling, full backprop — is from the curriculum, with no black boxes. Every choice scales transparently to a real LLM. Only the numbers change.
 
-## Walkthrough
-
-### 1. Tokenise the corpus
+## 1. Tokenise the corpus
 
 ### Theory
 
@@ -315,7 +313,7 @@ print("optimal-bigram PPL floor:", ppl_floor);
 
 Every current token predicts its successor deterministically **except token 12 (`"at "`)**, which is followed by three different tokens across the corpus: `"s"` (in `"sat"`, 4 times), `"o"` (in `"on"`, 4 times), and `"the c"` (wrapping into the next phrase, 3 times). A bigram conditions only on the current token, so it cannot see *which* `"at "` it is looking at; the best it can do is hedge with $P = (4/11,\, 4/11,\, 3/11)$. Those 11 ambiguous transitions cost $H(4/11, 4/11, 3/11) \approx 1.09$ nats each; the other 20 are free, so the mean cross-entropy is $\tfrac{11}{31} \cdot 1.09 = ${ce_floor:%.4f}$ nats, giving $\mathrm{PPL}_{\text{floor}} = ${ppl_floor:%.4f}$. **That is the number attention has to beat.**
 
-### 2. Train
+## 2. Train
 
 ### Theory
 
@@ -386,7 +384,7 @@ print("Final   L =", loss_curve(n_train + 1), "  PPL =", ppl_curve(n_train + 1))
 
 Loss drops from ${loss_curve(1):%.3f}$ (≈ $\log |\mathcal{V}| = ${log(vocab):%.3f}$, the uniform-random baseline) to ${loss_curve(n_train + 1):%.2e}$, equivalently $\mathrm{PPL} = ${ppl_curve(n_train + 1):%.5f}$. The model assigns probability $\approx 1$ to the correct next token at every position — perfect except for floating-point noise — and the bigram floor of ${ppl_floor:%.4f}$ is decisively beaten.
 
-### 3. Generate at checkpoints
+## 3. Generate at checkpoints
 
 ### Theory
 
@@ -412,9 +410,9 @@ print("step 600 K=3    : '", decode_seq(topk_gen(prompt_id, n_gen, 3, 1.0, P_ck3
 print("step 600 P=0.9  : '", decode_seq(topp_gen(prompt_id, n_gen, 0.9, 1.0, P_ck3), lp, rp, char_names), "'");
 ```
 
-Three things to read from the gallery. First, **by step 100 the model has already learned the full corpus structure**: greedy decoding reproduces the corpus exactly, with no mode collapse, because the model resolves the `"at "` ambiguity from context (it reads the token immediately before each `"at "`). This is the headline contrast with the bigram of [[21-sampling-and-generation]]: same corpus, same BPE, same training loop, attention added — and `"sat on the mat"` now appears under *greedy* decoding, not only under sampling. Second, **every sampling strategy converges to the same output at step 600** — once the model is this confident, the next-token distribution at every position is essentially one-hot, so temperature rescaling and top-K/top-P truncation are no-ops. Third, the step-0 output is gibberish heavy with `"the c"` because the random LM head happens to favour that token after most prefixes.
+Three things to read from the gallery. First, **by step 100 the model has already learned the full corpus structure**: greedy decoding reproduces the corpus exactly, with no mode collapse, because the model resolves the `"at "` ambiguity from context (the token before each `"at "` is what disambiguates; §4 and §6 show the model has two routes to it). This is the headline contrast with the **optimal-bigram floor of §1** ($\mathrm{PPL} = ${ppl_floor:%.4f}$ on this very corpus and BPE): a one-token-of-context model cannot tell the three successors of `"at "` apart, so for it `"sat on the mat"` is a sampling outcome, never a greedy one — the same limitation [[21-sampling-and-generation]] showed on its own 3-token corpus. With context added, it appears under *greedy* decoding. Second, **every sampling strategy converges to the same output at step 600** — once the model is this confident, the next-token distribution at every position is essentially one-hot, so temperature rescaling and top-K/top-P truncation are no-ops. Third, the step-0 output is gibberish heavy with `"the c"` because the random LM head happens to favour that token after most prefixes.
 
-### 4. Read the attention pattern
+## 4. Read the attention pattern
 
 ### Theory
 
@@ -467,7 +465,7 @@ print("mean attention-row entropy at steps 0/100/300/600 (bits):", H_ck, "  unif
 
 The mean row entropy says the same in numbers: ${H_ck(1):%.2f}$ bits at step 0 against ${H_unif:%.2f}$ for a uniform prefix average, then ${H_ck(2):%.2f}$ bits at step 100 and ${H_ck(4):%.2f}$ at step 600 — the head is built in the first hundred steps and only trimmed afterwards.
 
-### 5. Read the diagnostics
+## 5. Read the diagnostics
 
 ### Example — Loss, perplexity, gradient norm, learning rate
 
@@ -502,7 +500,7 @@ xlabel("step"); ylabel("eta")
 
 These are the four plots a production training run would also show. Reading them is the same — only the y-axis scale changes.
 
-### 6. Ablate: what actually beats the floor
+## 6. Ablate: what actually beats the floor
 
 ### Theory
 
@@ -629,11 +627,11 @@ legend("loss", "end of warm-up", "start of tail", "bigram floor")
 > [!TIP]
 > Left of the first grey line the gain is still ramping; between the lines the curve is straight on the log axis; right of the second line it bends over as the cosine schedule takes $\eta$ down.
 
-Three phases. **Warm-up transient** (steps 0–60): $\eta$ ramps from 0 and the loss falls slowly, crossing the bigram floor at step ${k_cross}$. **Exponential convergence** (60–150): a straight line on the log axis with an e-folding time of ${-1 / rate_exp:%.1f}$ steps — three decades in ninety steps. **Schedule-limited tail** (150–600): the log-slope falls by a factor of ${slope_a / slope_b:%.1f}$ between the windows 200–300 and 500–600 while $\eta$ falls by a factor of ${eta_a / eta_b:%.1f}$; the convergence rate tracks the scheduled gain. This tail is *not* a round-off floor: a position's loss reaches exactly 0 only when its logit margin exceeds $\approx 37$ nats and $p$ rounds to 1, and the mean loss here is still four orders of magnitude above that.
+Three phases. **Warm-up transient** (steps 0–60): $\eta$ ramps from 0 and the loss falls slowly, crossing the bigram floor at step ${k_cross}$. **Exponential convergence** (60–150): a straight line on the log axis with an e-folding time of ${-1 / rate_exp:%.1f}$ steps — three decades in ninety steps. **Schedule-limited tail** (150–600): the log-slope falls by a factor of ${slope_a / slope_b:%.1f}$ between the windows 200–300 and 500–600 while $\eta$ falls by a factor of ${eta_a / eta_b:%.1f}$; the convergence rate tracks the scheduled gain. This tail is *not* a round-off floor: a position's loss reaches exactly 0 only when its logit margin exceeds $\approx 37$ nats and $p$ rounds to 1, and the mean loss here, $\mathcal{L} = ${loss_curve(end) * 1e5:%.1f} \times 10^{-5}$, is still some ${log10(loss_curve(end) * exp(37)):%.0f} orders of magnitude above that ($e^{-37} \approx 10^{-16}$).
 
 ### Information
 
-**Exact.** The bigram floor of §1 is the corpus's own **conditional entropy** $H(\text{next} \mid \text{cur})$, and the trigram floor is $H(\text{next} \mid \text{cur}, \text{prev})$; their difference $I(\text{next}; \text{prev} \mid \text{cur})$ is the information that only a channel to the previous token can recover — which is what §6 ablated. PPL 1.00008 then has an exact reading as a **code length**:
+**Exact.** The bigram floor of §1 is the corpus's own **conditional entropy** $H(\text{next} \mid \text{cur})$, and the trigram floor is $H(\text{next} \mid \text{cur}, \text{prev})$; their difference $I(\text{next}; \text{prev} \mid \text{cur})$ is the information that only a channel to the previous token can recover — which is what §6 ablated. Both floors come from (context, next) counts via `cond_entropy_nats`, a helper defined in this notebook's hidden setup block on top of `entropy_nats` from `lib/info.rlab`. PPL 1.00008 then has an exact reading as a **code length**:
 
 ```rustlab
 H_cur      = cond_entropy_nats(tokens, 1, vocab);
@@ -695,7 +693,7 @@ Run with `make lesson-23` (or `rustlab run lessons/23-putting-it-all-together/<s
 
 ## Exercises
 
-1. **Why no mode collapse?** Examine the trained attention pattern `A_trained` at a position whose current token is `"at "` (id 12) — the only token with an ambiguous successor. Which earlier position carries the disambiguating information, and is it attended to with high weight? Hint: it is the token *immediately before* `"at "` (one position back) — `"the c"`, `"s"`, or `"the m"` — which uniquely determines the continuation.
+1. **Why no mode collapse?** The token *immediately before* each `"at "` (id 12, the only token with an ambiguous successor) — `"the c"`, `"s"`, or `"the m"` — uniquely determines the continuation, so a previous-token head would resolve the ambiguity. Read off from `A_trained` where the `"at "` rows actually put their weight: which of them attend to position $t - 1$, and which to one of the `"o"` columns 5, 13, 21 instead? Reconcile what you find with §4 (the head reads *where am I* as much as *what came before*) and with §6, where removing attention altogether still reached $\mathrm{PPL} \approx 1$ — through which channel does the model reach the previous token in that case?
 2. **Bigram floor analytically.** Using the transition counts from §1, show by hand that a context-1 model must assign $P(\cdot \mid \text{"at "}) = (4/11, 4/11, 3/11)$ over $(\text{"s"}, \text{"o"}, \text{"the c"})$, that every other current token has a deterministic successor, and that the mean cross-entropy over all 31 transitions is therefore $\tfrac{11}{31}\,H(4/11, 4/11, 3/11) = 0.3868$ nats — i.e. $\mathrm{PPL}_{\text{floor}} = 1.4723$. Confirm against the printed value.
 3. **Which channel did the model use?** §6 showed that either attention or the positional code suffices on this corpus. Re-run the ablation with $n_{\text{reps}} = 2$ (a 16-token sequence, 15 pairs). Does "PE off" still reach PPL ≈ 1 when the head has only two periods to compare, or does it fall back to the floor as it did on the `abb` corpus of [[22-full-backprop-through-the-block]]?
 4. **More merges.** Re-run with $n_{\text{merges}} = 20$ instead of 8. The vocabulary grows; what happens to the sequence length and the final PPL? Past how many merges does PPL stop improving?

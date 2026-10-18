@@ -8,7 +8,7 @@
 ## Learning Objectives
 
 - Implement **supervised fine-tuning** with prompt-token loss masking, recognise the **catastrophic forgetting** it produces, and measure it as **gradient interference** — the cosine between the fine-tuning and pre-training gradients.
-- Derive **DPO** from the KL-regularised reward objective (Gibbs tilt of the reference, reward inverted out, Bradley–Terry cancelling the partition function); read $\beta$ as an inverse temperature and the frozen reference as the KL anchor.
+- Derive **DPO** from the KL-regularised reward objective (Gibbs tilt of the reference, reward inverted out, Bradley–Terry cancelling the partition function); read $\beta$ as the temperature of the tilt and the frozen reference as the KL anchor.
 - Implement DPO with a frozen reference policy, see why the reference term curbs forgetting, and recognise likelihood displacement in the numbers.
 - Place pre-training, SFT, DPO and RLHF in the standard training stack, and read LoRA and replay as restrictions of the update subspace.
 
@@ -246,7 +246,7 @@ $$r_\theta(x, y) = \beta \log\frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid
 
 Three things to read off the derivation:
 
-- **$\beta$ is an inverse temperature.** Small $\beta$ lets the reward dominate the tilt; large $\beta$ pins $\pi^*$ to $\pi_{\text{ref}}$. It sets the *strength* of the KL penalty; no explicit bound on the KL distance is imposed.
+- **$\beta$ is a temperature.** In $e^{r/\beta}$ it divides the reward exactly as $\tau$ divides the logits in [[02-probability-and-softmax]]: small $\beta$ lets the reward dominate the tilt; large $\beta$ pins $\pi^*$ to $\pi_{\text{ref}}$. It sets the *strength* of the KL penalty; no explicit bound on the KL distance is imposed.
 - **The reference is frozen because it is the anchor.** Line 1 defines the objective relative to $\pi_{\text{ref}}$; if the reference moved with the policy the penalty would be zero at every step and line 3 would have no optimum.
 - **No reward model, no RL.** Line 4 makes the reward implicit in the policy (the contrast with RLHF/PPO); line 6 is an ordinary supervised loss. Versus SFT the difference is the *data*: a chosen and a rejected response per prompt instead of a labelled response.
 
@@ -283,8 +283,9 @@ flowchart LR
 
 ### Example — DPO on toy preference pairs
 
-Pre-train the same model for 400 steps, freeze the result as the reference (a struct copy), then run 200 DPO steps with $\beta = 0.5$ on three preference triples: chosen response `aa`, rejected response `bb`. The `abb`-corpus loss is tracked at every step as the forgetting probe.
+Pre-train the same model for 400 steps, freeze the result as the reference (a struct copy), then run 200 DPO steps with $\beta = 0.5$ on three preference triples: chosen response `aa`, rejected response `bb`. The `abb`-corpus loss is tracked at every step as the forgetting probe. The two helpers (`response_logprob`, which sums the response tokens' log-probabilities, and `dpo_dlogits`, which places $\pm\beta(1 - \sigma)(\mathbf{p} - \mathbf{e}_y)$ on the response rows of the upstream gradient), the pre-training pass that produces `P_ref`, the three triples and the step-0 margin evaluation sit in a hidden setup block; the visible block is the DPO loop itself.
 
+<!-- hide -->
 ```rustlab
 function lp = response_logprob(ids, response_start, response_end, logits)
   lp = 0.0;
@@ -334,6 +335,9 @@ end
 dpo_loss_curve(1) = L0_dpo / n_prefs;
 [lo, L_abb_pre, cache] = transformer_forward(ids_pre, mask_pre, P);
 abb_loss_curve(1) = L_abb_pre;
+```
+
+```rustlab
 print("Initial DPO L:", dpo_loss_curve(1), "  (ln 2 =", log(2), ")   abb-corpus L:", L_abb_pre);
 
 [M, V] = adamw_init(P);
@@ -406,7 +410,7 @@ xlabel("step"); ylabel("beta (1 - sigma)")
 ```
 
 > [!TIP]
-> Left: a soft dead band — full gain when the preference is wrong, half gain at indifference, effectively zero beyond $u \approx 5$. Right: the run starts at $0.25$ and the gain falls by three orders of magnitude within ten steps; the period-3 saw-tooth is the round-robin over the three prompts, one of which keeps a smaller margin and so a larger gain. After the first dozen steps DPO is barely moving the parameters — a second reason, besides the reference term, that the `abb` loss stays put.
+> Left: a soft dead band — full gain when the preference is wrong, half gain at indifference, effectively zero beyond $u \approx 5$. Right: the run starts at $0.25$ and the gain falls by ${log10(w_step(1) / w_step(11)):%.0f} orders of magnitude within ten steps; the period-3 saw-tooth is the round-robin over the three prompts, one of which keeps a smaller margin and so a larger gain. After the first dozen steps DPO is barely moving the parameters — a second reason, besides the reference term, that the `abb` loss stays put.
 
 ### Example — DPO loss and forgetting probe side by side
 
@@ -454,7 +458,7 @@ No signals reading adds to this lesson: fine-tuning changes the parameters, not 
 
 ### Systems
 
-**Exact.** The optimum of the KL-regularised objective is a Gibbs tilt of the reference — the reference is the set point and $\beta$ the inverse temperature of the tilt. Check line 3 of the derivation on the reference policy's own next-token law after the prompt `a b sep`, with a reward that likes `b`: the tilted distribution is `softmax(log pi_ref + r/beta)` to round-off, and inverting it (line 4) returns the reward up to the prompt-only constant.
+**Exact.** The optimum of the KL-regularised objective is a Gibbs tilt of the reference — the reference is the set point and $\beta$ the temperature of the tilt. Check line 3 of the derivation on the reference policy's own next-token law after the prompt `a b sep`, with a reward that likes `b`: the tilted distribution is `softmax(log pi_ref + r/beta)` to round-off, and inverting it (line 4) returns the reward up to the prompt-only constant.
 
 ```rustlab
 p_ref = next_token_dist([1, 2, 3], P_ref);
@@ -501,7 +505,7 @@ SFT moved the policy ${kl_sft:%.2f}$ bits per position away from where it starte
 ## Key Takeaways
 
 - **SFT** is "same loss, response-token-masked, different data, smaller LR." It trades pre-training-distribution loss for SFT loss — **catastrophic forgetting** — and the mechanism is measurable: $\cos\angle(\nabla\mathcal{L}_{\text{abb}}, \nabla\mathcal{L}_{\text{SFT}}) < 0$ at the pre-trained point, in every weight matrix. **LoRA** restricts the rank of the update, not its interference: rank-1 on the LM head solved the task with 7 parameters and forgot as much as full SFT.
-- **DPO** is the six-line consequence of "maximise reward minus $\beta\,$KL to the reference": a Gibbs tilt, inverted for the reward, under Bradley–Terry. No separately-trained reward model, no RL. $\beta$ is an inverse temperature; the frozen reference is the anchor; the gradient weight $\beta(1 - \sigma)$ is an error-driven gain that switches itself off.
+- **DPO** is the six-line consequence of "maximise reward minus $\beta\,$KL to the reference": a Gibbs tilt, inverted for the reward, under Bradley–Terry. No separately-trained reward model, no RL. $\beta$ is the temperature of the tilt (large $\beta$ stays close to the reference); the frozen reference is the anchor; the gradient weight $\beta(1 - \sigma)$ is an error-driven gain that switches itself off.
 - DPO constrains margins, not absolute likelihoods: chosen responses can lose probability mass while still winning the comparison (likelihood displacement).
 - Both paradigms are ordinary backpropagation with a different upstream gradient at the logits — the library from Lesson 22 is reused unchanged.
 
@@ -539,11 +543,11 @@ Run all with `make lesson-25` (or `rustlab run lessons/25-fine-tuning-sft-and-dp
 3. **Replay buffer.** Add a "replay" of the pretraining sequence to the SFT loop — every other SFT step trains on `ids_pre` instead. Does this reduce catastrophic forgetting? Does it slow down SFT convergence? Recompute the cosine of the *combined* step against $\nabla\mathcal{L}_{\text{abb}}$.
 4. **An orthogonal update subspace.** Fine-tune only the `sep` row of $\mathbf{E}$ (4 parameters) on the SFT data. Predict the abb-corpus loss before running anything, then check.
 
-<details><summary>Solution</summary>
+    <details><summary>Solution</summary>
 
-The token `sep` never occurs in the `abb` corpus, so $\mathbf{E}(\text{sep}, :)$ is never read in the forward pass on `ids_pre` and $\partial\mathcal{L}_{\text{abb}} / \partial\mathbf{E}(\text{sep}, :) = 0$ identically (the scatter-add in `transformer_backward` only touches rows of tokens that appear). Any update confined to that row therefore leaves $\mathcal{L}_{\text{abb}}$ *exactly* unchanged — the cosine with $\nabla\mathcal{L}_{\text{abb}}$ is $0$ by construction, not approximately. Whether four numbers can also solve the SFT task depends on how much the two response predictions can be steered through attention to the `sep` key; run it to see how far a soft prompt gets.
+    The token `sep` never occurs in the `abb` corpus, so $\mathbf{E}(\text{sep}, :)$ is never read in the forward pass on `ids_pre` and $\partial\mathcal{L}_{\text{abb}} / \partial\mathbf{E}(\text{sep}, :) = 0$ identically (the scatter-add in `transformer_backward` only touches rows of tokens that appear). Any update confined to that row therefore leaves $\mathcal{L}_{\text{abb}}$ *exactly* unchanged — the cosine with $\nabla\mathcal{L}_{\text{abb}}$ is $0$ by construction, not approximately. Whether four numbers can also solve the SFT task depends on how much the two response predictions can be steered through attention to the `sep` key; run it to see how far a soft prompt gets.
 
-</details>
+    </details>
 
 5. **DPO derivation.** Verify analytically that $\partial \mathcal{L}_{\text{DPO}} / \partial \log \pi_\theta(y_w \mid x) = -\beta (1 - \sigma(\cdot))$ (hint: $\frac{d}{du} \log \sigma(u) = 1 - \sigma(u)$), and that the term $\beta \log Z(x)$ in line 2 of the derivation does not depend on $\pi$.
 6. **Likelihood displacement.** Print $\log \pi_\theta(y_w \mid x)$ every 20 DPO steps. At which step does it start falling on prompts 1 and 2, and what happens to the rejected log-prob at the same time?

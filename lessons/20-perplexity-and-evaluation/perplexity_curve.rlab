@@ -123,11 +123,15 @@ print("Optimal-bigram floor (Lesson 05): 2^0.5 = sqrt(2) =", sqrt(2));
 # training pairs start from the ambiguous state b, so the empirical entropy is
 # 24*ln2/49 = 0.33950 nats and the empirical train floor is exp(0.33950) =
 # 1.40425 -- exactly what the run converges to.  The 9 held-out pairs contain
-# 5 b-transitions, so their floor is exp(5*ln2/9) = 1.4701, again exactly
-# where the held-out curve lands.  sqrt(2) is the population floor no Markov-1
-# model can beat; a finite sample can sit on either side of it.
+# 5 b-transitions (b->c x3, b->a x2); the (1/2, 1/2) model pays ln 2 on each,
+# exp(5*ln2/9) = 1.4701, again exactly where the held-out curve lands.  The
+# split's own empirical floor, exp(5*H(3/5,2/5)/9) = 1.4534, is lower.  sqrt(2)
+# is the population floor no Markov-1 model can beat; a finite sample can sit
+# on either side of it.
 print("Empirical train floor   : exp(24*ln2/49) =", exp(24 * log(2) / 49));
-print("Empirical held-out floor: exp(5*ln2/9)   =", exp(5 * log(2) / 9));
+print("Population-optimal bigram on held-out: exp(5*ln2/9) =", exp(5 * log(2) / 9));
+H_val_b = -(0.6 * log(0.6) + 0.4 * log(0.4));
+print("Empirical held-out floor: exp(5*H(3/5,2/5)/9)   =", exp(5 * H_val_b / 9));
 
 # === Plot 1: PPL curves on a log axis with both floors ===
 figure();

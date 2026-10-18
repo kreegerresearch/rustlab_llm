@@ -47,6 +47,7 @@ y = [2.0, 4.0, 6.0, 8.0];
 % Loss at true parameters (w=2, b=0) and at initial parameters (w=0, b=0)
 L_true = mean((2.0 * x + 0.0 - y) .^ 2);
 L_init = mean((0.0 * x + 0.0 - y) .^ 2);
+print("L(2, 0) =", L_true, "   L(0, 0) =", L_init);
 ```
 
 At the optimum, $\mathcal{L}(2, 0) = ${L_true:%.3f}$ — zero loss because $y = 2x$ exactly. Starting from $(w, b) = (0, 0)$ the loss is ${L_init:%.2f}$, the distance we need gradient descent to close.
@@ -86,12 +87,6 @@ The eigenvalues are ${lam_fast:%.2f}$ and ${lam_slow:%.3f}$ — a condition numb
 
 ### Example — Loss contours over (w, b)
 
-<!-- hide -->
-```rustlab
-% Verify: L(2, 0) = 7.5*4 - 60 + 30 = 0
-L_check = 7.5 * 4.0 + 0.0 + 5.0 * 2.0 * 0.0 - 30.0 * 2.0 - 10.0 * 0.0 + 30.0;
-```
-
 ```rustlab
 n_grid = 50;
 w_grid = linspace(-0.5, 3.5, n_grid);
@@ -99,6 +94,8 @@ b_grid = linspace(-3.0, 3.0, n_grid);
 [W_mesh, B_mesh] = meshgrid(w_grid, b_grid);
 L_matrix = 7.5 * W_mesh .^ 2 + B_mesh .^ 2 + 5.0 * W_mesh .* B_mesh - 30.0 * W_mesh - 10.0 * B_mesh + 30.0;
 min_loss_flat = min(reshape(L_matrix, 1, n_grid * n_grid));
+L_check = 7.5 * 4.0 + 0.0 + 5.0 * 2.0 * 0.0 - 30.0 * 2.0 - 10.0 * 0.0 + 30.0;   % analytic L(2, 0) = 7.5*4 - 60 + 30
+print("analytic L(2, 0) =", L_check, "   min over the grid =", min_loss_flat);
 
 figure();
 contourf(W_mesh, B_mesh, L_matrix, 20)
@@ -455,7 +452,8 @@ print("linear layer after", n_bi, "steps:", loss_bi(n_bi) / log(2), "bits   gap 
 
 figure();
 hold("on")
-plot(1:n_bi, loss_bi / log(2), "color", "blue", "label", "bigram linear layer, GD")
+loss_curve = [log(3.0), loss_bi];               % step 0 = uniform logits (loss log|V|); loss_bi(k) is logged after update k
+plot(0:n_bi, loss_curve / log(2), "color", "blue", "label", "bigram linear layer, GD")
 hline(floor_bits, "red", "H(X_t+1 | X_t) = 0.5 bit")
 hline(log2(3), "gray", "log2 |V| = uniform start")
 title("Cross-entropy of the learned bigram layer vs. the conditional-entropy floor")
@@ -466,7 +464,7 @@ hold("off")
 ```
 
 > [!TIP]
-> The curve falls from $\log_2 3 = 1.585$ bits toward the red floor and flattens ${loss_bi(n_bi) / log(2) - floor_bits:%.3f}$ bit above it: gradient descent rediscovers the count table's $0.5$ bit per token, and nothing that sees only the current token can go lower.
+> The curve starts on the grey line at $\log_2 3 = 1.585$ bits (step 0, uniform logits), falls toward the red floor, and flattens ${loss_bi(n_bi) / log(2) - floor_bits:%.3f}$ bit above it: gradient descent rediscovers the count table's $0.5$ bit per token, and nothing that sees only the current token can go lower.
 
 ## Key Takeaways
 

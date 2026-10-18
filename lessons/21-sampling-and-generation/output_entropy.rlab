@@ -4,8 +4,9 @@
 # Concept: The entropy of the output distribution is the one number that
 #          summarises every decoding control.  On the trained model only the
 #          repetition penalty moves it (temperature, top-K and top-P cannot
-#          break a tie); top-P is the smallest set whose mass reaches P (a
-#          one-symbol typical set); sampling at tau = 1 is a Markov chain
+#          break a tie); top-P is the smallest set whose mass reaches P (the
+#          one-symbol analogue of the smallest high-probability set B_delta,
+#          not the typical set); sampling at tau = 1 is a Markov chain
 #          whose entropy rate equals the corpus's 1/2 bit per token.
 # Equations:
 #   H(q) = -sum_i q_i log2 q_i

@@ -33,7 +33,7 @@ This repo follows the [Rustlab lesson-site pattern](../rustlab/docs/lesson-site-
 
 ```
 notebooks/
-  README.md              # editor-facing notes (skipped by renderer)
+  _authoring.md          # editor-facing notes (`_` partials are not rendered; since rustlab 0.3.9 a README.md *would* be)
   NN-topic-slug.md       # source notebooks — prose + math + ```rustlab``` blocks
 
 lessons/
@@ -80,7 +80,7 @@ make lesson-01          # run only lesson 01's .rlab scripts (pattern target: le
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
-The notebook render is directory-mode: `rustlab-notebook render notebooks --format markdown --output book --jail-root .` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The `--jail-root .` is required so notebook blocks may `run "../lib/<name>.rlab"` (0.3.7 jails notebook file I/O to the collection root by default). The hand-written `book/README.md` is preserved (the renderer skips files named `README.md` on input). Note: as of rustlab 0.3.4 (May 2026) the renderer is a separate binary `rustlab-notebook` — the old `rustlab notebook ...` subcommand has been removed. `make notebooks` is updated accordingly.
+The notebook render is directory-mode: `rustlab-notebook render notebooks --format markdown --output book --jail-root .` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The `--jail-root .` is required so notebook blocks may `run "../lib/<name>.rlab"` (0.3.7 jails notebook file I/O to the collection root by default). The hand-written `book/README.md` is preserved because the source tree has no `README.md` (rustlab 0.3.9 renders a source `README.md` as a notebook and would overwrite the landing page; the editor notes therefore live in `notebooks/_authoring.md`). Note: as of rustlab 0.3.4 (May 2026) the renderer is a separate binary `rustlab-notebook` — the old `rustlab notebook ...` subcommand has been removed. `make notebooks` is updated accordingly.
 
 `make validate` shells out to `rustlab-notebook validate -f markdown notebooks`, which re-renders every notebook to a temp dir and pipes it through `markdownlint-cli2` using the project-root `.markdownlint-cli2.jsonc` (mirrors rustlab's own noise floor plus `MD024: { siblings_only: true }` so the curriculum's repeated `### Theory` H3s under distinct H2 parents pass). Install the linter with `npm i -g markdownlint-cli2`; without it, validate reports SKIPPED rather than failing. HTML / LaTeX / PDF validation are opt-in via `-f html|latex|pdf` and require additional linters (`vnu` + JRE, `chktex`, `qpdf`/`pdfinfo`).
 

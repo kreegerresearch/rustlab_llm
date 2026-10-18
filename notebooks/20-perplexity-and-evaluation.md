@@ -250,14 +250,15 @@ The run above pushes both train and held-out PPL from the uniform reference $3$ 
 ```rustlab
 PPL_train_floor = exp(24 * log(2) / 49);     % empirical floor of the 49 training pairs
 print("final train PPL   :", PPL_tr(end), "   empirical train floor exp(24 ln2 / 49) =", PPL_train_floor);
-print("final held-out PPL:", PPL_va(end), "   empirical held-out floor exp(5 ln2 / 9)  =", exp(5 * log(2) / 9));
+print("final held-out PPL:", PPL_va(end), "   population-optimal bigram on the held-out split exp(5 ln2 / 9) =", exp(5 * log(2) / 9));
+print("empirical held-out floor (b->c x3, b->a x2): exp(5 H(3/5, 2/5) / 9) =", exp(5 * entropy_nats([0.6, 0.4]) / 9));
 print("optimal-bigram floor (population): sqrt(2) =", sqrt(2));
 BPC_train = L_tr(end) / log(2);  BPC_val = L_va(end) / log(2);   % 1 token per character here
 print("bits per character: train", BPC_train, "  held-out", BPC_val, "  (uniform reference log2 3 =", log2(3), ")");
 print("BPE example: L = 3.0 nats/token at 4.4 char/token -> BPC =", 3.0 / (4.4 * log(2)));
 ```
 
-The final *train* PPL is ${PPL_tr(end):%.4f}$, a hair **below** the optimal-bigram floor $\sqrt2 = 1.4142$. That is not a bug. The floor is the *population* value, while the train PPL is measured on the 49 training pairs, whose empirical entropy is $24 \ln 2 / 49 = 0.3395$ nats — an **empirical train floor** of $e^{0.3395} = 1.4042$. The finite sample under-represents the uncertain `b` transition (24 of 49 pairs start from `b`, below the true $\tfrac12$), so its floor sits just under the population one. The held-out split over-represents it (5 of 9 pairs), so its floor is $e^{5 \ln 2 / 9} = 1.470$, and the model lands on that number exactly. Neither gap is overfitting: the model has learned the one distribution both splits share, and each split scores it with its own finite-sample weights.
+The final *train* PPL is ${PPL_tr(end):%.4f}$, a hair **below** the optimal-bigram floor $\sqrt2 = 1.4142$. That is not a bug. The floor is the *population* value, while the train PPL is measured on the 49 training pairs, whose empirical entropy is $24 \ln 2 / 49 = 0.3395$ nats — an **empirical train floor** of $e^{0.3395} = 1.4042$. The finite sample under-represents the uncertain `b` transition (24 of 49 pairs start from `b`, below the true $\tfrac12$), so its floor sits just under the population one. The held-out split over-represents it (5 of 9 pairs) and, being tiny, is lopsided within it: the five `b` transitions are `b→c` three times and `b→a` twice. A model tuned to those nine pairs could reach the split's own **empirical held-out floor** $e^{5 H(3/5,\,2/5) / 9} = 1.453$ ($H = 0.673$ nats); the trained model instead carries the population law $(\tfrac12, \tfrac12)$ and pays $\ln 2$ on each of the five flips — $e^{5 \ln 2 / 9} = 1.470$, the **population-optimal bigram's held-out perplexity**, which is the number the run lands on exactly. Neither gap is overfitting: the model has learned the one distribution both splits share, and each split scores it with its own finite-sample weights.
 
 ### Example — The toy model on Shannon's bits-per-character axis
 
@@ -273,7 +274,7 @@ ylabel("bits/char")
 ```
 
 > [!TIP]
-> The three toy-corpus bars step down $\log_2 3 = 1.585 \to 1.5 \to 0.5$ as the model learns first the alphabet, then the letter frequencies, then the one-token context; the trained model sits on the held-out floor. English is *harder* than this corpus at every context length — the axis is shared, the texts are not — and a model within 0.2 bit of Shannon's estimate is a model near the floor of its language.
+> The three toy-corpus bars step down $\log_2 3 = 1.585 \to 1.5 \to 0.5$ as the model learns first the alphabet, then the letter frequencies, then the one-token context; the trained model sits at the population-optimal bigram's held-out value. English is *harder* than this corpus at every context length — the axis is shared, the texts are not — and a model within 0.2 bit of Shannon's estimate is a model near the floor of its language.
 
 ## Connection to Compression
 
@@ -389,7 +390,7 @@ No signals or systems reading adds to this lesson: perplexity is a scalar summar
 
 **Exact.** $\mathrm{PPL} = 2^{H(p,q)}$ is the antilog of the arithmetic-coding length per token — demonstrated above, where the same 20 tokens cost ${bits_first + bits_model:%.2f}$ bits under the model and ${20 * log2(3):%.2f}$ bits under the uniform code, and $2^{\text{bits/token}}$ reproduced the perplexity to the last digit.
 
-**Exact.** The file length is invariant under re-tokenisation; the perplexity is not. Score the same 199-token held-out stream once per character and once as if the tokeniser had merged each pair (`ab`, `cb`): the bits written to disk do not change, BPC does not change, and the perplexity doubles because the same bits are spread over half as many events.
+**Exact.** The file length is invariant under re-tokenisation; the perplexity is not. Score the same 199-token held-out stream once per character and once as if the tokeniser had merged each pair (`ab`, `cb`): the bits written to disk do not change, BPC does not change, and the bits *per token* double because the same bits are spread over half as many events — so the perplexity is **squared**, not doubled ($1.41^2 \approx 1.99$).
 
 ```rustlab
 bits_file = sum(losses);  N_char = N;
@@ -437,7 +438,7 @@ Run all with `make lesson-20` (or `rustlab run lessons/20-perplexity-and-evaluat
 | Optimal-bigram floor $e^{0.5 \ln 2} = \sqrt2$ | ≈ `1.4142` |
 | Initial train / held-out PPL (step 0) | ≈ `2.995` / `2.984` (uniform reference 3) |
 | Final train PPL | ≈ `1.4042` (= empirical train floor $e^{24 \ln 2 / 49}$) |
-| Final held-out PPL | ≈ `1.4697` (= empirical held-out floor $e^{5 \ln 2 / 9}$) |
+| Final held-out PPL | ≈ `1.4697` (= population-optimal bigram's held-out PPL $e^{5 \ln 2 / 9}$; the split's own empirical floor is $e^{5 H(3/5, 2/5) / 9} \approx 1.453$) |
 | `max \|E - E_lib\|` (loop vs `train_bigram_lm`) | `0` |
 | BPC train / held-out | ≈ `0.490` / `0.556` bits/char |
 | Code length of the 20-token corpus: model / uniform | ≈ `10.58` / `31.70` bits |

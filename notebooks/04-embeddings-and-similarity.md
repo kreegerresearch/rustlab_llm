@@ -72,6 +72,7 @@ h3 = e3 * E;
 diff = max(abs(h3 - E(3, :)));       % E(3, :) is row 3; E(3) would be a single scalar
 print("Embedded representation h3:", h3);
 print("Row 3 of E:              ", E(3, :));
+print("max |h3 - E(3, :)| =", diff);
 ```
 
 The one-hot multiply reproduces row 3 bit-for-bit: $\max|\mathbf{h}_3 - \mathbf{E}_{3,:}| = ${diff:%.2e}$ — exactly zero.
@@ -322,4 +323,4 @@ Run all with `make lesson-04` (or `rustlab run lessons/04-embeddings-and-similar
 
 ## What's next
 
-[[05-bigram-language-model]] builds the first **language model** of the series: a count-based bigram model that learns next-token probabilities from the Lesson 01 corpus and samples text from them. The lookup-table structure of this lesson reappears — a $|\mathcal{V}| \times |\mathcal{V}|$ matrix indexed by the current token — this time storing transition probabilities rather than learned vectors.
+[[05-bigram-language-model]] builds the first **language model** of the series: a count-based bigram model that learns next-token probabilities from a three-letter toy corpus and samples text from them. The lookup-table structure of this lesson reappears — a $|\mathcal{V}| \times |\mathcal{V}|$ matrix indexed by the current token — this time storing transition probabilities rather than learned vectors.

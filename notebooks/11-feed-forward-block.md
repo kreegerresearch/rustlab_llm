@@ -268,7 +268,7 @@ heatmap({"1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16"}
 ```
 
 > [!TIP]
-> Each row is one token, each column one memory slot. Bright cells are open gates: slot 1 fires hard for token 2 only, slot 3 for tokens 1 and 5, while slot 9 is lit for every token (a slot that always fires acts as a bias). The dark majority sit in GELU's $[-0.17, 0]$ band; ${n_open}$ of the $80$ gates pass more than $0.1$ — the read-out is *sparse*, which is why the slot picture is used to interpret trained models.
+> Each row is one token, each column one memory slot. Bright cells are open gates: slot 1 fires hard for tokens 2 and 4, slot 3 for every token but 3, while slot 9 is lit for every token (a slot that always fires acts as a bias). The dark majority sit in GELU's $[-0.17, 0]$ band; ${n_open}$ of the $80$ gates pass more than $0.1$ — the read-out is *sparse*, which is why the slot picture is used to interpret trained models.
 
 ### Systems
 
@@ -286,11 +286,11 @@ for t = 1:T
 end
 ```
 
-Across five tokens the largest gain of the same sublayer varies by a factor $\approx 1.7$ and the smallest by nearly two orders of magnitude — the FFN is a *time-varying* gain along the sequence even though its parameters are fixed, because the operating point (the set of open gates) changes per token.
+Across five tokens the largest gain of the same sublayer varies by a factor $\approx 1.7$ and the smallest by a factor of about $24$ — the FFN is a *time-varying* gain along the sequence even though its parameters are fixed, because the operating point (the set of open gates) changes per token.
 
 ### Information
 
-**Exact.** The FFN is a deterministic map of each row, so by the data-processing inequality $I\!\left(X_{t+1};\, \mathrm{FFN}(\mathbf{h}_t)\right) \le I\!\left(X_{t+1};\, \mathbf{h}_t\right)$: it can re-arrange, or destroy, the bits about the next token that attention delivered, but it cannot create any. On continuous activations the mutual information itself is not a usable number — it is infinite wherever the map is locally injective — so the statement is checked on a discrete toy. Four input symbols carry $I(Y; X)$ bits about a binary outcome $Y$; an injective map (a permutation) keeps every bit, and a map that merges two symbols — what a ReLU does to two inputs it clips to zero — loses some.
+**Exact.** The FFN is a deterministic map of each row, so by the data-processing inequality $I\!\left(X_{t+1};\, \mathrm{FFN}(\mathbf{h}_t)\right) \le I\!\left(X_{t+1};\, \mathbf{h}_t\right)$: it can re-arrange, or destroy, the bits about the next token that attention delivered, but it cannot create any. On continuous activations the inequality cannot be checked numerically: $I\!\left(X_{t+1};\, \mathrm{FFN}(\mathbf{h}_t)\right)$ is finite (at most $\log_2 \lvert V \rvert$ bits) but hard to estimate from samples, and the related quantity $I\!\left(\mathbf{h}_t;\, \mathrm{FFN}(\mathbf{h}_t)\right)$ — how much of its *input* the map retains — is infinite wherever the map is locally injective. So the statement is checked on a discrete toy. Four input symbols carry $I(Y; X)$ bits about a binary outcome $Y$; an injective map (a permutation) keeps every bit, and a map that merges two symbols — what a ReLU does to two inputs it clips to zero — loses some.
 
 ```rustlab
 % Joint p(x, y): rows x = 1..4 (uniform), columns y = 1..2

@@ -285,7 +285,7 @@ run "../lib/info.rlab"
 
 **Model.** LayerNorm is a **DC block followed by an RMS normaliser**, with a programmable gain and offset ($\boldsymbol{\gamma}, \boldsymbol{\beta}$) after it: subtracting $\mu$ removes the per-token mean, dividing by $\sigma$ sets the per-token power to one. It is *memoryless* — the statistics come from the current row only, with no averaging over time and no feedback — so calling it "automatic gain control" is only right in the instantaneous sense; it is not a control loop. RMSNorm ([[24-modern-architectural-variants]]) is the same device without the DC block — identical to LN on zero-mean rows, cheaper, and the default in LLaMA-class models.
 
-**Exact.** The reason to normalise at all: the $1/\sqrt{d_k}$ scaling of [[08-scaled-dot-product-attention]] keeps the score variance at $1$ *only if the attention input has unit variance*. On a Pre-LN bus whose magnitude grows with depth, the raw scores would grow as the fourth power of the stream's scale ($\mathbf{q}$ and $\mathbf{k}$ each scale linearly, their product quadratically per term, summed over $d_k$ and divided by $\sqrt{d_k}$), the softmax would saturate, and the row entropy would collapse to zero bits. LN in front of the projections restores the assumption at every depth.
+**Exact.** The reason to normalise at all: the $1/\sqrt{d_k}$ scaling of [[08-scaled-dot-product-attention]] keeps the score variance at $1$ *only if the attention input has unit variance*. On a Pre-LN bus whose magnitude grows with depth, the raw scores would grow as the square of the stream's scale and their *variance* as its fourth power ($\mathbf{q}$ and $\mathbf{k}$ each scale linearly, their product quadratically per term, summed over $d_k$ and divided by $\sqrt{d_k}$), the softmax would saturate, and the row entropy would collapse to zero bits. LN in front of the projections restores the assumption at every depth.
 
 ```rustlab
 seed(8);
@@ -311,7 +311,7 @@ Without LN the score variance follows $s^4$ ($1 \to 256 \to 65536$ in theory) an
 
 ### Systems
 
-**Exact.** The residual update $\mathbf{x}_{l+1} = \mathbf{x}_l + h\,f(\mathbf{x}_l)$ is one **forward-Euler step** of the flow $\dot{\mathbf{x}} = f(\mathbf{x})$ with step $h$: depth is time, the residual stream is the state, and the three curves of the magnitude figure are the same vector field integrated with $h = 0$ (the autonomous map $\mathbf{x} \mapsto f(\mathbf{x})$, whose origin is attracting with linearised gain $\tfrac{1}{2}$), $h = 0.1$, and $h = 1$.
+**Exact.** The residual update $\mathbf{x}_{l+1} = \mathbf{x}_l + h\,f(\mathbf{x}_l)$ is one **forward-Euler step** of the flow $\dot{\mathbf{x}} = f(\mathbf{x})$ with step $h$: depth is time, the residual stream is the state, and two of the three curves of the magnitude figure are the same vector field integrated with $h = 0.1$ and $h = 1$. The no-residual curve is the iterated map $\mathbf{x} \mapsto f(\mathbf{x})$, whose origin is attracting with linearised gain $\tfrac{1}{2}$; it is *not* a member of the Euler family (Euler with $h = 0$ would be the identity).
 
 **Exact.** Stability of the stack is the stability of the **product of Jacobians**. With $\mathbf{J}_l = \mathbf{W}_l\,\mathrm{diag}\!\left(\mathrm{GELU}'(\mathbf{x}_l\mathbf{W}_l)\right)$ in the row convention, a perturbation propagates as $\delta\mathbf{x}_L = \delta\mathbf{x}_0 \prod_l \mathbf{J}_l$ without residuals and $\delta\mathbf{x}_0 \prod_l (\mathbf{I} + h\mathbf{J}_l)$ with them. The backward pass ([[15-backpropagation]]) multiplies the *transposes* of the same factors in reverse order, so it has the same singular values: whatever the product does to a forward perturbation it does to the gradient.
 
@@ -381,7 +381,7 @@ print("h * Lip(f) <= ", h_step * lip_f, " (h = 0.1)   vs", lip_f, " (h = 1)");
 print("recovery error |x_hat - x|:", norm(x_hat - x_true));
 ```
 
-With $h = 0.1$ the contraction constant is ${h_step * lip_f:%.2f}$ and the input is recovered to machine precision: the bus is a **lossless backbone** with lossy side computations attached. With $h = 1$ the bound is ${lip_f:%.2f}$, above $1$, and the guarantee is gone — one more reason the sublayers that write to the bus are initialised small. Neither LN nor the residual adds bits; the residual protects them, and LN spends two per token to buy the conditioning the Signals lens measured.
+With $h = 0.1$ the contraction constant is ${h_step * lip_f:%.2f}$ and the input is recovered to machine precision: the bus is a **lossless backbone** with lossy side computations attached. With $h = 1$ the bound is ${lip_f:%.2f}$, above $1$, and the guarantee is gone — one more reason the sublayers that write to the bus are initialised small. Neither LN nor the residual adds bits; the residual protects them, and LN discards two degrees of freedom per token (the row mean and the row scale — not two bits) to buy the conditioning the Signals lens measured.
 
 ## Key Takeaways
 
@@ -396,7 +396,7 @@ With $h = 0.1$ the contraction constant is ${h_step * lip_f:%.2f}$ and the input
 | Script | What it computes |
 |---|---|
 | `layernorm_distribution.rlab` | per-row LN on a 4×6 random batch; pre/post histograms |
-| `residual_signal.rlab` | magnitude of activation across 24 random GELU sublayers for $h = 0$, $0.1$, $1$; per-layer ratio and its geometric mean |
+| `residual_signal.rlab` | magnitude of activation across 24 random GELU sublayers with no residual, $h = 0.1$, and $h = 1$; per-layer ratio and its geometric mean |
 | `jacobian_product.rlab` | extreme singular values of the cumulative Jacobian product $\prod \mathbf{J}_l$ vs $\prod(\mathbf{I} + h\mathbf{J}_l)$ per layer |
 | `pre_vs_post_ln.rlab` | Pre-LN vs Post-LN magnitude curves with the $\sqrt{d}$ reference; DC/AC split of the Pre-LN stream |
 | `ln_attention_scores.rlab` | attention-score variance and row entropy with and without LN at stream scales 1, 4, 16 |
@@ -430,4 +430,4 @@ Run all with `make lesson-12` (or `rustlab run lessons/12-layer-norm-and-residua
 
 ## What's next
 
-You now have all four sublayers a transformer needs: token embedding ([[04-embeddings-and-similarity]]), positional encoding ([[10-positional-encoding]]), self-attention ([[08-scaled-dot-product-attention]]) / multi-head ([[09-multi-head-attention]]), feed-forward ([[11-feed-forward-block]]), LayerNorm and residuals (this lesson). [[13-transformer-block]] assembles a single transformer block — Pre-LN → MHA → residual → Pre-LN → FFN → residual, the bus diagram above realised in code — and traces the data dimensions all the way through. [[14-full-gpt-architecture]] stacks $N$ blocks plus an embedding layer and an LM head into the full GPT architecture and counts every parameter.
+You now have every component a transformer needs: token embedding ([[04-embeddings-and-similarity]]), positional encoding ([[10-positional-encoding]]), self-attention ([[08-scaled-dot-product-attention]]) / multi-head ([[09-multi-head-attention]]), feed-forward ([[11-feed-forward-block]]), LayerNorm and residuals (this lesson). [[13-transformer-block]] assembles a single transformer block — Pre-LN → MHA → residual → Pre-LN → FFN → residual, the bus diagram above realised in code — and traces the data dimensions all the way through. [[14-full-gpt-architecture]] stacks $N$ blocks plus an embedding layer and an LM head into the full GPT architecture and counts every parameter.

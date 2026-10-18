@@ -1,7 +1,7 @@
 # Script:  entropy_floors.rlab
 # System:  The corpus "to be or not to be" as a discrete source over a 7-symbol alphabet
 # Concept: The staircase of information floors — uniform bound, unigram entropy,
-#          bigram conditional entropy — plus one-hot (unary) redundancy and symbol rate
+#          bigram conditional entropy — plus one-hot (one-of-N) redundancy and symbol rate
 # Equations: H(f) = -sum_i f_i log2 f_i;  H(X'|X) = sum_i pi_i H(P_i,:);
 #            redundancy = 1 - log2|V| / |V|;  bits/message = symbols x bits/symbol
 # Units:   Entropies in bits per symbol; redundancy dimensionless; bits per message
@@ -39,7 +39,7 @@ for i = 1:vocab_size
 end
 print("H(X_{t+1} | X_t) bigram preview =", H_cond, "bits/symbol");
 
-# === One-hot as a unary code ===
+# === One-hot as a one-of-N code ===
 redundancy = 1 - H_max / vocab_size;
 print("one-hot redundancy 1 - log2|V|/|V| =", redundancy);
 

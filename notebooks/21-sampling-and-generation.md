@@ -427,7 +427,7 @@ greedy (no penalty) : ababababababababa
 greedy (penalty=2)  : abcbababcbababcba
 ```
 
-The penalty over a 4-token window suppresses recent emissions enough that `c` becomes greedy-preferred when `a` has just been emitted twice. Greedy + penalty recovers the period-4 corpus where pure greedy could not.
+The penalty over a 4-token window breaks the tie at `b` whenever the window holds `a` but not `c`: a single recent `a` halves its logit and `c` wins, which is why the very first `c` follows one `a` (`abc…`). When the window holds both `a` and `c` the two penalties cancel, the tie returns and `argmax` falls back to `a` — hence the `abcb` / `ab` alternation rather than an exact period 4. Greedy + penalty gets `c` back into the stream where pure greedy could not.
 
 ## Engineering Lenses
 
@@ -501,7 +501,7 @@ end
 
 A transformer with a context window of $T_{\text{ctx}}$ tokens is a Markov-$T_{\text{ctx}}$ model, so the same theorem applies with $|\mathcal{V}|^{T_{\text{ctx}}}$ states — astronomically many, which is why greedy transformers do not cycle *immediately*, and finite, which is why they eventually do (the familiar repetition of long greedy outputs). Sampling replaces the deterministic map with a Markov chain whose transition matrix is the $\tau$-tilted $P$; its stationary distribution and period-2 pole are computed in the Information lens.
 
-**Exact.** The generation loop is a closed loop with a unit delay, $x_{t+1} = g(f_\theta(x_{1:t}), \varepsilon_t)$, and the KV cache is the plant's **state**: at step $t$ it holds $2\,t\,d_{\text{head}}$ numbers per head per layer (${2 * numel(K_cache)}$ at $t = 8$ in the demo above, ${n_cache / 1e9:%.2f}$ billion at production scale), so the state dimension grows linearly with $t$ — the memory problem that GQA, sliding windows and state-space models each attack by bounding it. The logit controls sit in the forward path between plant and sampler, a compensator that shapes $z_t$ before the nonlinearity:
+**Exact.** The generation loop is a closed loop with a unit delay, $x_{t+1} = g(f_\theta(x_{1:t}), \varepsilon_t)$, and the KV cache is the plant's **state**: at step $t$ it holds $2\,t\,d_{\text{head}}$ numbers per head per layer (${2 * numel(K_cache)}$ at $t = 8$ in the demo above; $2 \cdot 8192 \cdot 128 \approx ${2 * T_ctx * d_head_prod / 1e6:%.1f}$ million per head per layer at production scale, ${n_cache / 1e9:%.2f}$ billion summed over 32 layers × 32 heads), so the state dimension grows linearly with $t$ — the memory problem that GQA, sliding windows and state-space models each attack by bounding it. The logit controls sit in the forward path between plant and sampler, a compensator that shapes $z_t$ before the nonlinearity:
 
 ```mermaid
 flowchart LR
@@ -518,7 +518,7 @@ flowchart LR
 
 ### Information
 
-**Exact.** Top-P keeps the smallest set of tokens whose mass reaches $P$ — the minimum-cardinality high-probability set, which is the one-symbol version of the typical set in the asymptotic equipartition property (the smallest set of sequences carrying probability $1 - \epsilon$). On the 10-class vector the four most likely tokens carry ${c_sorted(4):%.3f} < 0.9$ and five carry ${c_sorted(5):%.3f}$, so the nucleus has exactly five members and no set of four will do.
+**Model.** Top-P keeps the smallest set of tokens whose mass reaches $P$ — a minimum-cardinality high-probability set, the one-symbol analogue of the smallest set $B_\delta^{(n)}$ of sequences carrying probability $1 - \delta$ (Cover & Thomas §3.3). It is *not* the typical set $A_\epsilon^{(n)}$ of the asymptotic equipartition property: that set also carries $1 - \epsilon$ but is not the smallest one that does, and the two agree only to first order in the exponent. On the 10-class vector the four most likely tokens carry ${c_sorted(4):%.3f}$ (below $0.9$) and five carry ${c_sorted(5):%.3f}$, so the nucleus has exactly five members and no set of four will do.
 
 **Exact.** The entropy of the output distribution under each control, computed on the trained model at its one uncertain state `b`, and the entropy rate of the sampled stream:
 

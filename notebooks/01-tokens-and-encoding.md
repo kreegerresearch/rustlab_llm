@@ -83,7 +83,7 @@ print("decoded:  '" + decoded + "'");
 print("round trip exact:", decoded == corpus);
 ```
 
-The corpus has $T = ${T}$ characters over a vocabulary of $|\mathcal{V}| = ${vocab_size}$; `t` is id 7 and `o` is id 5, so the text opens `7 5 1 ...`. Every later lesson consumes a sequence like `ids` — [[05-bigram-language-model]] counts transitions in it, [[18-training-loop]] trains on it.
+The corpus has $T = ${T}$ characters over a vocabulary of $|\mathcal{V}| = ${vocab_size}$; `t` is id 7 and `o` is id 5, so the text opens `7 5 1 ...`. Every later lesson consumes a sequence like `ids` — [[05-bigram-language-model]] counts transitions in a sequence like it, [[18-training-loop]] trains on one.
 
 ## Character Frequencies
 
@@ -239,7 +239,7 @@ ylim([0, 3])
 > [!TIP]
 > Left to right: uniform alphabet ${H_max:%.3f}$ → unigram ${H_f:%.3f}$ → bigram $H(X_{t+1} \mid X_t) = ${H_cond:%.3f}$ bits per token (the third bar is Lesson 05's floor). The fourth step, the trained transformer of [23-putting-it-all-together](23-putting-it-all-together.md), is measured on a different corpus and so is not drawn here; its cross-entropy in bits is the same kind of number and sits below the bigram floor of *its* corpus.
 
-**Exact.** One-hot encoding is a **unary code**: it spends $|\mathcal{V}|$ binary digits to carry at most $\log_2 |\mathcal{V}|$ bits — like writing the number 5 as `0000100` instead of `101` — with redundancy $1 - \log_2|\mathcal{V}| / |\mathcal{V}|$. And tokenisation changes the **symbol rate**, not the message: the same 18-character message is 6 word-level symbols, and what a tokeniser trades is symbols per message against bits per symbol:
+**Exact.** One-hot encoding is a **one-of-N code**: it spends $|\mathcal{V}|$ binary digits to carry at most $\log_2 |\mathcal{V}|$ bits — like writing the number 5 as `0000100` instead of `101` — with redundancy $1 - \log_2|\mathcal{V}| / |\mathcal{V}|$. And tokenisation changes the **symbol rate**, not the message: the same 18-character message is 6 word-level symbols, and what a tokeniser trades is symbols per message against bits per symbol:
 
 ```rustlab
 redundancy = 1 - H_max / vocab_size;
@@ -254,7 +254,7 @@ print("chars: 18 symbols x", H_f, "bits =", bits_chars, "bits/message");
 print("words:  6 symbols x", H_words, "bits =", bits_words, "bits/message");
 ```
 
-The redundancy is ${redundancy:%.3f}$ at $|\mathcal{V}| = 7$ and $0.9997$ at $50{,}000$; we accept it because one-hot vectors plug directly into matrix algebra, and the embedding of Lesson 04 is the dense code that trades it away. The two memoryless products disagree — ${bits_chars:%.1f}$ versus ${bits_words:%.1f}$ bits for the same message — and the gap is exactly the information the character-level memoryless source cannot see: that `t` is followed by `o`, that `b` is followed by `e`. A model that captured every dependency would give the same bits per message under either tokenisation, because the information in a message does not depend on how it is chopped up. Bigger symbols push bits into the symbol table, smaller symbols push them into the sequence model — the trade [[19-byte-pair-encoding]] makes explicit; [[03-cross-entropy-loss]] measures the bits per token a model wastes against the floor, and [[20-perplexity-and-evaluation]] reads $2^{H}$ as an effective alphabet size.
+The redundancy is ${redundancy:%.3f}$ at $|\mathcal{V}| = 7$ and $0.9997$ at $50{,}000$; we accept it because one-hot vectors plug directly into matrix algebra, and the embedding of Lesson 04 is the dense code that trades it away. The two memoryless products disagree — ${bits_chars:%.1f}$ versus ${bits_words:%.1f}$ bits for the same message — and the gap is mostly the information the character-level memoryless source cannot see: that `t` is followed by `o`, that `b` is followed by `e` (the rest is bookkeeping — the word-level count drops the spaces and ignores dependence between words). A model that captured every dependency would give the same bits per message under either tokenisation, because the information in a message does not depend on how it is chopped up. Bigger symbols push bits into the symbol table, smaller symbols push them into the sequence model — the trade [[19-byte-pair-encoding]] makes explicit; [[03-cross-entropy-loss]] measures the bits per token a model wastes against the floor, and [[20-perplexity-and-evaluation]] reads $2^{H}$ as an effective alphabet size.
 
 ## Key Takeaways
 
@@ -270,7 +270,7 @@ The redundancy is ${redundancy:%.3f}$ at $|\mathcal{V}| = 7$ and $0.9997$ at $50
 | `encode_decode.rlab` | the vocabulary, the encode/decode round trip, and counts/frequencies from the id sequence |
 | `char_frequencies.rlab` | character counts and relative frequencies for `"to be or not to be"`; labelled PMF bar chart |
 | `one_hot_encoding.rlab` | the 18×7 one-hot matrix from the ids; density, orthogonality, the `X * eye` lookup; heatmap |
-| `entropy_floors.rlab` | $\log_2\lvert\mathcal{V}\rvert$, $H(f)$, the bigram preview, unary redundancy, the symbol-rate comparison; staircase bar chart |
+| `entropy_floors.rlab` | $\log_2\lvert\mathcal{V}\rvert$, $H(f)$, the bigram preview, one-hot redundancy, the symbol-rate comparison; staircase bar chart |
 
 Run all with `make lesson-01` from the repo root (or `rustlab run lessons/01-tokens-and-encoding/<name>.rlab` for one). Each writes SVGs next to the script (gitignored).
 
@@ -292,7 +292,7 @@ Run all with `make lesson-01` from the repo root (or `rustlab run lessons/01-tok
 1. **Vocabulary extension.** Modify `encode_decode.rlab` to use the corpus `"the cat sat on the mat"`. What is the new vocabulary size? Which character has the highest frequency, and what is $H(f)$?
 2. **Decode a sequence.** Using this lesson's vocabulary, decode `[4, 5, 7, 1, 7, 5]` by hand, then check with the `decoded` loop.
 3. **One-hot orthogonality.** Compute the dot product between row 1 (`t`) and row 4 (`b`) of $\mathbf{X}$ by hand, and the dot product between rows 1 and 14 (both `t`). Confirm both against $\delta_{ij}$.
-4. **Vocabulary size trade-off.** The one-hot matrix for $T$ tokens over $N$ symbols has $T \times N$ entries, of which $T$ are non-zero. Write the density and the unary-code redundancy as formulas in $N$; evaluate both at $N = 7$, $256$, $50{,}000$.
+4. **Vocabulary size trade-off.** The one-hot matrix for $T$ tokens over $N$ symbols has $T \times N$ entries, of which $T$ are non-zero. Write the density and the one-of-N code redundancy as formulas in $N$; evaluate both at $N = 7$, $256$, $50{,}000$.
 5. **Beyond characters.** Tokenise `"to be or not to be"` at the word level. What are $T$ and $|\mathcal{V}|$ now, what is the shape of $\mathbf{X}$, and does $T \cdot H(f)$ go up or down? Reconcile your answer with the symbol-rate block above.
 
 ## What's next

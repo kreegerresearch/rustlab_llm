@@ -66,7 +66,7 @@ end
 
 ### Theory
 
-The capstone's single-block transformer has 300 parameters: 272 of them sit in eight weight matrices — $\mathbf{E}$ ($18 \times 4$), $\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V, \mathbf{W}_O$ ($4 \times 4$), $\mathbf{W}_1$ ($4 \times 8$), $\mathbf{W}_2$ ($8 \times 4$), $\mathbf{W}_U$ ($4 \times 18$) — and the remaining 28 are LayerNorm affines and FFN biases. Those eight matrices are what gets quantised in this lesson; the 28 vectors stay in full precision, as they do in every production quantiser (in a real model they are well under 0.1 % of the parameters). The hidden setup block above reproduces the capstone's training run exactly — same seed, same 600 AdamW steps — so the weights below are the weights Lesson 23 ended with.
+The capstone's single-block transformer has 300 parameters: 272 of them sit in eight weight matrices — $\mathbf{E}$ ($18 \times 4$), $\mathbf{W}_Q, \mathbf{W}_K, \mathbf{W}_V, \mathbf{W}_O$ ($4 \times 4$), $\mathbf{W}_1$ ($4 \times 8$), $\mathbf{W}_2$ ($8 \times 4$), $\mathbf{W}_U$ ($4 \times 18$) — and the remaining 28 are LayerNorm affines and FFN biases. Those eight matrices are what gets quantised in this lesson; the 28 vectors stay in full precision, as they do in every production quantiser (in a real model they are well under 0.1 % of the parameters). The hidden setup block above reproduces the capstone's training run exactly — same seed, same 600 AdamW steps — so the weights below are the weights Lesson 23 ended with. It also defines `mat_k(P, k)`, a hidden helper that returns the $k$-th of the eight matrices in the order above (rustlab has no struct-field indexing), which the visible blocks use to loop over them.
 
 ### Example — Reproduce the capstone
 
@@ -279,7 +279,7 @@ KL is the right distortion for a language model because it compares the quantise
 
 ### Example — Perplexity and KL versus bits per weight
 
-`quant_params` applies one quantiser to all eight matrices (a hidden helper — one assignment per matrix, because rustlab cannot loop over struct fields), and `mean_kl` averages `kl_bits` over positions.
+`quant_params` applies one quantiser to all eight matrices (a hidden helper — one assignment per matrix, because rustlab cannot loop over struct fields) by calling `quant_any(W, b, per_row)`, a second hidden helper that dispatches to `quant_rows` or `quant_tensor`; `mean_kl` averages `kl_bits` over the $T - 1$ predicting positions (the last logit row predicts nothing).
 
 <!-- hide -->
 ```rustlab
@@ -315,10 +315,10 @@ L_t = zeros(n_b);  L_r = zeros(n_b);  KL_t = zeros(n_b);  KL_r = zeros(n_b);
 for i = 1:n_b
   Pq = quant_params(P, bits(i), 0);
   [lo_q, L_q, c] = transformer_forward(tokens, mask_train, Pq);
-  L_t(i) = L_q;  KL_t(i) = mean_kl(lo_fp, lo_q, T);
+  L_t(i) = L_q;  KL_t(i) = mean_kl(lo_fp, lo_q, T - 1);
   Pq = quant_params(P, bits(i), 1);
   [lo_q, L_q, c] = transformer_forward(tokens, mask_train, Pq);
-  L_r(i) = L_q;  KL_r(i) = mean_kl(lo_fp, lo_q, T);
+  L_r(i) = L_q;  KL_r(i) = mean_kl(lo_fp, lo_q, T - 1);
   print(sprintf("%d bits  PPL per-tensor %11.5f  per-row %9.5f   KL(bits) per-tensor %9.2e  per-row %9.2e", bits(i), exp(L_t(i)), exp(L_r(i)), KL_t(i), KL_r(i)));
 end
 PPL_t = exp(L_t);  PPL_r = exp(L_r);
@@ -368,10 +368,10 @@ for i = 1:n_b
 end
 print("H_out SNR at 8 bits: per-tensor", SNR_H(7, 1), " per-token", SNR_H(7, 2), "   at 4 bits:", SNR_H(3, 1), SNR_H(3, 2));
 [lq4, s4] = quant_tensor(lo_fp, 4);                     % 4-bit logits
-KL_logits4 = mean_kl(lo_fp, lq4, T);
+KL_logits4 = mean_kl(lo_fp, lq4, T - 1);
 Pq = P;  Pq.W_U = quant_any(P.W_U, 4, 0);               % 4-bit W_U, everything else fp64
 [lo_q, L_q, c] = transformer_forward(tokens, mask_train, Pq);
-KL_WU4 = mean_kl(lo_fp, lo_q, T);
+KL_WU4 = mean_kl(lo_fp, lo_q, T - 1);
 print("KL at 4 bits — W_U only:", KL_WU4, "bits   logits:", KL_logits4, "bits   max|logit| =", max(max(abs(lo_fp))));
 figure();
 subplot(1, 2, 1)
@@ -469,7 +469,7 @@ xlabel("bits per weight and per cache element"); ylabel("tok/s upper bound")
 
 ### Signals
 
-**Exact.** Quantisation is an additive noise source: $\hat{\mathbf{W}} = \mathbf{W} + \mathbf{e}$ with $\mathbf{e}$ uniform on $\pm\Delta/2$, variance $\Delta^2/12$, and 6.02 dB of SNR per bit — the same statement, with the same derivation, as the quantisation noise of an ADC; the weight tensor plays the role of the sampled waveform and $\max\lvert\mathbf{W}\rvert$ that of the full-scale range. The pooled errors of all 272 quantised weights, normalised by their steps, test the model directly. The second computation is the rounding-mode corollary: `qfmt`'s default mode is `floor` (truncation), whose error is uniform on $[0, \Delta)$ with mean square $\Delta^2/3$ — exactly 6.02 dB worse than rounding to nearest. It uses $\mathcal{N}(0, 0.3^2)$ samples in Q1.6, the format that holds their range; in Q0.7 the few samples beyond $\pm 1$ clip, and clipping error — outside the uniform-noise model — then dominates the SNR (which is why quoted Q0.7 figures for this signal vary by several dB with the seed).
+**Exact.** Round-to-nearest quantisation is an additive error, $\hat{\mathbf{W}} = \mathbf{W} + \mathbf{e}$ with $\lvert\mathbf{e}\rvert \le \Delta/2$, and *given* an error uniform on $\pm\Delta/2$ its variance is $\Delta^2/12$. **Model.** Treating that error as signal-independent uniform noise — the uniform-noise model of the ADC — is what turns $\Delta^2/12$ into 6.02 dB of SNR per bit; the weight tensor plays the role of the sampled waveform and $\max\lvert\mathbf{W}\rvert$ that of the full-scale range, and the SNR sweep above already showed the model breaking at 2–3 bits. The pooled errors of all 272 quantised weights, normalised by their steps, test the model directly. The second computation is the rounding-mode corollary: `qfmt`'s default mode is `floor` (truncation), whose error is uniform on $[0, \Delta)$ with mean square $\Delta^2/3$ — exactly 6.02 dB worse than rounding to nearest. It uses $\mathcal{N}(0, 0.3^2)$ samples in Q1.6, the format that holds their range; in Q0.7 the few samples beyond $\pm 1$ clip, and clipping error — outside the uniform-noise model — then dominates the SNR (which is why quoted Q0.7 figures for this signal vary by several dB with the seed).
 
 ```rustlab
 b_sig = 4;
@@ -521,12 +521,12 @@ The 3-bit model goes from $\mathrm{PPL} = ${exp(L_before):%.1f}$ to ${exp(L_afte
 
 ### Information
 
-**Exact.** A quantised model is a **code** for the corpus in the two-part sense of MDL ([[23-putting-it-all-together]]): first transmit the weights ($272\,b$ bits), then the corpus under the model ($T \cdot \mathcal{L}_q / \ln 2$ bits). The rate–distortion curve measured above is the trade between the two parts, and their sum is the description length to minimise.
+**Exact.** A quantised model is a **code** for the corpus in the two-part sense of MDL ([[23-putting-it-all-together]]): first transmit the weights ($272\,b$ bits), then the corpus under the model ($(T - 1)\,\mathcal{L}_q / \ln 2$ bits — $\mathcal{L}_q$ is a mean over the $T - 1 = 31$ predicted tokens). The rate–distortion curve measured above is the trade between the two parts, and their sum is the description length to minimise.
 
 ```rustlab
 bits_corpus_raw = T * log2(vocab);
 code_model = n_q * bits;
-code_corpus = T * L_t / log(2);
+code_corpus = (T - 1) * L_t / log(2);
 two_part = code_model + code_corpus;
 for i = 1:n_b
   print(sprintf("%d bits/weight:  weights %5d + corpus %8.2f = %8.1f bits", bits(i), code_model(i), code_corpus(i), two_part(i)));
@@ -569,26 +569,26 @@ Run with `make lesson-26` or `rustlab run lessons/26-quantization-and-fixed-poin
 | `crest_E`, mean dB per added bit (bits 5–8) | $2.88$; $6.31$ dB |
 | `PPL_t` at 4 / 5 / 6 bits | $3.03$ / $1.068$ / $1.0002$ |
 | `PPL_r` at 4 / 5 / 6 bits | $1.114$ / $1.0027$ / $1.00009$ |
-| `KL_t` at 4 / 6 bits | $1.55$ / $2.1 \times 10^{-4}$ bits per token |
+| `KL_t` at 4 / 6 bits | $1.60$ / $2.1 \times 10^{-4}$ bits per token (means over the $T - 1 = 31$ predicting positions) |
 | `ch_max` (residual-stream channel ranges) | $67.9$, $26.3$, $33.2$, $24.3$ |
-| `KL_WU4`, `KL_logits4` | $8.8 \times 10^{-4}$ bits; $0.237$ bits |
+| `KL_WU4`, `KL_logits4` | $9.1 \times 10^{-4}$ bits; $0.244$ bits |
 | `snr_sat`, `snr_wrap`; PPL under each | $4.0$ dB, $-0.7$ dB; $4.59$, $\approx 10^{9}$ |
 | `bytes_tok / 1024`; `cache_GB` at $T = 8192$; `tok_both` | $320 / 160 / 80$ KiB per token; $2.68 / 1.34 / 0.67$ GB; $23.5 / 47.0 / 93.9$ tok/s |
 | `12 * mean(e_pool .^ 2)` at 4 bits | $\approx 0.97$ |
 | `snr_round`, `snr_floor` (Q1.6 on $\mathcal{N}(0, 0.3^2)$; model 36.5) | $36.4$ dB, $30.4$ dB — a $6.0$ dB gap |
 | QAT at 3 bits, PPL before → after | $14.7 \to \approx 1.01$ |
-| best two-part code | $940$ bits at $b = 3$ (raw corpus: $133$ bits) |
+| best two-part code | $936$ bits at $b = 3$ (corpus term over $T - 1 = 31$ tokens; raw corpus: $133$ bits) |
 
 ## Exercises
 
 1. **Per-column scales.** `quant_rows` puts one scale per *input* channel of a projection. Write `quant_cols` with one scale per *output* column and show algebraically that $\mathbf{X}\hat{\mathbf{W}} = (\mathbf{X}\mathbf{q}) \operatorname{diag}(\mathbf{s})$ — the scales factor out of the integer accumulation, which is why deployed kernels prefer that axis. Compare SNR and PPL at 4 bits against the per-row and per-tensor curves.
 2. **Derive $\Delta^2/12$ and the 6.02 dB.** Starting from an error uniformly distributed on $[-\Delta/2, \Delta/2]$, derive its variance, then show that adding one bit changes the SNR by $20\log_{10} 2$ dB. Where does the $+4.77$ dB in the SNR formula come from, and why does a Gaussian tensor with $\max\lvert W\rvert = 4\sigma$ land at $6.02\,b - 7.3$ dB?
 
-<details><summary>Solution</summary>
+    <details><summary>Solution</summary>
 
-For $e \sim \mathcal{U}[-\Delta/2, \Delta/2]$ the mean is zero by symmetry and the variance is $\sigma_e^2 = \frac{1}{\Delta}\int_{-\Delta/2}^{\Delta/2} e^2\,de = \frac{1}{\Delta}\left[\frac{e^3}{3}\right]_{-\Delta/2}^{\Delta/2} = \frac{1}{\Delta}\cdot\frac{2}{3}\cdot\frac{\Delta^3}{8} = \frac{\Delta^2}{12}$. With full-scale range $R = \max\lvert W\rvert$ and $2^{b-1}$ codes per side, $\Delta \approx R\,2^{1-b}$, so $\sigma_e^2 = R^2\,2^{2-2b}/12 = R^2\,2^{-2b}/3$. Adding a bit multiplies $\sigma_e^2$ by $1/4$: $10\log_{10}4 = 20\log_{10}2 = 6.02$ dB. The SNR is $10\log_{10}\!\big(P_W \cdot 3 \cdot 2^{2b}/R^2\big) = 6.02\,b + 10\log_{10}3 - 20\log_{10}(R/\sqrt{P_W}) = 6.02\,b + 4.77 - 20\log_{10}c$; the $4.77$ is the $\tfrac{1}{3}$ in $\sigma_e^2$. For a Gaussian tensor clipped at $R = 4\sigma$, $c = 4$ and $20\log_{10}4 = 12.04$, giving $6.02\,b - 7.3$ dB. (The textbook ADC figure $6.02\,b + 1.76$ dB is the same formula for a full-scale sine, whose crest factor is $\sqrt{2}$: $4.77 - 3.01 = 1.76$.)
+    For $e \sim \mathcal{U}[-\Delta/2, \Delta/2]$ the mean is zero by symmetry and the variance is $\sigma_e^2 = \frac{1}{\Delta}\int_{-\Delta/2}^{\Delta/2} e^2\,de = \frac{1}{\Delta}\left[\frac{e^3}{3}\right]_{-\Delta/2}^{\Delta/2} = \frac{1}{\Delta}\cdot\frac{2}{3}\cdot\frac{\Delta^3}{8} = \frac{\Delta^2}{12}$. With full-scale range $R = \max\lvert W\rvert$ and $2^{b-1}$ codes per side, $\Delta \approx R\,2^{1-b}$, so $\sigma_e^2 = R^2\,2^{2-2b}/12 = R^2\,2^{-2b}/3$. Adding a bit multiplies $\sigma_e^2$ by $1/4$: $10\log_{10}4 = 20\log_{10}2 = 6.02$ dB. The SNR is $10\log_{10}\!\big(P_W \cdot 3 \cdot 2^{2b}/R^2\big) = 6.02\,b + 10\log_{10}3 - 20\log_{10}(R/\sqrt{P_W}) = 6.02\,b + 4.77 - 20\log_{10}c$; the $4.77$ is the $\tfrac{1}{3}$ in $\sigma_e^2$. For a Gaussian tensor clipped at $R = 4\sigma$, $c = 4$ and $20\log_{10}4 = 12.04$, giving $6.02\,b - 7.3$ dB. (The textbook ADC figure $6.02\,b + 1.76$ dB is the same formula for a full-scale sine, whose crest factor is $\sqrt{2}$: $4.77 - 3.01 = 1.76$.)
 
-</details>
+    </details>
 
 3. **Mixed precision.** Quantise $\mathbf{E}$ and $\mathbf{W}_U$ at 8 bits and the six inner matrices at 4 bits (or the reverse) and measure PPL and KL. Which matrices are most sensitive, and does the answer agree with their crest factors? The "only $\mathbf{E}$" and "only $\mathbf{W}_U$" sweeps are two-line changes to `quant_params`.
 4. **Smooth the outlier channel.** Divide column 1 of `H` by $\alpha = $ `ch_max(1) / ch_max(2)` and multiply row 1 of $\mathbf{W}_U$ by the same $\alpha$ — the product $\mathbf{H}\mathbf{W}_U$ is unchanged. Re-measure the 4-bit SNR of the smoothed $\mathbf{H}$ and the KL of the 4-bit logits. This is the SmoothQuant transformation.

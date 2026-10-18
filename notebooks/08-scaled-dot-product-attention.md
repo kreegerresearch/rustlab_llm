@@ -16,7 +16,7 @@ One renaming, stated once: Lesson 07's mixing matrix $\mathbf{W}$ is called $\ma
 
 ## Background
 
-Embeddings as dense row vectors and the dot product as a correlator from [[04-embeddings-and-similarity]]. Softmax, entropy and probability row-normalisation from [[02-probability-and-softmax]] and [[03-cross-entropy-loss]]. Linear layers from [[06-linear-layers-and-gradient-descent]], where a layer was written $\mathbf{y} = \mathbf{W}\mathbf{x} + \mathbf{b}$ with $\mathbf{x}$ a column vector. Here rows are tokens, so we right-multiply instead: $\mathbf{X}\mathbf{W}$ applies the same linear map to every row of $\mathbf{X}$ at once. Causal prefix averaging as a time-varying FIR filter from [[07-context-and-naive-averaging]]. Entropies are computed with `lib/info.rlab`.
+Embeddings as dense row vectors and the dot product as a correlator from [[04-embeddings-and-similarity]]. Softmax, entropy and probability row-normalisation from [[02-probability-and-softmax]] and [[03-cross-entropy-loss]]. Linear layers from [[06-linear-layers-and-gradient-descent]], where a layer was written $\mathbf{y} = \mathbf{x}\mathbf{W} + \mathbf{b}$ with $\mathbf{x}$ a row vector. Here rows are tokens, and the same right-multiplication applies to every row of $\mathbf{X}$ at once: $\mathbf{X}\mathbf{W}$ applies one linear map to the whole sequence. Causal prefix averaging as a time-varying FIR filter from [[07-context-and-naive-averaging]]. Entropies are computed with `lib/info.rlab`.
 
 <!-- hide -->
 ```rustlab
@@ -155,7 +155,6 @@ print("A =");
 print(A);
 ```
 
-<!-- hide -->
 ```rustlab
 row_sums = zeros(T);
 for t = 1:T
@@ -171,6 +170,8 @@ for i = 1:T
     end
   end
 end
+print("A(1,1) =", A_1_1, "   row sums =", row_sums);
+print("largest upper-triangle entry =", max_upper);
 ```
 
 Now read the design back. Row 2 puts ${A(2,1):%.2f}$ on $t_1$ (query 2 asked for feature 1; key 1 has it) against $0.5$ under uniform averaging. Row 3 puts ${A(3,2):%.2f}$ on $t_2$, the key advertising feature 2. Row 4 puts ${A(4,1):%.2f}$ on $t_1$ — a token **three positions back**, retrieved by content, against the $0.25$ that Lesson 07's $1/4$ would give; its own half-strength key earns it ${A(4,4):%.2f}$. Row 5's half-and-half query ties $t_1$, $t_2$ and $t_4$ at ${A(5,1):%.2f}$ each. Token 1 can only attend to itself, so $A_{1,1} = ${A_1_1:%.4f}$; every row sums to 1; the largest entry in the upper triangle is ${max_upper:%.2e}$ — zero, as causality requires.
@@ -264,10 +265,10 @@ print("O =");
 print(O);
 ```
 
-<!-- hide -->
 ```rustlab
 diff_row1 = max(abs(O(1, :) - V2(1, :)));
 n_params_qkv = 3 * d_model * d_k;
+print("max |O(1, :) - V(1, :)| =", diff_row1, "   params 3 * d_model * d_k =", n_params_qkv);
 ```
 
 Query 4 (`it`) meets key 1 (`mat`) with score $2 \cdot 3 / \sqrt{4} = 3$ and every other visible key with score 0, so $A_{4,1} = e^{3}/(e^{3} + 3) = ${A2(4,1):%.3f}$: **token 4 retrieves token 1**, three positions back, against the $0.25$ uniform averaging would give. That is content-based retrieval — the thing Lesson 07 could not do. Row 2's verb finds its subject (${A2(2,1):%.2f}$ on `mat`), row 3's adjective does too (${A2(3,1):%.2f}$), and row 5's second verb has *two* candidate subjects and splits ${A2(5,1):%.3f}$ / ${A2(5,4):%.3f}$ between `mat` and `it` — attention represents the ambiguity instead of guessing. In the output, row 4 is ${O(4,1):%.2f}$ of `mat`'s value plus three slivers of ${O(4,2):%.3f}$: the `it` row now carries the noun's content. Row 1 of $\mathbf{O}$ equals row 1 of $\mathbf{V}$ (token 1 attends only to itself): $\max|\mathbf{O}_1 - \mathbf{V}_1| = ${diff_row1:%.2e}$. The block's learnable parameters are $3 \cdot d_{\text{model}} \cdot d_k = 3 \cdot ${d_model} \cdot ${d_k} = ${n_params_qkv}$ — a count that does **not** depend on the sequence length $T$.
@@ -321,7 +322,7 @@ diff_box = max(reshape(abs(A_box - W_avg), 1, T * T));
 print("max|A(W_Q = W_K = 0) - W_avg| =", diff_box);
 ```
 
-**Exact** (as a functional description). *Associative memory.* Keys are addresses, values are contents, the query is a probe, and the read-out is a convex combination of contents weighted by address match. Row 4 above is one lookup: probe "a noun" → address `mat` → content $\mathbf{v}_1$, with ${A2(4,1):%.2f}$ fidelity; row 5 is a probe that matches two addresses.
+**Model.** *Associative memory.* Keys are addresses, values are contents, the query is a probe, and the read-out is a convex combination of contents weighted by address match. Row 4 above is one lookup: probe "a noun" → address `mat` → content $\mathbf{v}_1$, with ${A2(4,1):%.2f}$ fidelity; row 5 is a probe that matches two addresses.
 
 **Analogy.** Because the taps of the FIR filter are computed from the signal itself, attention behaves like an adaptive filter — but there is no error-driven tap update at inference time; the adaptation is instantaneous and feed-forward.
 

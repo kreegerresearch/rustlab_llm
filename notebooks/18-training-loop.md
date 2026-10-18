@@ -351,42 +351,6 @@ The ${nc_c}$ clipped steps change the final losses in the fourth decimal or not 
 
 ## Engineering Lenses
 
-### Systems
-
-**Model.** Training is a discrete-time feedback loop, and every box in it was built in one of the last four lessons. The framing is a model rather than an identity because the "plant" has no dynamics of its own (it is a static map from $\theta$ to $\mathbf{p}$; all the dynamics live in the controller), the "sensor" is the same computation as the loss, and the reference enters through the error signal rather than as a separate input. The arrows, however, are exact: the error signal $\mathbf{p} - \mathbf{y}$ (**Exact**, Lesson 15), the adjoint recursion (**Exact**, Lesson 15), the one-pole filter and the leak (**Exact**, Lesson 16), the per-coordinate AGC (**Model**, Lesson 16), the gain schedule (**Exact**, Lesson 17), and the limiter (**Exact**, below).
-
-```mermaid
-flowchart LR
-  y["targets y<br/>(next tokens)"] --> err["error signal p − y<br/>L03 · L15"]
-  plant["plant: parameters θ<br/>forward pass → p<br/>L14 · L18"] --> err
-  err --> adj["adjoint recursion<br/>backprop → g_t<br/>L15"]
-  adj -->|"g_t from a minibatch<br/>= noisy sensor (L18)"| lim["limiter<br/>g · min(1, c/‖g‖)<br/>L18"]
-  lim --> ctrl["controller (L16)<br/>one-pole filter m_t<br/>AGC 1/√v̂ · leak λθ"]
-  gs["gain schedule η_t<br/>L17"] --> ctrl
-  ctrl -->|"Δθ_t"| plant
-```
-
-**Exact.** The limiter $g \mapsto g\,\min(1, c/\lVert g \rVert)$ is a vector-norm saturation: the identity below the knee at $c$, a constant output norm above it, direction untouched. Its input–output curve is the same one an audio limiter or a rate limiter has, drawn here on log axes with the knee at $c = 0.25$ and this run's recorded gradient norms marked against it.
-
-```rustlab
-c_clip = 0.25;
-g_in = logspace(-2, 1, 200);
-g_out = g_in .* min(1, c_clip ./ g_in);
-figure();
-loglog(g_in, g_in,  "color", "gray",  "label", "identity")
-hold("on")
-loglog(g_in, g_out, "color", "green", "label", "clipped, c = 0.25")
-hold("off")
-title("gradient clipping: a vector-norm limiter, knee at c")
-xlabel("||g|| in")
-ylabel("||g|| out")
-legend("identity", "clipped")
-print("recorded gradient norms above the knee:", length(hit), "of", n_steps, " (max ||g|| =", max(gnc), ")");
-```
-
-> [!TIP]
-> Slope 1 below the knee, slope 0 above it. Only the ${length(hit)}$ steps around the gradient peak lie to the right of $c = 0.25$; at the production value $c = 1$ nothing in this run does.
-
 ### Signals
 
 **Model.** The gradient the controller sees is the full-batch gradient plus a zero-mean sampling error — a sensor with additive noise. Drawing a minibatch of $B$ pairs with replacement makes that noise white across steps (independent draws) with power $\propto 1/B$; it is a model of real training, which draws without replacement within an epoch (weakly anti-correlated) and whose noise scale changes with $\theta$. Measure both properties at the initial parameters:
@@ -437,6 +401,42 @@ legend("|X(f)|^2")
 
 At $B = 8$ the noise power is ${noise_pow(2):%.3f}$ against a signal power of ${sum(sum(gE_full .^ 2)) + sum(sum(gW_full .^ 2)):%.3f}$ at initialisation — the sensor's noise is as large as its signal from the very first step, and at $B = 4$ twice as large. That is why the momentum filter exists, and why the full-batch runs above were needed to see the optimiser's own ringing at all.
 
+### Systems
+
+**Model.** Training is a discrete-time feedback loop, and every box in it was built in one of the last four lessons. The framing is a model rather than an identity because the "plant" has no dynamics of its own (it is a static map from $\theta$ to $\mathbf{p}$; all the dynamics live in the controller), the "sensor" is the same computation as the loss, and the reference enters through the error signal rather than as a separate input. The arrows, however, are exact: the error signal $\mathbf{p} - \mathbf{y}$ (**Exact**, Lesson 15), the adjoint recursion (**Exact**, Lesson 15), the one-pole filter and the leak (**Exact**, Lesson 16), the per-coordinate normalisation by $\sqrt{\hat{\mathbf{v}}}$ — the AGC (**Exact**, Lesson 16), the gain schedule (**Exact**, Lesson 17), and the limiter (**Exact**, below).
+
+```mermaid
+flowchart LR
+  y["targets y<br/>(next tokens)"] --> err["error signal p − y<br/>L03 · L15"]
+  plant["plant: parameters θ<br/>forward pass → p<br/>L14 · L18"] --> err
+  err --> adj["adjoint recursion<br/>backprop → g_t<br/>L15"]
+  adj -->|"g_t from a minibatch<br/>= noisy sensor (L18)"| lim["limiter<br/>g · min(1, c/‖g‖)<br/>L18"]
+  lim --> ctrl["controller (L16)<br/>one-pole filter m_t<br/>AGC 1/√v̂ · leak λθ"]
+  gs["gain schedule η_t<br/>L17"] --> ctrl
+  ctrl -->|"Δθ_t"| plant
+```
+
+**Exact.** The limiter $g \mapsto g\,\min(1, c/\lVert g \rVert)$ is a vector-norm saturation: the identity below the knee at $c$, a constant output norm above it, direction untouched. Its input–output curve is the same one an audio limiter or a rate limiter has, drawn here on log axes with the knee at $c = 0.25$ and this run's recorded gradient norms marked against it.
+
+```rustlab
+c_clip = 0.25;
+g_in = logspace(-2, 1, 200);
+g_out = g_in .* min(1, c_clip ./ g_in);
+figure();
+loglog(g_in, g_in,  "color", "gray",  "label", "identity")
+hold("on")
+loglog(g_in, g_out, "color", "green", "label", "clipped, c = 0.25")
+hold("off")
+title("gradient clipping: a vector-norm limiter, knee at c")
+xlabel("||g|| in")
+ylabel("||g|| out")
+legend("identity", "clipped")
+print("recorded gradient norms above the knee:", length(hit), "of", n_steps, " (max ||g|| =", max(gnc), ")");
+```
+
+> [!TIP]
+> Slope 1 below the knee, slope 0 above it. Only the ${length(hit)}$ steps around the gradient peak lie to the right of $c = 0.25$; at the production value $c = 1$ nothing in this run does.
+
 ### Information
 
 **Exact.** Two reference points, computed. A randomly initialised softmax over $\lvert\mathcal{V}\rvert$ classes has expected cross-entropy $\log\lvert\mathcal{V}\rvert$; a trained bigram model on the period-4 corpus `abcbabcb…` cannot beat the conditional entropy $H(X_{t+1} \mid X_t) = P(b)\,H(\tfrac12, \tfrac12)$ of [[05-bigram-language-model]]. The run's floors are the *empirical* versions of that bound, weighted by the fraction of pairs in each split that start from the ambiguous state.
@@ -454,7 +454,7 @@ print("initial loss", Ltr(1), "nats vs log 3 =", log(3), ";  final train", Ltr(n
 print("overfit run: -log P(c | a) =", -log(p_from_a(3)), "nats =", -log2(p_from_a(3)), "bits for one transition with zero training support");
 ```
 
-The population floor is exactly $0.5$ bits $= ${H_cond_bits * log(2):%.4f}$ nats (perplexity $\sqrt 2 = 1.414$): half the time the model is at `b` and must pay one bit, the other half it pays nothing. The training split has $24/49 = 0.490$ of its pairs at `b`, so its floor is ${floor_tr:%.4f}$ nats $= ${floor_tr / log(2):%.3f}$ bits — matched by the run to four decimals; the validation split has $5/9 = 0.556$, so its floor is ${floor_va:%.4f}$ nats $= ${floor_va / log(2):%.3f}$ bits — also matched. Comparing the terminal loss to this bound is the cleanest "is my training healthy?" test on a small corpus; the same finite-sample effect resurfaces in [[20-perplexity-and-evaluation]] as a train perplexity of $1.404$ just below the $1.4148$ population value. The overfit run shows the opposite pathology in the same units: one transition with zero training support costs ${-log2(p_from_a(3)):%.1f}$ bits — a code with no codeword for an event that occurs.
+The population floor is exactly $0.5$ bits $= ${H_cond_bits * log(2):%.4f}$ nats (perplexity $\sqrt 2 = 1.414$): half the time the model is at `b` and must pay one bit, the other half it pays nothing. The training split has $24/49 = 0.490$ of its pairs at `b`, so its floor is ${floor_tr:%.4f}$ nats $= ${floor_tr / log(2):%.3f}$ bits — matched by the run to four decimals; the validation split has $5/9 = 0.556$, so its floor is ${floor_va:%.4f}$ nats $= ${floor_va / log(2):%.3f}$ bits — also matched. Comparing the terminal loss to this bound is the cleanest "is my training healthy?" test on a small corpus; the same finite-sample effect resurfaces in [[20-perplexity-and-evaluation]] as a train perplexity of $1.404$ just below the $1.4142$ population value. The overfit run shows the opposite pathology in the same units: one transition with zero training support costs ${-log2(p_from_a(3)):%.1f}$ bits — a code with no codeword for an event that occurs.
 
 ## Key Takeaways
 

@@ -80,7 +80,7 @@ The whole course uses one convention so that mathematics and code read the same 
 
 ### Example — Bits, nats, and perplexity
 
-The one conversion that recurs in every lesson: rustlab's `log` is natural, so losses come out in nats; dividing by $\ln 2$ gives bits, and exponentiating either gives the same perplexity. The helpers in `lib/info.rlab` are used from Lesson 03 onward.
+The one conversion that recurs in every lesson: rustlab's `log` is natural, so losses come out in nats; dividing by $\ln 2$ gives bits, and exponentiating either gives the same perplexity. The helpers in `lib/info.rlab` are used from Lesson 02 onward, after it derives entropy inline.
 
 <!-- hide -->
 ```rustlab

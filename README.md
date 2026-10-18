@@ -159,7 +159,7 @@ This repo follows the [Rustlab lesson-site pattern](../rustlab/docs/lesson-site-
 
 ```
 notebooks/
-  README.md            # editor-facing notes (skipped by renderer)
+  _authoring.md        # editor-facing notes (not rendered)
   NN-topic-slug.md     # source notebooks (prose + math + ```rustlab``` blocks)
 lessons/
   README.md            # explains the .rlab-script convention

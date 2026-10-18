@@ -43,3 +43,5 @@ clean: ## Delete the interactive HTML build and .rlab script artefacts
 	rm -f $(BOOK)/*.html
 	rm -f lessons/*/*.svg lessons/*/*.html lessons/*/*.png lessons/*/*.gif
 	rm -f notebooks/*.svg notebooks/*.html notebooks/*.png notebooks/*.gif
+	rm -rf $(BOOK)/plots/*/.cache
+	rm -f $(BOOK)/plots/*/anim-[0-9].gif $(BOOK)/plots/*/anim-[0-9][0-9].gif

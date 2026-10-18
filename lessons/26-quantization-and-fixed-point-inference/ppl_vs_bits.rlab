@@ -7,7 +7,7 @@
 #          versus bits per weight — and the two-part (MDL) code length.
 # Equations: SNR_dB ~ 6.02 b + 4.77 - 20 log10(max|W| / rms W)
 #            D(b) = mean_t KL(softmax(z_t) || softmax(z_t^(b)))  [bits]
-#            two-part code = 272 b + T * L_q / ln 2               [bits]
+#            two-part code = 272 b + (T - 1) * L_q / ln 2         [bits]
 # Units:   weights dimensionless; SNR in dB; loss in nats; KL and code lengths in bits.
 
 run "../../lib/transformer.rlab"
@@ -114,13 +114,13 @@ for i = 1:n_b
   end
   Pq = quant_params(P, bits(i), 0);
   [lo_q, L_q, c] = transformer_forward(tokens, mask_train, Pq);
-  L_t(i) = L_q;  KL_t(i) = mean_kl(lo_fp, lo_q, T);
+  L_t(i) = L_q;  KL_t(i) = mean_kl(lo_fp, lo_q, T - 1);
   Pq = quant_params(P, bits(i), 1);
   [lo_q, L_q, c] = transformer_forward(tokens, mask_train, Pq);
-  L_r(i) = L_q;  KL_r(i) = mean_kl(lo_fp, lo_q, T);
+  L_r(i) = L_q;  KL_r(i) = mean_kl(lo_fp, lo_q, T - 1);
 end
 PPL_t = exp(L_t);  PPL_r = exp(L_r);
-two_part = n_q * bits + T * L_t / log(2);
+two_part = n_q * bits + (T - 1) * L_t / log(2);
 print("");
 print("=== Rate-distortion sweep (eight matrices quantised, 28 vectors fp64) ===");
 print("bits   SNR_E(t)  SNR_E(r)   PPL(t)       PPL(r)      KL(t) bits  KL(r) bits   two-part bits");

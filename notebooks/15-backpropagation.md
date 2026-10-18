@@ -345,7 +345,7 @@ dL_dS = zeros(T2, T2);
 for t = 1:T2
   a   = A(t, :);
   da  = dL_dA(t, :);
-  dL_dS(t) = a .* (da - sum(a .* da));
+  dL_dS(t, :) = a .* (da - sum(a .* da));
 end
 
 % Backward — Step 3
@@ -391,8 +391,7 @@ Finite-difference check at $\mathbf{W}_Q(2, 1)$: analytic ${dL_dWQ(2, 1):%.6f}$ 
 
 The shared-input accumulation $\bar{\mathbf{X}} = \bar{\mathbf{X}}_Q + \bar{\mathbf{X}}_K + \bar{\mathbf{X}}_V$ is the multivariate analogue of the chain rule's product over branches — every place the same variable feeds the graph, gradients add.
 
-> [!NOTE]
-> [14-full-gpt-architecture](14-full-gpt-architecture.md) promised backprop through "softmax, attention, FFN, and LN". Softmax and attention are above; the FFN is two linear layers around an element-wise nonlinearity, so it is the MLP example with GELU in place of $\tanh$. The one genuinely non-obvious case, **LayerNorm backward** (its mean and variance couple every element of a row), is derived in [22-full-backprop-through-the-block](22-full-backprop-through-the-block.md) where the whole block's backward pass is assembled and finite-difference checked; it is deliberately deferred there rather than duplicated here.
+The one case not derived here, **LayerNorm backward** (its mean and variance couple every element of a row), is worked out in [22-full-backprop-through-the-block](22-full-backprop-through-the-block.md), where the whole block's backward pass is assembled and finite-difference checked.
 
 ## Gradient Flow Through a Stack
 

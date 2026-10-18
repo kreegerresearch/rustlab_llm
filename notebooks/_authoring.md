@@ -47,5 +47,6 @@ flat. See [`01-tokens-and-encoding.md`](01-tokens-and-encoding.md) for
 the worked pattern, and [`../AGENTS.md`](../AGENTS.md) §"Notebook
 Format" for the full template.
 
-This file (named `README.md`) is skipped by the renderer, so it never
-shows up under `book/`.
+This file is prefixed with `_` so the renderer treats it as a partial and
+never renders it under `book/` (a `README.md` here would be rendered as a
+notebook since rustlab 0.3.9 and would overwrite the hand-written landing page).

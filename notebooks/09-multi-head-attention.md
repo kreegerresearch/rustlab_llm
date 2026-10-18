@@ -118,7 +118,7 @@ A4_row4 = A4(4, :);
 print("Head 4 row 4:", A4_row4);
 ```
 
-Head 4 row 4 is $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case is exactly the Lesson 07 averaging matrix. Computed: ${A4_row4(1):%.3f}, ${A4_row4(2):%.3f}, ${A4_row4(3):%.3f}, ${A4_row4(4):%.3f}, ${A4_row4(5):%.3f}, ${A4_row4(6):%.3f}.
+Head 4 row 4 is $[0.25, 0.25, 0.25, 0.25, 0, 0]$ — the uniform case is exactly the Lesson 07 averaging matrix.
 
 ### Example — Four head-attention heatmaps
 
@@ -208,15 +208,13 @@ O = O_concat * W_O;
 
 print("Concat = [O_1, O_2]:", O_concat);
 print("O = Concat * W_O:", O);
-```
-
-<!-- hide -->
-```rustlab
 concat_shape = size(O_concat);
 out_shape    = size(O);
+print("Concat shape =", concat_shape, "   O shape =", out_shape);
 n_qkv = 3 * d_model * d_model;
 n_wo  = d_model * d_model;
 n_tot = n_qkv + n_wo;
+print("parameters: W_Q, W_K, W_V =", n_qkv, "  W_O =", n_wo, "  total =", n_tot);
 ```
 
 Shapes: $\mathrm{Concat} \in \mathbb{R}^{${concat_shape(1)} \times ${concat_shape(2)}}$, $\mathbf{O} \in \mathbb{R}^{${out_shape(1)} \times ${out_shape(2)}}$. Read row 3. `Concat` holds $[${O_concat(3,1):%.3f}, ${O_concat(3,2):%.3f}, ${O_concat(3,3):%.3f}, ${O_concat(3,4):%.3f}]$ — head 1 put almost all its weight on token 3 itself (feature $x_3$), head 2 averaged tokens 1–3 ($x_1$ and $x_2$ at $1/3$ each). In `O`, channel $d_1 = h_{1.1} + h_{2.1} = ${O_concat(3,1):%.3f} + ${O_concat(3,3):%.3f} = ${O(3,1):%.3f}$: one output channel now carries information from **both** heads, which no column of `Concat` did. Channel $d_3 = -h_{2.1} = ${O(3,3):%.3f}$ is negative, so the heatmap below needs a signed colour scale. A learned $\mathbf{W}_O$ does the same with dense trained weights instead of hand-set $\pm 1$.
@@ -303,7 +301,7 @@ print("max |Concat*W_O - sum_h A_h X W_V^h W_O^(h)| =", bank_err);
 
 The identity holds exactly (maximum deviation ${bank_err}).
 
-**Exact.** *Impulse responses.* Row $t$ of $\mathbf{A}_h$ is the impulse response seen at output time $t$. The four heads are four textbook causal filters: head 1 holds the first sample (a DC hold), head 2 is the unit delay $z^{-1}$, head 3 is the identity, head 4 is Lesson 07's growing box. Attention can realise any causal filter with non-negative taps summing to one — and, unlike a fixed filter, choose the taps per input.
+**Model.** *Impulse responses.* Row $t$ of $\mathbf{A}_h$ is the impulse response seen at output time $t$. The four heads approach four textbook causal filters as the key gain grows: head 1 a hold on the first sample (a DC hold), head 2 the unit delay $z^{-1}$, head 3 the identity, head 4 Lesson 07's growing box. At the gain used here the row-4 entropies of $1.25$ / $0.47$ / $0.24$ bits (Information lens below) show heads 1–3 as soft versions of those filters; only head 4 is exact. Attention can realise any causal filter with non-negative taps summing to one — and, unlike a fixed filter, choose the taps per input.
 
 ```rustlab
 figure();

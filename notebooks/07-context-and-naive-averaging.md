@@ -332,6 +332,7 @@ Run all with `make lesson-07` (or `rustlab run lessons/07-context-and-naive-aver
 3. **Non-causal averaging.** What matrix $\mathbf{W}'$ would average *all* tokens (past and future) uniformly at every position? Write it out for $T=4$. Why is this wrong for language modelling but fine for, e.g., sentence classification?
 4. **Counting operations.** For a sequence of length $T$ and embedding dimension $d$, how many scalar multiplies does $\mathbf{W}\mathbf{X}$ take? How does this scale with $T$? (Hint: count the non-zero entries of $\mathbf{W}$.) How many does the recursive update take?
 5. **Preview of attention.** In attention (Lesson 08), the weights in row $t$ of $\mathbf{W}$ are replaced by $\mathrm{softmax}(\mathbf{q}_t \mathbf{K}^\top / \sqrt{d_k})$, still with a causal mask. What property of softmax guarantees each row still sums to 1 — and therefore that DC still passes with unit gain?
+
 ## What's next
 
 [[08-scaled-dot-product-attention]] replaces the fixed $1/t$ taps with **learned, content-dependent** ones derived from query and key projections of the embeddings. The matrix shape and the causal mask stay; only the entries change — and that change is the entire mechanism behind modern transformer attention.
