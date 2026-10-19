@@ -198,8 +198,8 @@ print("log2(total no-res ratio):     ", log2(mag_no_res(n_layers + 1) / mag_no_r
 <!-- rustlab:output-start -->
 ```text
 layer 0 magnitude (all): 6.008513697733318
-layer 24 magnitude: no-res 0.00000030999937929016566  h = 0.1 8.305932496635211  h = 1 32380.935903241378
-no-res per-layer ratio: min 0.3847816713415898  max 0.7948719575437854  geometric mean 0.49700192824778694
+layer 24 magnitude: no-res 0.0000003099993792901655  h = 0.1 8.305932496635211  h = 1 32380.935903241385
+no-res per-layer ratio: min 0.38478167134158975  max 0.7948719575437854  geometric mean 0.49700192824778705
 log2(total no-res ratio):      -24.2082394987112
 ```
 
@@ -314,12 +314,12 @@ hold("off")
 
 <!-- rustlab:output-start -->
 ```text
-Pre-LN  |x_l| at l = 0, 6, 12, 24: 5.851529867071925 13.083624478648225 23.36037580688656 43.64598330595661
-Post-LN |x_l| at l = 0, 6, 12, 24: 5.851529867071925 5.656832157531204 5.656829454864784 5.656831684534839
+Pre-LN  |x_l| at l = 0, 6, 12, 24: 5.851529867071925 13.083624478648227 23.36037580688656 43.64598330595662
+Post-LN |x_l| at l = 0, 6, 12, 24: 5.851529867071925 5.656832157531205 5.656829454864783 5.656831684534838
 sqrt(d) reference:                  5.656854249492381
 mean per-layer DC of f:             0.2899589637432015  (E[GELU(z)] for z ~ N(0,1) is 0.282)
-Pre-LN DC part at l = 24: measured  40.362955596797384  predicted 40.36295559679739
-Pre-LN AC part at l = 24: measured  16.607337963527044  predicted 16.893409356498978
+Pre-LN DC part at l = 24: measured  40.36295559679738  predicted 40.36295559679739
+Pre-LN AC part at l = 24: measured  16.607337963527048  predicted 16.893409356498978
 ```
 
 ![plot 3](plots/12-layer-norm-and-residuals/plot-3-73c3d106.svg)
@@ -407,7 +407,7 @@ hold("off")
 
 <!-- rustlab:output-start -->
 ```text
-after 24 layers: no residual sigma_max = 0.0000004382308136725137    h = 0.1 [sigma_min, sigma_max] = 0.6391402596409399 2.1934318391319745
+after 24 layers: no residual sigma_max = 0.0000004382308136725138    h = 0.1 [sigma_min, sigma_max] = 0.6391402596409398 2.1934318391319745
 ```
 
 ![plot 4](plots/12-layer-norm-and-residuals/plot-4-eab93cca.svg)
@@ -463,7 +463,7 @@ print("recovery error |x_hat - x|:", norm(x_hat - x_true));
 <!-- rustlab:output-start -->
 ```text
 h * Lip(f) <=  0.21578136552789187  (h = 0.1)   vs 2.1578136552789187  (h = 1)
-recovery error |x_hat - x|: 0.00000000000000011466328625622554
+recovery error |x_hat - x|: 0.00000000000000012432126078351885
 ```
 
 <!-- rustlab:output-end -->

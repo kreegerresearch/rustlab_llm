@@ -343,9 +343,9 @@ tau=1.0: abababcbcbaba
 tau=2.0: abababcbcbcba
 logits at 'b': [1×3]  8.391505  -8.841305  8.391505
 tau = 0.5   P(. | b) = [1×3]  0.500000  0.000000  0.500000   H = 1.0000000000000275 bits
-tau = 1   P(. | b) = [1×3]  0.500000  0.000000  0.500000   H = 1.000000431403955 bits
+tau = 1   P(. | b) = [1×3]  0.500000  0.000000  0.500000   H = 1.0000004314039548 bits
 tau = 2   P(. | b) = [1×3]  0.499955  0.000091  0.499955   H = 1.001256212153058 bits
-tau = 5   P(. | b) = [1×3]  0.492161  0.015678  0.492161   H = 1.1007526326437544 bits
+tau = 5   P(. | b) = [1×3]  0.492161  0.015678  0.492161   H = 1.1007526326437538 bits
 ```
 
 <!-- rustlab:output-end -->
@@ -473,7 +473,7 @@ print("cache at t = 8: K and V each", size(K_cache)(1), "x", d_head, " ->", 2 * 
 
 <!-- rustlab:output-start -->
 ```text
-max | naive_out - cached_out | over 8 steps = 0.000000000000000027755575615628914   (round-off: same arithmetic, different order)
+max | naive_out - cached_out | over 8 steps = 0   (round-off: same arithmetic, different order)
 per-step FLOP ratio naive / cached: [1×8]  1.000000  2.000000  3.000000  4.000000  5.000000  6.000000  7.000000  8.000000
 cumulative FLOPs at T=8 — naive: 3564   cached: 708   ratio: 5.033898305084746
 cache at t = 8: K and V each 8 x 4  -> 64 numbers of state
@@ -483,7 +483,7 @@ cache at t = 8: K and V each 8 x 4  -> 64 numbers of state
 
 Two diagnostics matter:
 
-1. **Equivalence.** The maximum elementwise difference between naive and cached outputs over all eight steps is $2.8e-17$ — floating-point round-off. Not a numerical approximation, a different ordering of the same arithmetic.
+1. **Equivalence.** The maximum elementwise difference between naive and cached outputs over all eight steps is $0.0e+00$: zero, or at most floating-point round-off, depending on how the matrix-multiply kernel orders its sums. The cache is not a numerical approximation, only a different ordering of the same arithmetic.
 2. **Speedup ratio at step $t$.** The per-step FLOP ratio is exactly $t$ for this configuration — at step 8 the cached version does 8× less work; at step 1024 it would do 1024× less. The cumulative ratio at $T$ is roughly $2T/3$ (at $T=8$ it is $5.03$; the projections dominate at small $t$, the attention quadratic at large $t$).
 
 ### Connection to real systems
@@ -667,10 +667,10 @@ print("entropy rate of the sampled stream = sum_i pi_i H(row i) =", dot(pi_stat,
 <!-- rustlab:output-start -->
 ```text
 H(P(.|b)) in bits under each control:
-  greedy 0   tau=0.5 1.0000000000000275   tau=1 1.000000431403955   tau=2 1.001256212153058
-  top-K=2 1   top-P=0.9 1   penalty rho=2 on 'a' x2 0.019413435029058908
+  greedy 0   tau=0.5 1.0000000000000275   tau=1 1.0000004314039548   tau=2 1.001256212153058
+  top-K=2 1   top-P=0.9 1   penalty rho=2 on 'a' x2 0.019413435029058648
 eigenvalues of P_hat': [1×3]  -1.000000  1.000000  -0.000000   stationary pi = [1×3]  0.250000  0.500000  0.250000
-entropy rate of the sampled stream = sum_i pi_i H(row i) = 0.5000004951647452 bits/token  (corpus: 0.5)
+entropy rate of the sampled stream = sum_i pi_i H(row i) = 0.5000004951647451 bits/token  (corpus: 0.5)
 ```
 
 <!-- rustlab:output-end -->

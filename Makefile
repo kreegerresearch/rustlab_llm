@@ -56,17 +56,17 @@ define sherlock_stage
 	cd $(SHERLOCK) && set -o pipefail && rustlab run $(1).rlab --plot none 2>&1 | tee $(1).log
 endef
 
-sherlock: sherlock-doctor sherlock-data sherlock-train sherlock-generate sherlock-sft sherlock-distill sherlock-report ## Sherlock: run every stage with the selected preset (default: ~30 min), then write report.md
+sherlock: sherlock-doctor sherlock-data sherlock-train sherlock-generate sherlock-sft sherlock-distill sherlock-report ## Sherlock: run every stage with the selected preset (default: ~7 min on rustlab 0.3.10), then write report.md
 	@echo; echo "all stages done -> $(SHERLOCK)/report.md   (ask it something: make sherlock-ask Q=\"Who is the woman?\")"
 
-sherlock-quick: ## Sherlock: everything with the 3-minute preset (small model, 400 steps, checkpoints-quick/)
+sherlock-quick: ## Sherlock: everything with the 30-second preset (small model, 400 steps, checkpoints-quick/)
 	@$(MAKE) --no-print-directory sherlock-preset PRESET=quick
 	@$(MAKE) --no-print-directory sherlock
 
-sherlock-doctor: ## Sherlock: check rustlab >= 0.3.9, python3, the corpus and the prepared data
+sherlock-doctor: ## Sherlock: check rustlab >= 0.3.10, python3, the corpus and the prepared data
 	@command -v rustlab >/dev/null || { echo "rustlab is not on PATH (https://github.com/kreegerresearch/rustlab)"; exit 1; }
 	@v=$$(rustlab --version | awk '{print $$2}'); printf 'rustlab %s ' "$$v"; \
-	  [ "$$(printf '%s\n0.3.9\n' "$$v" | sort -V | head -1)" = "0.3.9" ] && echo "(ok, >= 0.3.9)" || { echo "(too old: need >= 0.3.9)"; exit 1; }
+	  [ "$$(printf '%s\n0.3.10\n' "$$v" | sort -V | head -1)" = "0.3.10" ] && echo "(ok, >= 0.3.10)" || { echo "(too old: need >= 0.3.10)"; exit 1; }
 	@command -v python3 >/dev/null && echo "python3 ok (used once, by prepare_corpus.py)" || { echo "python3 is missing"; exit 1; }
 	@test -f $(SHERLOCK)/data/adventures.txt && echo "corpus ok: $(SHERLOCK)/data/adventures.txt" || { echo "corpus missing: $(SHERLOCK)/data/adventures.txt"; exit 1; }
 	@test -f $(SHERLOCK)/data/ids.csv && echo "prepared data ok" || echo "prepared data missing (make sherlock-data writes it)"
@@ -76,7 +76,7 @@ sherlock-doctor: ## Sherlock: check rustlab >= 0.3.9, python3, the corpus and th
 sherlock-data: ## Sherlock step 0: python3 prepare_corpus.py -> data/ids.csv + data/vocab.rlab (about a second)
 	cd $(SHERLOCK) && python3 prepare_corpus.py data/adventures.txt
 
-sherlock-train: ## Sherlock step 1: pre-train the character GPT (config.rlab + preset; ~20 min at the defaults) -> train.log
+sherlock-train: ## Sherlock step 1: pre-train the character GPT (config.rlab + preset; ~5 min at the defaults on rustlab 0.3.10) -> train.log
 	@mkdir -p $(SHERLOCK)/checkpoints $(SHERLOCK)/checkpoints-quick
 	$(call sherlock_stage,train)
 

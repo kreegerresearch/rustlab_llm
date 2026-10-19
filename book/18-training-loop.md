@@ -218,9 +218,9 @@ print("limiter at c = 1.0 fired", n_clip, "of", n_steps, "steps");
 <!-- rustlab:output-start -->
 ```text
 initial train loss: 1.1200930454953792   (log 3 = 1.0986122886681098 )
-final train loss  : 0.33950065992134676    empirical floor 24 ln2 / 49 = 0.3395006598660956
-final val   loss  : 0.38508017927180976    empirical floor  5 ln2 / 9  = 0.3850817669777474
-gradient norm: step 1 0.18374478526441965   peak 0.3533700050771836 at step 13   final 0.000007823812176590395
+final train loss  : 0.3395006599213469    empirical floor 24 ln2 / 49 = 0.3395006598660956
+final val   loss  : 0.3850801792718099    empirical floor  5 ln2 / 9  = 0.3850817669777474
+gradient norm: step 1 0.18374478526441965   peak 0.3533700050771836 at step 13   final 0.00000782381217450363
 limiter at c = 1.0 fired 0 of 180 steps
 ```
 
@@ -238,8 +238,8 @@ print("lambda = 0.1: final gradient norm", gn_w(n_steps), "  ||E||_F", sqrt(sum(
 
 <!-- rustlab:output-start -->
 ```text
-lambda = 0.1: final train 0.34193843301811083  val 0.38740049166176505   (+ 0.002437773096764073 nats vs lambda = 0)
-lambda = 0.1: final gradient norm 0.0074511901109659134   ||E||_F 3.00936537533113  vs 6.24512774550714 at lambda = 0
+lambda = 0.1: final train 0.34193843301811083  val 0.38740049166176505   (+ 0.0024377730967639066 nats vs lambda = 0)
+lambda = 0.1: final gradient norm 0.007451190110965806   ||E||_F 3.0093653753311296  vs 6.245127745507132 at lambda = 0
 ```
 
 <!-- rustlab:output-end -->
@@ -314,9 +314,9 @@ print("constant-eta run final train loss:", Ltr_k(n_steps + 1));
 <!-- rustlab:output-start -->
 ```text
 sign changes of dW(2,1) over steps 31-180: 58   -> mean period 5.172413793103448 steps
-||g|| over the last 60 steps: scheduled 0.000005405763359550225 to 0.0006426347189373581 ;  constant eta 0.000071978049483022 to 0.1311653678262021
-slope of log||g|| vs log eta_t over steps 60-180: 2.6566754411212083
-constant-eta run final train loss: 0.33950891571261177
+||g|| over the last 60 steps: scheduled 0.000005405763357466081 to 0.0006426347189362895 ;  constant eta 0.00007197798041328444 to 0.1311653676661818
+slope of log||g|| vs log eta_t over steps 60-180: 2.6566754411459557
+constant-eta run final train loss: 0.33950891571251157
 ```
 
 ![plot 2](plots/18-training-loop/plot-2-9fb4ace5.svg)
@@ -355,8 +355,8 @@ legend("train", "val")
 
 <!-- rustlab:output-start -->
 ```text
-overfit run: train 0.2772602445292135  (floor 2 ln2 / 5 = 0.2772588722239781 )   val 6.208098624038093   val at step 0: 1.0783604476361792
-P(. | a) after training: [1×3]  0.000000  1.000000  0.000000   ->  -log P(c | a) = 17.93340563833419 nats
+overfit run: train 0.2772602445312346  (floor 2 ln2 / 5 = 0.2772588722239781 )   val 6.208098622876494   val at step 0: 1.0783604476361794
+P(. | a) after training: [1×3]  0.000000  1.000000  0.000000   ->  -log P(c | a) = 17.933405637116476 nats
 ```
 
 ![plot 3](plots/18-training-loop/plot-3-d7b1d64a.svg)
@@ -414,7 +414,7 @@ print("final train / val with clipping:", Ltr_c(n_steps + 1), Lva_c(n_steps + 1)
 <!-- rustlab:output-start -->
 ```text
 c = 0.25: limiter fired 7 of 180 steps (steps 9 to 15 )
-final train / val with clipping: 0.33950065990698514 0.3850831237783923    without: 0.33950065992134676 0.38508017927180976
+final train / val with clipping: 0.3395006599069849 0.3850831237783926    without: 0.3395006599213469 0.3850801792718099
 ```
 
 <!-- rustlab:output-end -->
@@ -546,8 +546,8 @@ print("overfit run: -log P(c | a) =", -log(p_from_a(3)), "nats =", -log2(p_from_
 ```text
 population floor H(X_t+1 | X_t) = 0.5 bits = 0.34657359027997264 nats   (perplexity 1.4142135623730951 )
 train floor 24 ln2 / 49 = 0.3395006598660956 nats = 0.48979591836734687 bits;   val floor 5 ln2 / 9 = 0.3850817669777474 nats = 0.5555555555555556 bits
-initial loss 1.1200930454953792 nats vs log 3 = 1.0986122886681098 ;  final train 0.33950065992134676  final val 0.38508017927180976
-overfit run: -log P(c | a) = 17.93340563833419 nats = 25.872435380674908 bits for one transition with zero training support
+initial loss 1.1200930454953792 nats vs log 3 = 1.0986122886681098 ;  final train 0.3395006599213469  final val 0.3850801792718099
+overfit run: -log P(c | a) = 17.933405637116476 nats = 25.87243537891812 bits for one transition with zero training support
 ```
 
 <!-- rustlab:output-end -->

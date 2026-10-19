@@ -384,7 +384,7 @@ print("cache at t = 8: K and V each", size(K_cache)(1), "x", d_head, " ->", 2 * 
 
 Two diagnostics matter:
 
-1. **Equivalence.** The maximum elementwise difference between naive and cached outputs over all eight steps is ${max_diff:%.1e}$ — floating-point round-off. Not a numerical approximation, a different ordering of the same arithmetic.
+1. **Equivalence.** The maximum elementwise difference between naive and cached outputs over all eight steps is ${max_diff:%.1e}$: zero, or at most floating-point round-off, depending on how the matrix-multiply kernel orders its sums. The cache is not a numerical approximation, only a different ordering of the same arithmetic.
 2. **Speedup ratio at step $t$.** The per-step FLOP ratio is exactly $t$ for this configuration — at step 8 the cached version does 8× less work; at step 1024 it would do 1024× less. The cumulative ratio at $T$ is roughly $2T/3$ (at $T=8$ it is ${sum(naive_flops) / sum(cached_flops):%.2f}$; the projections dominate at small $t$, the attention quadratic at large $t$).
 
 ### Connection to real systems

@@ -1,2 +1,2 @@
 # Preset: default — the values in config.rlab (811 k parameters, 3000
-# steps, about 20 minutes on a 14-core laptop).  Nothing to override.
+# steps, about 5 minutes on a 14-core laptop with rustlab 0.3.10).  Nothing to override.

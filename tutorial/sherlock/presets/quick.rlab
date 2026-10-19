@@ -1,4 +1,4 @@
-# Preset: quick — a 2-3 minute end-to-end demo on a laptop.
+# Preset: quick — a 30-second end-to-end demo on a laptop (rustlab 0.3.10).
 # Selected with `make sherlock-quick` (copied to preset.rlab, which
 # config.rlab runs last, so these lines override the defaults).
 C.d_model    = 64;
