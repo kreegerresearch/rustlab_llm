@@ -125,6 +125,31 @@ ts = zeros(R); for r = 1:R
 end
 perf_out("prim.scalar_loop_1e5", ts, 1e5 / 1e6, "Miter/s");
 
+# --- Added in suite v2 (2026-10-18, after iteration 01's nested profile) ---
+# Allocation, in-loop row writes, transposed operands, a large reshape, and
+# the cost of passing a large struct to a user function.
+ts = zeros(R); for r = 1:R
+  tic; Z = zeros(512, 384); ts(r) = toc;
+end
+perf_out("prim.zeros_512x384", ts, 0, "-");
+Mrow = zeros(129, 128);
+ts = zeros(R); for r = 1:R
+  tic;
+  for t = 1:129
+    Mrow(t, :) = X(t, :);
+  end
+  ts(r) = toc;
+end
+perf_out("prim.row_assign_loop_129x128", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; Y = X * W1(:, 1:128)'; ts(r) = toc;
+end
+perf_out("prim.matmul_A_Bt_129x128x128", ts, 2 * 129 * 128 * 128 / 1e9, "GFLOP/s");
+ts = zeros(R); for r = 1:R
+  tic; Y = H' * H; ts(r) = toc;
+end
+perf_out("prim.matmul_At_B_512x129x512", ts, 2 * 512 * 129 * 512 / 1e9, "GFLOP/s");
+
 # === 2. Flat-vector work per optimiser step (811,008 parameters) ===
 cfg = gpt_config(77, 128, 4, 4, 512, 129);
 P = gpt_init(cfg, 0.02);
@@ -161,6 +186,24 @@ ts = zeros(R); for r = 1:R
   tic; t3 = gpt_flatten(P, cfg); ts(r) = toc;
 end
 perf_out("flat.flatten_811k", ts, 0, "-");
+
+# --- Added in suite v2: reshape of the whole vector, and passing the 13 MB
+# parameter struct to a user function that reads one field.
+ts = zeros(R); for r = 1:R
+  tic; Y = reshape(theta, 1584, 512); ts(r) = toc;
+end
+perf_out("flat.reshape_811k", ts, 0, "-");
+function s = read_one_field(P)
+  gf = P.gf;
+  s = gf(1);
+end
+ts = zeros(R); for r = 1:R
+  tic; for k = 1:10
+    s = read_one_field(P);
+  end
+  ts(r) = toc / 10;
+end
+perf_out("prim.call_struct_arg_13MB", ts, 0, "-");
 
 # === 3. Model functions at the default size (one 129-token window, 128 predictions) ===
 RM = 5;

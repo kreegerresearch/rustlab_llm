@@ -99,12 +99,26 @@ def run_gate():
 
 def run_profile():
     rc, out, err = sh([BIN, "run", "--profile", "profile_step.rlab", "--plot", "none"])
+    # rustlab <= 0.3.9: name calls total avg in out Mbit/s (7 fields).
+    # rustlab >= 0.3.10: name calls total self avg in out Mbit/s (8 fields); nested
+    # user functions, [top-level], [matmul] and parmap:<name> worker rows appear.
     rows = []
+    num = r"([\d.]+)"
+    p8 = re.compile(r"\s+(\S+)\s+(\d+)" + (r"\s+" + num) * 6 + r"\s*$")
+    p7 = re.compile(r"\s+(\S+)\s+(\d+)" + (r"\s+" + num) * 5 + r"\s*$")
     for line in err.splitlines():
-        m = re.match(r"\s+(\S+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*$", line)
-        if m and m.group(1) != "TOTAL":
-            rows.append({"fn": m.group(1), "calls": int(m.group(2)), "total_ms": float(m.group(3)),
-                         "in_kb": float(m.group(5)), "out_kb": float(m.group(6))})
+        m = p8.match(line)
+        if m:
+            row = {"fn": m.group(1), "calls": int(m.group(2)), "total_ms": float(m.group(3)),
+                   "self_ms": float(m.group(4)), "in_kb": float(m.group(6)), "out_kb": float(m.group(7))}
+        else:
+            m = p7.match(line)
+            if not m:
+                continue
+            row = {"fn": m.group(1), "calls": int(m.group(2)), "total_ms": float(m.group(3)),
+                   "self_ms": None, "in_kb": float(m.group(5)), "out_kb": float(m.group(6))}
+        if row["fn"] != "TOTAL":
+            rows.append(row)
     return rows
 
 
@@ -218,9 +232,17 @@ def report(run, base, prev):
     if flagged:
         lines += ["", f"⚠ More than {int(REGRESSION * 100)} % slower than the previous run: " + ", ".join(f"`{k}`" for k in flagged)]
     if run["profile"]:
-        lines += ["", "## `rustlab run --profile profile_step.rlab`", "", "| function | calls | total ms | in KB | out KB |", "|---|---:|---:|---:|---:|"]
-        for r in run["profile"][:12]:
-            lines.append(f"| `{r['fn']}` | {r['calls']} | {r['total_ms']:.1f} | {r['in_kb']:,.0f} | {r['out_kb']:,.0f} |")
+        has_self = any(r.get("self_ms") is not None for r in run["profile"])
+        lines += ["", "## `rustlab run --profile profile_step.rlab`", ""]
+        if has_self:
+            lines += ["Sorted by self time. `Total` is inclusive. `parmap:` rows are worker CPU time summed over threads.", "",
+                      "| function | calls | total ms | self ms | in KB | out KB |", "|---|---:|---:|---:|---:|---:|"]
+            for r in sorted(run["profile"], key=lambda r: -(r["self_ms"] or 0))[:20]:
+                lines.append(f"| `{r['fn']}` | {r['calls']} | {r['total_ms']:.1f} | {r['self_ms']:.1f} | {r['in_kb']:,.0f} | {r['out_kb']:,.0f} |")
+        else:
+            lines += ["| function | calls | total ms | in KB | out KB |", "|---|---:|---:|---:|---:|"]
+            for r in run["profile"][:12]:
+                lines.append(f"| `{r['fn']}` | {r['calls']} | {r['total_ms']:.1f} | {r['in_kb']:,.0f} | {r['out_kb']:,.0f} |")
     return "\n".join(lines) + "\n"
 
 
