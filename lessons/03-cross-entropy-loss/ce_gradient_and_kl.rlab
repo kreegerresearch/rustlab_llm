@@ -1,0 +1,52 @@
+# Script:  ce_gradient_and_kl.rlab
+# System:  Softmax + cross-entropy read as an error signal and as a code length
+# Concept: (1) the backward signal dL/dz_c = p_c - 1 saturates at -1 while the loss
+#          grows without bound; (2) cross-entropy = entropy + KL, with KL the excess
+#          bits of a mismatched code; (3) MSE is cross-entropy under Gaussian noise.
+# Equations: p_c = sigmoid(z_c - LSE(others));  dL/dz_c = p_c - 1
+#            H(p, q) = H(p) + KL(p || q)
+#            -log N(y; y_hat, s^2) = (y - y_hat)^2 / (2 s^2) + 0.5 log(2 pi s^2)
+# Units:     logits dimensionless; entropies and KL in bits; Gaussian NLL in nats
+
+run "../../lib/info.rlab"
+
+# === Saturating error signal vs. logit margin ===
+margin = linspace(-6.0, 6.0, 121);        # z_c - LSE(other logits)
+p_c    = 1.0 ./ (1.0 + exp(-margin));      # forward: p_hat_c
+g_c    = p_c - 1.0;                        # backward: dL/dz_c
+L_c    = -log(p_c);                        # the loss, for contrast
+print("margin -6: loss =", L_c(1), "nats, gradient =", g_c(1));
+print("margin +6: loss =", L_c(121), "nats, gradient =", g_c(121));
+
+figure();
+hold("on")
+plot(margin, p_c, "color", "blue", "label", "p_c  (forward)")
+plot(margin, g_c, "color", "red", "label", "dL/dz_c = p_c - 1  (backward)")
+hline(-1.0, "gray", "saturation at -1")
+title("Forward probability and backward error signal vs. logit margin")
+xlabel("logit margin  z_c - LSE(others)")
+ylabel("value")
+legend()
+hold("off")
+savefig("error_signal_saturation.svg")
+print("Saved error_signal_saturation.svg");
+
+# === KL divergence between Lesson 02's tau = 1 and tau = 2 softmaxes ===
+z02   = [2.0, 1.0, 0.5, -0.5];
+p_src = softmax(z02 / 1.0);       # "true" source
+p_mdl = softmax(z02 / 2.0);       # the model's code
+H_src  = entropy_bits(p_src);
+H_x    = cross_entropy_bits(p_src, p_mdl);
+KL_sm  = kl_bits(p_src, p_mdl);
+KL_rev = kl_bits(p_mdl, p_src);
+print("H(p)         =", H_src, "bits");
+print("H(p, p_hat)  =", H_x, "bits  = H(p) + KL:", H_src + KL_sm);
+print("KL(p||p_hat) =", KL_sm, "bits   (excess bits per symbol)");
+print("KL(p_hat||p) =", KL_rev, "bits   (not symmetric)");
+
+# === MSE is cross-entropy under a Gaussian likelihood ===
+y_obs = 2.0;  y_pred = [0.0, 1.0, 2.0, 3.0, 4.0];  sigma = 1.0;
+nll_gauss = 0.5 * log(2 * pi * sigma^2) + (y_obs - y_pred) .^ 2 / (2 * sigma^2);
+half_sq   = (y_obs - y_pred) .^ 2 / 2;
+print("Gaussian NLL       :", nll_gauss);
+print("NLL - (y-y_hat)^2/2:", nll_gauss - half_sq, "  (constant 0.5 log 2pi =", 0.5 * log(2 * pi), ")");

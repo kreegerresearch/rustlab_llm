@@ -1,0 +1,93 @@
+# Script:  bigram_stationary.rlab
+# System:  The bigram model as a discrete-time linear system on the probability simplex
+# Concept: pi_{t+1} = pi_t P; the lambda = 1 left eigenvector is the stationary distribution;
+#          a -1 eigenvalue is a period-2 mode; smoothing pulls it inside the unit circle;
+#          entropy rate sum_i pi_i H(P_i,:) and the staircase of floors
+# Equations: pi P = pi;  eig(P') = {1, 0, -1};  |lambda_2|^t mixing;  H_rate = sum_i pi_i H_i
+#            floors: log2|V| >= H(X) >= H(X_{t+1}|X_t)
+# Units:     Probabilities in [0,1]; eigenvalues dimensionless; entropies in bits
+
+run "../../lib/info.rlab"
+
+# === Corpus statistics (from bigram_counts.rlab) ===
+vocab_size = 3;
+seq = [1, 2, 3, 2, 1, 2, 3, 2, 1];
+C = [0, 2, 0; 2, 0, 2; 0, 2, 0];
+P        = C ./ sum(C, 2);
+P_smooth = (C + 1) ./ sum(C + 1, 2);
+
+# === Stationary distribution and spectrum of P ===
+[V, D] = eig(P');                       # columns of V: left eigenvectors of P
+lam = real(diag(D));
+k1 = argmax(lam);
+pi_st = real(V(:, k1));
+pi_st = pi_st / sum(pi_st);
+print("eigenvalues of P       :", lam);
+print("stationary pi          :", pi_st);
+print("pi * P (should equal pi):", pi_st * P);
+print("empirical unigram       :", [sum(seq == 1), sum(seq == 2), sum(seq == 3)] / length(seq));
+
+# === Same for the smoothed chain ===
+[Vs, Ds] = eig(P_smooth');
+lam_s = real(diag(Ds));
+ks = argmax(lam_s);
+pi_sm = real(Vs(:, ks));
+pi_sm = pi_sm / sum(pi_sm);
+abs_s = reshape(sort(abs(lam_s), "descend"), 1, vocab_size);
+print("|eigenvalues| P_smooth :", abs_s);
+print("stationary pi (smooth) :", pi_sm);
+print("mixing rate |lambda_2|^8 =", abs_s(2) ^ 8, "   time constant -1/ln|lambda_2| =", -1 / log(abs_s(2)), "steps");
+
+# === pi_t = e_a P^t for t = 0..8  (P^k is element-wise in rustlab: iterate) ===
+n_steps = 8;
+traj   = zeros(n_steps + 1, vocab_size);
+traj_s = zeros(n_steps + 1, vocab_size);
+row = [1, 0, 0];  row_s = [1, 0, 0];
+for t = 0:n_steps
+  traj(t + 1, :)   = row;
+  traj_s(t + 1, :) = row_s;
+  row   = row * P;
+  row_s = row_s * P_smooth;
+end
+steps = 0:n_steps;
+print("P(b) at t = 0..8 under P       :", traj(:, 2));
+print("P(b) at t = 0..8 under P_smooth:", traj_s(:, 2));
+
+figure();
+subplot(1, 2, 1)
+hold("on")
+plot(steps, traj(:, 1)', "color", "blue",  "label", "P(a)")
+plot(steps, traj(:, 2)', "color", "red",   "label", "P(b)")
+plot(steps, traj(:, 3)', "color", "green", "label", "P(c)")
+yline(pi_st(2), "gray", "pi(b) = 0.5")
+legend("P(a)", "P(b)", "P(c)")
+title("pi_t under P: pole at -1, period 2")
+xlabel("t"); ylabel("probability")
+hold("off")
+subplot(1, 2, 2)
+hold("on")
+plot(steps, traj_s(:, 1)', "color", "blue",  "label", "P(a)")
+plot(steps, traj_s(:, 2)', "color", "red",   "label", "P(b)")
+plot(steps, traj_s(:, 3)', "color", "green", "label", "P(c)")
+yline(pi_sm(2), "gray", "pi(b) = 7/17")
+legend("P(a)", "P(b)", "P(c)")
+title("pi_t under P_smooth: |lambda_2| = 0.457")
+xlabel("t"); ylabel("probability")
+hold("off")
+savefig("bigram_stationary.svg")
+print("Saved bigram_stationary.svg");
+
+# === Entropy rate and the staircase of floors ===
+H_rows = row_entropies_bits(P);
+H_rate = sum(pi_st .* H_rows);
+H_uni  = entropy_bits([sum(seq == 1), sum(seq == 2), sum(seq == 3)] / length(seq));
+print("entropy rate sum_i pi_i H_i =", H_rate, "bits  (= training CE of the MLE in bits)");
+print("floors: log2|V| =", log2(vocab_size), "  H(unigram) =", H_uni, "  H(next|cur) =", H_rate);
+
+figure();
+bar({"log2|V| blind", "H(X) unigram", "H(next|cur) bigram"}, [log2(vocab_size), H_uni, H_rate])
+title("Staircase of floors for 'abcbabcba' (bits per token)")
+ylabel("bits")
+ylim([0, 1.8])
+savefig("bigram_floors.svg")
+print("Saved bigram_floors.svg");

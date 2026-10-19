@@ -1,0 +1,55 @@
+# Library: info.rlab
+# System:  Information-theoretic helpers shared across the curriculum
+#          (entropy, cross-entropy, KL divergence, per-row entropies).
+# Concept: One definition each, in bits (log2) and nats (ln), with the
+#          convention 0 * log 0 = 0.  Lesson 02 derives entropy; later
+#          lessons call these instead of re-implementing the loops.
+# Usage:   from a lesson script:   run "../../lib/info.rlab"
+#          from a notebook block:  run "../lib/info.rlab"
+# Units:   probabilities dimensionless; entropies in bits or nats as named.
+
+# Shannon entropy in bits of a probability vector p (0 log 0 = 0).
+function H = entropy_bits(p)
+  H = 0.0;
+  for i = 1:length(p)
+    if p(i) > 0
+      H = H - p(i) * log2(p(i));
+    end
+  end
+end
+
+# Shannon entropy in nats.
+function H = entropy_nats(p)
+  H = entropy_bits(p) * log(2);
+end
+
+# Cross-entropy H(p, q) = -sum p log2 q in bits (q must be > 0 where p > 0).
+function C = cross_entropy_bits(p, q)
+  C = 0.0;
+  for i = 1:length(p)
+    if p(i) > 0
+      C = C - p(i) * log2(q(i));
+    end
+  end
+end
+
+# KL divergence D(p || q) = H(p, q) - H(p) in bits.
+function D = kl_bits(p, q)
+  D = cross_entropy_bits(p, q) - entropy_bits(p);
+end
+
+# Per-row entropies (bits) of a row-stochastic matrix, e.g. an attention
+# matrix A: returns a vector with one entry per row.
+function Hs = row_entropies_bits(A)
+  T = size(A)(1);
+  Hs = zeros(T);
+  for t = 1:T
+    Hs(t) = entropy_bits(A(t, :));
+  end
+end
+
+# Perplexity of a distribution or of a mean cross-entropy in nats:
+# ppl_from_nats(L) = exp(L); equivalently 2^(bits).
+function ppl = ppl_from_nats(L_nats)
+  ppl = exp(L_nats);
+end

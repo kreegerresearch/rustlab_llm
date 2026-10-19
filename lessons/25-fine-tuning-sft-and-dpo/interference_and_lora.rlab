@@ -1,0 +1,157 @@
+# Script:  interference_and_lora.rlab
+# System:  The single-block transformer of Lesson 22 (lib/transformer.rlab),
+#          pre-trained on the abb corpus exactly as in sft.rlab (seed 241,
+#          600 steps), then probed at that pre-trained point.
+# Concept: Catastrophic forgetting as gradient interference.  A step -eta d
+#          changes the abb loss to first order by -eta grad_abb . d, so the
+#          sign of cos(grad_abb, grad_SFT) says whether the first SFT step
+#          climbs the pre-training loss.  The cosine is measured overall,
+#          against AdamW's first step direction sign(grad_SFT), and per
+#          weight matrix.  Then a rank-1 LoRA on W_U (7 parameters) is
+#          trained to the same SFT loss as full SFT: restricting the RANK
+#          of the update does not restrict its INTERFERENCE.
+# Equations:
+#   cos = <g_abb, g_sft> / (|g_abb| |g_sft|)
+#   LoRA:  W_U = W_U0 + b a,   dL/da = b' dL/dW_U,   dL/db = dL/dW_U a'
+# Units:   losses in nats; cosines dimensionless.
+
+run "../../lib/transformer.rlab"
+
+# === 1. Setup and pre-training (identical to sft.rlab) ===
+seed(241);
+vocab = 3;  d_model = 4;  d_ff = 8;  T_max = 16;
+pat = [1, 2, 2];
+T_pre = 12;
+ids_pre = zeros(T_pre);
+for i = 1:T_pre
+  ids_pre(i) = pat(mod(i - 1, 3) + 1);
+end
+mask_pre = ones(T_pre - 1);
+
+E = randn(vocab, d_model) * 0.3;
+PE = sinusoidal_pe(T_max, d_model);
+gamma1 = ones(d_model);   beta1 = zeros(d_model);
+gamma2 = ones(d_model);   beta2 = zeros(d_model);
+Wq = randn(d_model, d_model) * 0.3;
+Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;
+Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W_U = randn(d_model, vocab) * 0.3;
+P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
+           "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
+
+[M, V] = adamw_init(P);
+bet1 = 0.9; bet2 = 0.999; eps_a = 1e-8;
+n_pre = 600;  eta_max = 0.05;  eta_min = 0.005;  T_w = 60;
+for step = 1:n_pre
+  eta_t = warmup_cosine(step, n_pre, T_w, eta_max, eta_min);
+  [lo, L, cache] = transformer_forward(ids_pre, mask_pre, P);
+  dl = ce_dlogits(ids_pre, mask_pre, lo, cache.total);
+  G = transformer_backward(ids_pre, dl, cache, P);
+  [P, M, V] = adamw_step(P, G, M, V, eta_t, step, bet1, bet2, eps_a, 0.0);
+end
+P_pre = P;
+[lo, L_abb0, cache] = transformer_forward(ids_pre, mask_pre, P_pre);
+print("Pre-trained abb-corpus L:", L_abb0);
+
+sft_data = [1, 2, 3, 1, 1;
+            2, 2, 3, 1, 1;
+            2, 1, 3, 1, 1];
+sft_mask = [0, 0, 1, 1];
+n_seq = size(sft_data)(1);
+
+# === 2. Gradients at the pre-trained point ===
+function g = flat_grad(G)
+  g = [reshape(G.E, 1, numel(G.E)), G.gamma1, G.beta1, G.gamma2, G.beta2, ...
+       reshape(G.Wq, 1, numel(G.Wq)), reshape(G.Wk, 1, numel(G.Wk)), ...
+       reshape(G.Wv, 1, numel(G.Wv)), reshape(G.Wo, 1, numel(G.Wo)), ...
+       reshape(G.W1, 1, numel(G.W1)), G.b1f, reshape(G.W2, 1, numel(G.W2)), G.b2f, ...
+       reshape(G.W_U, 1, numel(G.W_U))];
+end
+function c = cos_angle(a, b)
+  c = sum(a .* b) / (norm(a) * norm(b));
+end
+function G = grad_at(ids, mask, P)
+  [lo, L, cache] = transformer_forward(ids, mask, P);
+  G = transformer_backward(ids, ce_dlogits(ids, mask, lo, cache.total), cache, P);
+end
+
+g_abb = flat_grad(grad_at(ids_pre, mask_pre, P_pre));
+g_sft = zeros(length(g_abb));
+for s = 1:n_seq
+  g_sft = g_sft + flat_grad(grad_at(sft_data(s, :), sft_mask, P_pre)) / n_seq;
+end
+print("");
+print("=== Gradient interference at the pre-trained point ===");
+print("parameters:", length(g_abb), "  |grad_abb| =", norm(g_abb), "  |grad_SFT| =", norm(g_sft));
+print("cos(grad_abb, grad_SFT)       =", cos_angle(g_abb, g_sft));
+print("cos(grad_abb, sign(grad_SFT)) =", cos_angle(g_abb, sign(g_sft)), "  (AdamW's first step direction)");
+
+# Per weight matrix, in flat_grad's field order.
+sz = [numel(P.E), 4 * d_model, numel(P.Wq), numel(P.Wk), numel(P.Wv), numel(P.Wo), numel(P.W1), d_ff, numel(P.W2), d_model, numel(P.W_U)];
+hi = cumsum(sz);  lo_i = hi - sz + 1;
+mat_idx = [1, 3, 4, 5, 6, 7, 9, 11];
+blocks = {"E", "Wq", "Wk", "Wv", "Wo", "W1", "W2", "W_U"};
+cos_blk = zeros(8);
+for i = 1:8
+  cos_blk(i) = cos_angle(g_abb(lo_i(mat_idx(i)):hi(mat_idx(i))), g_sft(lo_i(mat_idx(i)):hi(mat_idx(i))));
+  print("  ", blocks(i), " cos =", cos_blk(i));
+end
+
+# === 3. Full SFT (as in sft.rlab) for the comparison ===
+n_sft = 200;
+P = P_pre;
+[M, V] = adamw_init(P);
+for step = 1:n_sft
+  seq = sft_data(mod(step - 1, n_seq) + 1, :);
+  G = grad_at(seq, sft_mask, P);
+  [P, M, V] = adamw_step(P, G, M, V, 0.001, step, bet1, bet2, eps_a, 0.0);
+end
+L_sft_full = 0.0;
+for s = 1:n_seq
+  [lo, L, cache] = transformer_forward(sft_data(s, :), sft_mask, P);
+  L_sft_full = L_sft_full + L / n_seq;
+end
+[lo, L_abb_full, cache] = transformer_forward(ids_pre, mask_pre, P);
+
+# === 4. Rank-1 LoRA on W_U: W_U = W_U0 + b a, 7 trainable numbers ===
+P_lora = P_pre;
+W_U0 = P_pre.W_U;
+b_l = ones(d_model, 1) * 0.1;   a_l = zeros(1, vocab);
+ma = zeros(1, vocab);  va = ma;  mb = zeros(d_model, 1);  vb = mb;
+eta_lora = 0.003;                 # chosen so the final SFT loss matches full SFT's
+for step = 1:n_sft
+  seq = sft_data(mod(step - 1, n_seq) + 1, :);
+  P_lora.W_U = W_U0 + b_l * a_l;
+  G = grad_at(seq, sft_mask, P_lora);
+  dW = G.W_U;
+  ga = b_l' * dW;   gb = dW * a_l';
+  [a_l, ma, va] = adamw_update(a_l, ga, ma, va, eta_lora, step, bet1, bet2, eps_a, 0.0);
+  [b_l, mb, vb] = adamw_update(b_l, gb, mb, vb, eta_lora, step, bet1, bet2, eps_a, 0.0);
+end
+P_lora.W_U = W_U0 + b_l * a_l;
+L_sft_lora = 0.0;
+for s = 1:n_seq
+  [lo, L, cache] = transformer_forward(sft_data(s, :), sft_mask, P_lora);
+  L_sft_lora = L_sft_lora + L / n_seq;
+end
+[lo, L_abb_lora, cache] = transformer_forward(ids_pre, mask_pre, P_lora);
+print("");
+print("=== Forgetting probe: full SFT vs rank-1 LoRA on W_U ===");
+print("full SFT   :", length(g_abb), "params   mean SFT L =", L_sft_full, "  abb-corpus L =", L_abb_full);
+print("rank-1 LoRA:", d_model + vocab, "params   mean SFT L =", L_sft_lora, "  abb-corpus L =", L_abb_lora);
+print("Restricting the rank did not restrict the interference: the LM-head");
+print("direction is shared by every context, abb contexts included.");
+
+# === 5. Figure: per-block cosines ===
+figure();
+bar(blocks, cos_blk)
+hold("on")
+hline(0.0, "gray", "orthogonal")
+hold("off")
+title("cos(grad L_abb, grad L_SFT) per weight matrix at the pre-trained point")
+xlabel("parameter block"); ylabel("cosine")
+savefig("interference.svg")
+print("Saved interference.svg");

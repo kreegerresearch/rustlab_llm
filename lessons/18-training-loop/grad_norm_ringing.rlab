@@ -1,0 +1,110 @@
+# Script:  grad_norm_ringing.rlab
+# System:  The Lesson 18 24-parameter embedding+head model, trained full-batch
+#          for 180 steps with Adam (lambda = 0) under warmup+cosine, and again
+#          with eta held constant at eta_max.
+# Concept: The gradient-norm diagnostic is a sawtooth, not a smooth decay: the
+#          momentum-filtered coordinates with an interior optimum (the ambiguous
+#          state b) ring, and the schedule's decay is what damps the ring.  The
+#          gradient-norm limiter is in the loop; at c = 1 it never fires, at
+#          c = 0.25 it fires on the steps around the peak with no effect on the
+#          final loss.
+# Equations: forward / backward as train_loop.rlab; AdamW step of Lesson 16;
+#            limiter g <- g * min(1, c / ||g||)
+# Units:   parameters dimensionless; loss in nats.
+
+seed(18);
+vocab = 3;  d_emb = 4;
+E0 = randn(vocab, d_emb) * 0.3;
+W0 = randn(d_emb, vocab) * 0.3;
+corpus = zeros(60);
+pat = [1, 2, 3, 2];
+for i = 1:60
+  corpus(i) = pat(mod(i - 1, 4) + 1);
+end
+n_tr = 49;  va_start = 50;  n_va = 9;
+
+# === Helpers: one pair, one batch, one optimiser step, the schedule ===
+function [dE, dW, L] = backward_one(x_curr, x_next, E, W, vocab, d_emb)
+  h = E(x_curr, :);  pvec = softmax(h * W);  L = -log(pvec(x_next));
+  e_y = zeros(vocab);  e_y(x_next) = 1.0;
+  dlogits = pvec - e_y;  dW = h' * dlogits;  dh = dlogits * W';
+  dE = zeros(vocab, d_emb);
+  for k = 1:d_emb
+    dE(x_curr, k) = dh(k);
+  end
+end
+function L = range_loss(start_idx, n_pairs, corpus, E, W)
+  L = 0.0;
+  for k = 0:(n_pairs - 1)
+    p = softmax(E(corpus(start_idx + k), :) * W);
+    L = L - log(p(corpus(start_idx + k + 1)));
+  end
+  L = L / n_pairs;
+end
+function [dE, dW] = batch_grad(idx, corpus, E, W)
+  vocab = size(E, 1);  d_emb = size(E, 2);
+  dE = zeros(vocab, d_emb);  dW = zeros(d_emb, vocab);
+  for k = 1:length(idx)
+    [dEk, dWk, Lk] = backward_one(corpus(idx(k)), corpus(idx(k) + 1), E, W, vocab, d_emb);
+    dE = dE + dEk;  dW = dW + dWk;
+  end
+  dE = dE / length(idx);  dW = dW / length(idx);
+end
+function [P, m, v] = adamw_step(P, m, v, g, t, eta, lambda)
+  b1 = 0.9;  b2 = 0.999;  eps_a = 1e-8;
+  m = b1 * m + (1 - b1) * g;
+  v = b2 * v + (1 - b2) * (g .^ 2);
+  P = P - eta * ((m / (1 - b1 ^ t)) ./ (sqrt(v / (1 - b2 ^ t)) + eps_a) + lambda * P);
+end
+function eta = warmup_cosine(t, n, T_w, eta_max, eta_min)
+  if t <= T_w
+    eta = eta_max * (t / T_w);
+  else
+    eta = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * (t - T_w) / (n - T_w)));
+  end
+end
+
+# === The five lines, as a function ===
+function [Ltr, gn, etas, g21, n_clip] = train_run(E, W, corpus, n_tr, n_steps, eta_of_t, lambda, c_clip)
+  vocab = size(E, 1);  d_emb = size(E, 2);
+  mE = zeros(vocab, d_emb);  vE = mE;  mW = zeros(d_emb, vocab);  vW = mW;
+  Ltr = zeros(n_steps + 1);  gn = zeros(n_steps);  etas = zeros(n_steps);  g21 = zeros(n_steps);  n_clip = 0;
+  Ltr(1) = range_loss(1, n_tr, corpus, E, W);
+  for t = 1:n_steps
+    etas(t) = eta_of_t(t);
+    [dE, dW] = batch_grad(1:n_tr, corpus, E, W);
+    gn(t) = sqrt(sum(sum(dE .^ 2)) + sum(sum(dW .^ 2)));  g21(t) = dW(2, 1);
+    if gn(t) > c_clip
+      dE = dE * (c_clip / gn(t));  dW = dW * (c_clip / gn(t));  n_clip = n_clip + 1;
+    end
+    [E, mE, vE] = adamw_step(E, mE, vE, dE, t, etas(t), lambda);
+    [W, mW, vW] = adamw_step(W, mW, vW, dW, t, etas(t), lambda);
+    Ltr(t + 1) = range_loss(1, n_tr, corpus, E, W);
+  end
+end
+
+n_steps = 180;  T_w = 30;  eta_max = 0.15;  eta_min = 0.015;
+sched = @(t) warmup_cosine(t, n_steps, T_w, eta_max, eta_min);
+[L_s, gn_s, eta_t, g21, nc1]  = train_run(E0, W0, corpus, n_tr, n_steps, sched, 0.0, 1.0);
+[L_k, gn_k, eta_k, g21k, nck] = train_run(E0, W0, corpus, n_tr, n_steps, @(t) eta_max, 0.0, 1.0);
+[L_c, gn_c, eta_c, g21c, nc025] = train_run(E0, W0, corpus, n_tr, n_steps, sched, 0.0, 0.25);
+flips = sum(sign(g21(31:n_steps)) != sign(g21(30:(n_steps - 1))));
+print("scheduled: final train", L_s(n_steps + 1), "  ||g|| step 1", gn_s(1), " peak", max(gn_s), "at step", argmax(gn_s), " final", gn_s(n_steps));
+print("constant eta = 0.15: final train", L_k(n_steps + 1), "  ||g|| over last 60 steps", min(gn_k(121:n_steps)), "to", max(gn_k(121:n_steps)));
+print("scheduled          :                       ||g|| over last 60 steps", min(gn_s(121:n_steps)), "to", max(gn_s(121:n_steps)));
+print("sign changes of dW(2,1), steps 31-180:", flips, " -> mean period", 2 * 150 / flips, "steps");
+print("limiter fired: c = 1.0 ->", nc1, " steps;  c = 0.25 ->", nc025, " steps;  final train with c = 0.25:", L_c(n_steps + 1));
+
+# === Plot: gradient norm and eta_t on one step axis ===
+figure();
+semilogy(1:n_steps, gn_s,  "color", "green",  "label", "||g||, scheduled")
+hold("on")
+semilogy(1:n_steps, gn_k,  "color", "orange", "label", "||g||, constant eta = 0.15")
+semilogy(1:n_steps, eta_t, "color", "gray",   "label", "eta_t")
+hold("off")
+title("gradient norm (sawtooth) and eta_t on one step axis")
+xlabel("step")
+ylabel("log scale")
+legend("||g|| scheduled", "||g|| constant 0.15", "eta_t")
+savefig("grad_norm_ringing.svg")
+print("Saved grad_norm_ringing.svg");

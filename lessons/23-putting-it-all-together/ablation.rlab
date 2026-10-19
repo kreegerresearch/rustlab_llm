@@ -1,0 +1,105 @@
+# Script:  ablation.rlab
+# System:  Four single-block transformers trained from the capstone's
+#          step-0 initialisation (seed 22) on the 32-token BPE sequence of
+#          "the cat sat on the mat " x 4: full / attention off / PE off /
+#          both off, 600 AdamW steps with the capstone recipe.
+# Concept: Which mechanism beats the bigram floor (PPL 1.4723)?  "Attention
+#          off" clamps W_O = 0 after every update (H_mid = H_in exactly, zero
+#          gradient into Q, K, V — Lesson 22 piece 6); "PE off" zeroes the
+#          positional table.  The floors are the corpus's own conditional
+#          entropies, and PPL 1.00008 is read as a two-part code length
+#          (MDL): bits(model) + bits(corpus | model) vs bits(corpus).
+# Equations: PPL = exp(L);  H(next|cur) = sum_c n(c)/N H(next | cur = c);
+#            bits(corpus | model) = n_pairs * L / ln 2.
+# Units:   loss and entropies in nats; code lengths in bits.
+
+run "../../lib/transformer.rlab"
+run "../../lib/info.rlab"
+
+# === 1. The capstone token sequence (capstone.rlab section 2 produces it) ===
+tokens = repmat([17, 12, 9, 12, 8, 16, 18, 12], 1, 4);   # period 8, 32 tokens
+vocab = 18;  T = length(tokens);  n_pairs = T - 1;
+mask_train = ones(T - 1);
+
+# === 2. Step-0 initialisation, identical to capstone.rlab section 4 ===
+seed(22);
+d_model = 4;  d_ff = 8;  T_max = T + 16;
+E = randn(vocab, d_model) * 0.3;
+PE = sinusoidal_pe(T_max, d_model);
+Wq = randn(d_model, d_model) * 0.3;  Wk = randn(d_model, d_model) * 0.3;
+Wv = randn(d_model, d_model) * 0.3;  Wo = randn(d_model, d_model) * 0.3;
+W1 = randn(d_model, d_ff) * 0.3;     W2 = randn(d_ff, d_model) * 0.3;
+W_U = randn(d_model, vocab) * 0.3;
+P0 = struct("E", E, "PE", PE, "gamma1", ones(d_model), "beta1", zeros(d_model), ...
+            "gamma2", ones(d_model), "beta2", zeros(d_model), ...
+            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", zeros(d_ff), ...
+            "W2", W2, "b2f", zeros(d_model), "W_U", W_U);
+n_params = vocab * d_model + 4 * d_model + 4 * d_model * d_model + 2 * d_model * d_ff + d_ff + d_model + d_model * vocab;
+n_train = 600;  T_w = 60;  eta_max = 0.05;  eta_min = 0.005;
+
+# === 3. One training run, optionally with the attention branch clamped off ===
+function L_final = train_variant(P_start, ids, mask, n_steps, attn_on, T_w, eta_max, eta_min)
+  Pv = P_start;
+  d = size(Pv.E)(2);
+  if attn_on == 0
+    Pv.Wo = zeros(d, d);
+  end
+  [Mv, Vv] = adamw_init(Pv);
+  for step = 1:n_steps
+    eta_t = warmup_cosine(step, n_steps, T_w, eta_max, eta_min);
+    [lo, L, ca] = transformer_forward(ids, mask, Pv);
+    dlv = ce_dlogits(ids, mask, lo, ca.total);
+    Gv = transformer_backward(ids, dlv, ca, Pv);
+    [Pv, Mv, Vv] = adamw_step(Pv, Gv, Mv, Vv, eta_t, step, 0.9, 0.999, 1e-8, 0.0);
+    if attn_on == 0
+      Pv.Wo = zeros(d, d);
+    end
+  end
+  [lo, L_final, ca] = transformer_forward(ids, mask, Pv);
+end
+
+# === 4. Four variants from the same snapshot ===
+P_nope = P0;  P_nope.PE = zeros(T_max, d_model);
+L_abl = zeros(4);
+L_abl(1) = train_variant(P0, tokens, mask_train, n_train, 1, T_w, eta_max, eta_min);
+L_abl(2) = train_variant(P0, tokens, mask_train, n_train, 0, T_w, eta_max, eta_min);
+L_abl(3) = train_variant(P_nope, tokens, mask_train, n_train, 1, T_w, eta_max, eta_min);
+L_abl(4) = train_variant(P_nope, tokens, mask_train, n_train, 0, T_w, eta_max, eta_min);
+print("=== Ablation (final PPL after 600 steps) ===");
+print("full model               PPL =", exp(L_abl(1)));
+print("attention off            PPL =", exp(L_abl(2)));
+print("PE off                   PPL =", exp(L_abl(3)));
+print("attention off and PE off PPL =", exp(L_abl(4)));
+
+# === 5. Floors as conditional entropies; PPL as a code length (MDL) ===
+function H = cond_entropy_nats(seq, k, V)
+  n = length(seq);
+  C = zeros(V ^ k, V);
+  for t = (k + 1):n
+    key = 0;
+    for j = 1:k
+      key = key * V + (seq(t - j) - 1);
+    end
+    C(key + 1, seq(t)) = C(key + 1, seq(t)) + 1;
+  end
+  H = 0.0;
+  for r = 1:(V ^ k)
+    n_r = sum(C(r, :));
+    if n_r > 0
+      H = H + (n_r / (n - k)) * entropy_nats(C(r, :) / n_r);
+    end
+  end
+end
+H_cur = cond_entropy_nats(tokens, 1, vocab);
+H_cur_prev = cond_entropy_nats(tokens, 2, vocab);
+print("");
+print("H(next | cur)        =", H_cur, "nats  -> bigram floor PPL", exp(H_cur));
+print("H(next | cur, prev)  =", H_cur_prev, "nats  -> trigram floor PPL", exp(H_cur_prev));
+print("I(next ; prev | cur) =", (H_cur - H_cur_prev) / log(2), "bits per pair");
+bits_corpus = T * log2(vocab);
+bits_params = n_params * 64;
+bits_data_given_model = n_pairs * L_abl(1) / log(2);
+print("");
+print("MDL: corpus, fixed-length code =", bits_corpus, "bits");
+print("     model parameters (float64) =", bits_params, "bits");
+print("     corpus under the model     =", bits_data_given_model, "bits");

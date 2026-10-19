@@ -24,10 +24,10 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 | 9 | Modern Architectural Variants (post-curriculum extension) | Complete |
 | 10 | Fine-Tuning — SFT and DPO (post-curriculum extension) | Complete |
 | 11 | Toolchain modernisation (rustlab 0.3.7), shared `lib/`, lesson renumbering | Complete |
-| 12 | Attention & transformer arc rewrite (07–14) under the three lenses | Planned — see `docs/proposal-2026-09-27-ee-controls-it-revision.md` |
-| 13 | Training as feedback control (03, 06, 15–18) | Planned |
-| 14 | Information arc (01, 02, 04, 05, 19–21) | Planned |
-| 15 | New lessons 00 and 26, late lessons, consistency pass | Planned |
+| 12 | Attention & transformer arc rewrite (07–14) under the three lenses | Complete |
+| 13 | Training as feedback control (03, 06, 15–18) | Complete |
+| 14 | Information arc (01, 02, 04, 05, 19–21) | Complete |
+| 15 | New lessons 00 and 26, late lessons (22–25), consistency pass | Complete |
 
 **Lesson numbering (since 2026-09-27, Phase 11):** `22-full-backprop-through-the-block` (was the first half of 24), `23-putting-it-all-together` (was 22), `24-modern-architectural-variants` (was 23), `25-fine-tuning-sft-and-dpo` (was the second half of 24). The capstone now comes *after* the lesson that derives the backward pass it runs on. Older handoff notes below keep their original numbers where they narrate history.
 
@@ -356,6 +356,29 @@ These close the gaps surfaced by the nanoGPT / *Attention Is All You Need* cover
 - Renderer facts that shaped this phase (also in AGENTS.md): the markdown renderer captures **one plot per code block**, so side-by-side panels use `subplot`; a `run` inside a script that a *notebook* runs resolves relative to the notebook, so notebooks carry their own short library-based blocks rather than running the lesson scripts; `run` paths must be quoted.
 - Next action: Phase 12 (attention & transformer arc, lessons 07–14) per §5 of the proposal, starting from these clean sources.
 - Known blockers: none. Still upstream-open: autodiff, struct-field indexing, `A^k` element-wise, `<!-- solution -->` in markdown output.
+
+---
+
+## Phases 12–15 — Engineering Lenses Revision (2026-09-27)
+
+**Goal:** Turn the nanoGPT curriculum into a course on designing an LLM from signals-and-systems, modern control, and information theory, per `docs/proposal-2026-09-27-ee-controls-it-revision.md` (approved as recommended) and the four reviewer reports in `docs/review-2026-09-27/`.
+
+**Deliverables:**
+- [x] Every lesson 01–26 closes with `## Engineering Lenses` (`### Signals` / `### Systems` / `### Information`); each present lens has ≥ 1 executed block and every claim opens with **Exact.** / **Model.** / **Analogy.** (AGENTS.md → Engineering Lenses). The former prose-only `## Connection to Information Theory` sections were merged into `### Information` as computations.
+- [x] Lesson 00 (`00-the-llm-as-a-system`): course map as a mermaid signal-flow graph with the two feedback loops, the three lenses, the notation table, the toolkit-to-lesson map.
+- [x] Lesson 26 (`26-quantization-and-fixed-point-inference`): b-bit weight quantisation of the capstone model, Δ²/12 and 6.02 dB/bit, PPL/KL vs bits, weights vs activations, saturate vs wrap, KV-cache memory and the bandwidth bound; three scripts.
+- [x] Phase 12 (07–14): the attention arc as one story — causal LTV FIR (07) → correlation receiver / kernel smoother with measured row entropies and a softmax-sharpening GIF (08) → filter-bank identity and DSP head labels (09) → phasor bank, aliasing answers "why 10000", oscillator state update (10) → Wiener–Hammerstein cascade, small-signal gain, keyed memory (11) → forward Euler, Jacobian products, Pre/Post-LN curves, LN as the guarantor of 08's variance assumption (12) → two mixing axes, block as a system step, mermaid graph (13) → causality test, FLOPs budget, matched-filter head (14). All demonstrations that did not demonstrate were fixed (08's full pipeline, 09's permutation W_O, 10's similarity prose, 12's endpoint-only demo).
+- [x] Phase 13 (03, 06, 15–18): p − y replaces the wrong gradient section (03); GD as the LTI error system with poles, η_crit = 0.1198, and the bigram-as-linear-layer example (06); the adjoint/costate theorem, computational graphs, and the closed-loop training diagram (15); momentum as a one-pole IIR, heavy-ball poles, Adam as normalisation, the β₂ bias-correction row fixed (16); the LTV contraction-factor experiment replaces the SGD demo (17); overfitting run shown, clipping live, grad-norm ringing explained with measured mechanism (18).
+- [x] Phase 14 (01, 02, 04, 05, 19–21): staircase of floors (01 → 05); softmax derived by max-entropy, τ for temperature, LLR demapper (02); correlator / matched-filter bank and codebook view (04); stationary distribution and the period-2 pole, entropy rate (05); BPE as source coding with the bits-vs-merges curve, byte-level BPE, EOS defined (19); PPL = 2^{H(p,q)} demonstrated as code length, BPC, varentropy (20); tied-logit temperature demo explained honestly, live KV-cache check, closed-loop generation, argmax orbits (21).
+- [x] Phase 15 (22–25): the seven backward pieces derived against the library's lines, ε V-curve, ablation table (22); design budget, four-row ablation landing on the bigram floor, attention GIF, MDL reading (23); RoPE as complex modulation verified bit-identical, sliding window, bandwidth-bound decode with honest numbers (24); DPO derivation, gain vs margin, gradient interference, rank-1 LoRA (25).
+- [x] Book re-rendered (27 pages, all figures live); `rustlab-notebook check` clean; every script (106) exits 0.
+
+**Handoff notes:**
+- Line budgets: most lessons grew 35–60 %; 06, 10, 22, 24 grew more because their plans mandated many new artefacts. Candidates for trimming if wanted are listed in the reviewer hand-backs (e.g. Lesson 10's FFT or polar panel → exercise; Lesson 26's Q-format example).
+- Honest corrections made while executing the plan: the proposal's "6 tok/s vs 50 tok/s" decode figures did not follow from their inputs (Lesson 24 now computes the bound properly); "Adam's per-coordinate step ≈ η_t" was not what Lesson 18's data shows (the notebook states the measured mechanism); the capstone's old "previous-token head" reading was false for the trained model (rewritten from printed entries); Lesson 05's row-entropy floor prints as √2 = 1.4142.
+- rustlab findings recorded in AGENTS.md (Rustlab Recommendations): `svd` absolute floor ≈ 1e-8; `hline` after a plot replaces the series unless `hold("on")`; the SVG backend drops line/scatter series overlaid on `contour`/`contourf`/`imagesc`; `quiver` needs gridded origins; `V(:, i)'` does not transpose a column slice; indexed `+=` does not parse; integer-matrix `*` is element-wise; `snr`/`histogram` reject 1×n matrices; `print` caps at 16 arguments; `${expr}` directly followed by `	imes$` or `> 1$` is not interpolated; wikilinks inside callouts are not transformed (use plain links); no `vline`.
+- `lib/` follow-ups requested by the rewrites (not done, to keep this phase's diff reviewable): `lib/bpe.rlab` (`bpe_step`, `apply_merge`, `tok_str`), `lib/capstone.rlab` (`capstone_tokens`, `train_capstone`), `lib/quant.rlab`, `add_grads`/`grad_dot`/`flat_grad` and costates from `transformer_backward`, `stationary_dist`, `conditional_entropy_bits`, `mi_bits`, `gd_modes`, a 1-based `sinusoidal_pe`, and a `train_bigram_lm` variant returning per-step losses.
+- Next action: none scheduled; the curriculum is complete under the approved plan. Optional Lesson 27 (the transformer as a dynamical system) remains deferred per decision 5.
 
 ---
 

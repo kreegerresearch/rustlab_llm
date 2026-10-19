@@ -1,0 +1,71 @@
+# Script:  mixing_axes.rlab
+# System:  One Pre-LN transformer block, split into its two sublayers
+# Concept: Attention is the only operation that mixes along the time axis
+#          (rows); LayerNorm and the FFN act per token and mix only along
+#          the channel axis (columns).  Bump one entry of token 3 at each
+#          sublayer's input and record which output rows move.
+# Equations:
+#   A_out = MHA(LN1(H)),   F_out = FFN(LN2(H))
+#   row-wise map g:  g(H)(t, :) depends on H(t, :) only
+#   attention head:  (A_h V_h)(t, :) = sum_{i <= t} A_h(t, i) V_h(i, :)
+# Units:   token features, dimensionless
+
+run "../../lib/transformer.rlab"
+
+# MHA sublayer alone: LN -> per-head attention -> concat -> W_O (no residual).
+function A_out = attn_sublayer(H, W_Q, W_K, W_V, W_O, H_heads, M_mask)
+  T = size(H)(1);  d_model = size(H)(2);  d_k = d_model / H_heads;
+  H_n = layernorm(H);
+  Q = H_n * W_Q;  K = H_n * W_K;  V = H_n * W_V;
+  out_concat = zeros(T, d_model);
+  for h = 1:H_heads
+    c = ((h - 1) * d_k + 1):(h * d_k);
+    out_concat(:, c) = softmax(Q(:, c) * K(:, c)' * (1.0 / sqrt(d_k)) + M_mask) * V(:, c);
+  end
+  A_out = out_concat * W_O;
+end
+
+# FFN sublayer alone: LN -> W_1 -> GELU -> W_2 (no residual).
+function F_out = ffn_sublayer(H, W_ff1, W_ff2)
+  F_out = gelu(layernorm(H) * W_ff1) * W_ff2;
+end
+
+# === Configuration and weights (same draw order as block_forward.rlab) ===
+seed(13);
+T = 4;  d_model = 8;  H_heads = 2;  d_ff = 4 * d_model;
+H_in = randn(T, d_model);
+W_Q = randn(d_model, d_model) * (1.0 / sqrt(d_model));
+W_K = randn(d_model, d_model) * (1.0 / sqrt(d_model));
+W_V = randn(d_model, d_model) * (1.0 / sqrt(d_model));
+W_O = randn(d_model, d_model) * (1.0 / sqrt(d_model));
+W_ff1 = randn(d_model, d_ff) * sqrt(2.0 / d_model);
+W_ff2 = randn(d_ff,    d_model) * sqrt(2.0 / d_ff);
+M_mask = causal_mask(T);
+
+# === Unperturbed sublayer outputs ===
+A_out = attn_sublayer(H_in, W_Q, W_K, W_V, W_O, H_heads, M_mask);
+H_mid = H_in + A_out;
+F_out = ffn_sublayer(H_mid, W_ff1, W_ff2);
+
+# === Perturbation test: bump channel 1 of token 3 at each sublayer's input ===
+H_p = H_in;
+H_p(3, 1) = H_p(3, 1) + 1.0;
+dA = attn_sublayer(H_p, W_Q, W_K, W_V, W_O, H_heads, M_mask) - A_out;
+H_mid_p = H_mid;
+H_mid_p(3, 1) = H_mid_p(3, 1) + 1.0;
+dF = ffn_sublayer(H_mid_p, W_ff1, W_ff2) - F_out;
+
+print("sum |dA_out| per token (MHA response):", sum(abs(dA), 2)');
+print("sum |dF_out| per token (FFN response):", sum(abs(dF), 2)');
+print("max |dA_out| on tokens 1-2 (must be exactly 0):", max(max(abs(dA(1:2, :)))));
+print("channels of token 3 touched by the FFN:", sum(abs(dF(3, :)) > 0), "of", d_model);
+
+# === Figure: signed responses, rows = tokens, columns = channels ===
+feat = {"1", "2", "3", "4", "5", "6", "7", "8"};
+tok  = {"1", "2", "3", "4"};
+figure();
+subplot(1, 2, 1)
+heatmap(feat, tok, dA, "MHA response to a bump at token 3", "viridis")
+subplot(1, 2, 2)
+heatmap(feat, tok, dF, "FFN response to a bump at token 3", "viridis")
+savefig("mixing_axes.svg")

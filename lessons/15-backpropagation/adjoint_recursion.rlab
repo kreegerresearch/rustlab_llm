@@ -1,0 +1,58 @@
+# Script:  adjoint_recursion.rlab
+# System:  Two-layer MLP  y_hat = tanh(x W1) W2  with squared-error loss, read as a
+#          two-stage discrete-time system x_{k+1} = f_k(x_k, theta_k), L = ell(x_N).
+# Concept: Backpropagation is the discrete adjoint / costate recursion (Bryson-Ho 1969,
+#          LeCun 1988): lam_N = d ell/d x_N,  lam_k = lam_{k+1} df_k/dx_k,
+#          dL/dtheta_k = lam_{k+1} df_k/dtheta_k.  Relabelling chain_rule.rlab's
+#          backward pass with lam leaves every number unchanged.  Also: the relative-error
+#          finite-difference check and the epsilon sweep that justifies eps ~ 1e-5.
+# Equations: lam3 = y_hat - t;  lam2 = lam3 W2';  lam1 = lam2 .* (1 - a1.^2);  lam0 = lam1 W1'
+#            dL/dW2 = a1' lam3;  dL/dW1 = x' lam1
+#            rel_err = |fd - analytic| / max(|fd|, |analytic|)
+# Units:   all quantities dimensionless; loss in squared output units.
+
+# === Setup (identical to chain_rule.rlab) ===
+seed(15);
+d_in = 4;
+d_h  = 3;
+W1 = randn(d_in, d_h) * 0.5;
+W2 = randn(d_h,  1)   * 0.5;
+x = [0.5, -0.2, 0.1, 0.3];
+t = 1.0;
+
+# === Forward: the state lane, left to right ===
+z1    = x * W1;            # x_1a
+a1    = tanh(z1);          # x_1b
+y_hat = a1 * W2;           # x_N
+L     = sum(0.5 * (y_hat - t) .^ 2);
+print("L =", L);
+
+# === Backward: the costate lane, right to left ===
+lam3   = sum(y_hat - t);           # lam_N = d ell / d x_N
+lam2_m = lam3 * W2';               # through f_2:  a1 -> a1 W2      (costate at a1)
+lam2   = lam2_m(1, :);
+lam1   = lam2 .* (1 - a1 .^ 2);    # through tanh: z1 -> tanh(z1)    (costate at z1)
+lam0   = lam1 * W1';               # through f_1:  x -> x W1         (costate at x)
+
+# === Rungs: parameter gradients  dL/dtheta_k = lam_{k+1} df_k/dtheta_k ===
+grad_W2 = a1' * lam3;
+grad_W1 = x'  * lam1;
+print("lam0 = dL/dx :", lam0);
+print("dL/dW2 (rung at stage 2):"); print(grad_W2);
+print("dL/dW1 (rung at stage 1):"); print(grad_W1);
+
+# === Relative-error finite-difference check and the epsilon sweep ===
+function r = rel_err(a, b)
+  r = abs(a - b) / max([abs(a), abs(b), 1e-300]);
+end
+
+eps_list = [1e-2, 1e-4, 1e-5, 1e-7, 1e-9];
+print("centred difference at W1(2,1):  eps    relative error");
+for i = 1:length(eps_list)
+  e = eps_list(i);
+  W1p = W1; W1p(2, 1) = W1(2, 1) + e;
+  W1m = W1; W1m(2, 1) = W1(2, 1) - e;
+  fd_e = (sum(0.5 * (tanh(x * W1p) * W2 - t) .^ 2) - sum(0.5 * (tanh(x * W1m) * W2 - t) .^ 2)) / (2 * e);
+  print("   ", e, "   ", rel_err(fd_e, grad_W1(2, 1)));
+end
+print("truncation O(eps^2) vs rounding O(eps_mach / eps): the minimum sits near eps_mach^(1/3) =", (2.2e-16) ^ (1 / 3));

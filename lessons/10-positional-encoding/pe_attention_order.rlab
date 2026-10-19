@@ -1,0 +1,64 @@
+# Script:  pe_attention_order.rlab
+# System:  One causal attention head with and without a positional signal
+# Concept: Unmasked attention is permutation-equivariant; with the causal mask
+#          row t is invariant to shuffling its prefix.  Adding PE breaks the
+#          tie: identical tokens at different positions get different keys.
+# Equations: attn(Pi X) = Pi attn(X);  A = softmax(Q K' / sqrt(d) + M)
+# Units:     dimensionless
+
+run "../../lib/transformer.rlab"
+
+# === Equivariance, unmasked and masked ===
+seed(10);
+T = 4;
+d = 4;
+X = randn(T, d);
+W_Q = randn(d, d) * 0.5;
+W_K = randn(d, d) * 0.5;
+W_V = randn(d, d) * 0.5;
+scale = 1.0 / sqrt(d);
+
+function O = attn(X, W_Q, W_K, W_V, scale, M)
+  A = softmax((X * W_Q) * (X * W_K)' * scale + M);
+  O = A * (X * W_V);
+end
+
+Pi = [0, 1, 0, 0; 0, 0, 0, 1; 1, 0, 0, 0; 0, 0, 1, 0];
+no_mask = zeros(T, T);
+O = attn(X, W_Q, W_K, W_V, scale, no_mask);
+O_perm = attn(Pi * X, W_Q, W_K, W_V, scale, no_mask);
+print("unmasked: max |attn(Pi X) - Pi attn(X)| =", max(max(abs(O_perm - Pi * O))));
+M = causal_mask(T);
+Pi_prefix = [0, 0, 1, 0; 1, 0, 0, 0; 0, 1, 0, 0; 0, 0, 0, 1];   # shuffles rows 1-3, fixes row 4
+O_c  = attn(X, W_Q, W_K, W_V, scale, M);
+O_cp = attn(Pi_prefix * X, W_Q, W_K, W_V, scale, M);
+print("causal: max |row 4 after shuffling rows 1-3 - row 4| =", max(abs(O_c(4, :) - O_cp(4, :))));
+
+# === Attention matrices with and without PE on an alternating token sequence ===
+d_model = 32;
+T_demo = 8;
+PE_all = sinusoidal_pe(T_demo + 1, d_model);
+PE = PE_all(2:(T_demo + 1), :);              # positions 1..8 (the lib table is 0-based)
+seed(42);
+E = randn(6, d_model) * 0.1;
+ids = [1, 2, 1, 2, 1, 2, 1, 2];
+X_tok = E(ids, :) * sqrt(d_model);           # content only, scaled to PE's amplitude
+X_pos = X_tok + PE;                          # content + position
+seed(7);
+W_Qa = randn(d_model, d_model) * 0.1;
+W_Ka = randn(d_model, d_model) * 0.1;
+M8 = causal_mask(T_demo);
+s = 1.0 / sqrt(d_model);
+A_noPE = softmax((X_tok * W_Qa) * (X_tok * W_Ka)' * s + M8);
+A_PE   = softmax((X_pos * W_Qa) * (X_pos * W_Ka)' * s + M8);
+print("row 5 weights on the token-1 positions 1, 3, 5 -- no PE:", A_noPE(5, 1), A_noPE(5, 3), A_noPE(5, 5));
+print("row 5 weights on the token-1 positions 1, 3, 5 -- PE:   ", A_PE(5, 1), A_PE(5, 3), A_PE(5, 5));
+
+pos8 = {"t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8"};
+figure();
+subplot(1, 2, 1)
+heatmap(pos8, pos8, A_noPE, "A without PE (tokens 1,2,1,2,...)", "viridis")
+subplot(1, 2, 2)
+heatmap(pos8, pos8, A_PE, "A with PE added", "viridis")
+savefig("pe_attention_order.svg")
+print("Saved pe_attention_order.svg");

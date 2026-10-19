@@ -1,6 +1,6 @@
 # Script:  char_frequencies.rlab
 # System:  Character-level tokenisation of a text corpus
-# Concept: Vocabulary construction and relative character frequency distribution
+# Concept: Vocabulary construction and relative character frequency distribution (PMF)
 # Equations: f_i = c_i / sum(c), where c_i is the count of character i
 # Units:   Frequencies are dimensionless (probabilities summing to 1)
 
@@ -36,9 +36,10 @@ print("Highest frequency:", max_freq);
 # Expected: space appears 5/18 ≈ 0.2778 times
 
 # === Bar Chart ===
-# x-axis: character index (1=space, 2=b, 3=e, 4=n, 5=o, 6=r, 7=t)
-# y-axis: relative frequency
+# Categorical x-axis; the space character is labelled ␣ so its bar is visible.
+labels = {"␣", "b", "e", "n", "o", "r", "t"};
 figure();
-bar(freqs, "Character Frequencies: 'to be or not to be'")
+bar(labels, freqs, "Character PMF f_i: 'to be or not to be'")
+ylim([0, 0.3])
 savefig("char_frequencies.svg")
 print("Saved char_frequencies.svg")

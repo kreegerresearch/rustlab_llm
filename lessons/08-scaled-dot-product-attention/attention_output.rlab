@@ -2,8 +2,9 @@
 # System:  End-to-end scaled dot-product attention  X → Q, K, V → A → O
 # Concept: Three linear projections turn each input embedding into a query,
 #          key, and value vector.  Attention weights combine the value vectors
-#          into the context-aware output O = A V.  Demonstrates the full
-#          pipeline and counts learnable parameters for one attention block.
+#          into the context-aware output O = A V.  The projections are chosen
+#          so that token 4 (a pronoun) retrieves token 1 (a noun) by content —
+#          the thing uniform prefix averaging cannot do.  Counts parameters.
 # Equations: Q = X W_Q;  K = X W_K;  V = X W_V;
 #            A = softmax_row((Q K^T) / sqrt(d_k) + M);  O = A V
 # Units:     All values are dimensionless reals; A entries in [0,1]
@@ -16,108 +17,84 @@ d_v = 4;        # value dimension
 scale = 1.0 / sqrt(d_k);
 
 # === Input embeddings X (T × d_model) ===
-# Hand-set so token 1 is the "keyword", later tokens mix in various ways.
-X = [ 1.0, 0.0, 0.0, 0.0, 0.0, 0.0;
-      0.0, 1.0, 0.0, 0.0, 0.0, 0.0;
-      0.0, 0.0, 1.0, 0.0, 0.0, 0.0;
-      0.5, 0.5, 0.0, 0.0, 0.0, 0.0;
-      0.0, 0.0, 0.0, 1.0, 1.0, 1.0 ];
-
+# Five tokens, read as "mat was soft, it was ...".  Columns are hand-labelled
+# features [noun, verb, adjective, pronoun, spare, spare], one-hot for clarity.
+tokens = {"t1 mat", "t2 was", "t3 soft", "t4 it", "t5 was"};
+X = [ 1, 0, 0, 0, 0, 0;     # mat   (noun)
+      0, 1, 0, 0, 0, 0;     # was   (verb)
+      0, 0, 1, 0, 0, 0;     # soft  (adjective)
+      0, 0, 0, 1, 0, 0;     # it    (pronoun)
+      0, 1, 0, 0, 0, 0 ];   # was   (verb, again)
 print("X shape (T × d_model):", size(X));
 
 # === Projection matrices (d_model × {d_k, d_k, d_v}) ===
-# Hand-set values keep the arithmetic reproducible.  In a real model these
-# are learned by gradient descent.
-W_Q = [ 1.0, 0.0, 0.0, 0.0;
-        0.0, 1.0, 0.0, 0.0;
-        0.0, 0.0, 1.0, 0.0;
-        0.0, 0.0, 0.0, 1.0;
-        0.0, 0.0, 0.0, 0.0;
-        0.0, 0.0, 0.0, 0.0 ];
-
-W_K = [ 1.0, 0.0, 0.0, 0.0;
-        0.0, 1.0, 0.0, 0.0;
-        0.0, 0.0, 1.0, 0.0;
-        0.0, 0.0, 0.0, 1.0;
-        0.0, 0.0, 0.0, 0.0;
-        0.0, 0.0, 0.0, 0.0 ];
-
-W_V = [ 1.0, 0.0, 0.0, 0.0;
-        0.0, 1.0, 0.0, 0.0;
-        0.0, 0.0, 1.0, 0.0;
-        0.0, 0.0, 0.0, 1.0;
-        1.0, 1.0, 0.0, 0.0;
-        0.0, 0.0, 1.0, 1.0 ];
+# W_Q: what each kind of token LOOKS FOR.  Query dim 1 = "a noun", dim 2 = "a pronoun".
+W_Q = zeros(d_model, d_k);
+W_Q(2, :) = [2, 2, 0, 0];   # a verb looks for its subject: a noun or a pronoun
+W_Q(3, :) = [2, 0, 0, 0];   # an adjective looks for the noun it describes
+W_Q(4, :) = [2, 0, 0, 0];   # a pronoun looks for the noun it stands for
+# W_K: what each kind of token ADVERTISES, on the same dims.
+W_K = zeros(d_model, d_k);
+W_K(1, :) = [3, 0, 0, 0];   # a noun advertises "noun"
+W_K(4, :) = [0, 3, 0, 0];   # a pronoun advertises "pronoun"
+W_K(2, :) = [0, 0, 3, 0];   # verbs and adjectives advertise on dims no query asks for
+W_K(3, :) = [0, 0, 0, 3];
+# W_V: what a token HANDS OVER when selected — its first four features, unchanged.
+W_V = [eye(4); zeros(2, 4)];
 
 # === Linear projections ===
 Q = X * W_Q;    # T × d_k
 K = X * W_K;    # T × d_k
 V = X * W_V;    # T × d_v
-
-print("Q shape:", size(Q));
-print("K shape:", size(K));
-print("V shape:", size(V));
-
-print("V (values to be mixed):");
-print(V);
+print("Q shape:", size(Q), " K shape:", size(K), " V shape:", size(V));
 
 # === Attention weights A ===
 S = Q * K' * scale;
-
 NEG_INF = -1.0e9;
-M = zeros(T, T);
-for i = 1:T
-  for j = (i + 1):T
-    M(i, j) = NEG_INF;
-  end
-end
-S_masked = S + M;
-
-# softmax(M) softmaxes each row of M independently (dim=2 default).
-A = softmax(S_masked);
-
+M = NEG_INF * (1 - cumsum(eye(T), 1));   # 0 on / below the diagonal, -1e9 above
+A = softmax(S + M);                      # row-wise softmax in one call
+print("Scaled scores S:");
+print(S);
 print("Attention weights A:");
 print(A);
 
 # === Output O = A V  (T × d_v) ===
 O = A * V;
-
-print("Output O shape:", size(O));
 print("O (context-aware representations):");
 print(O);
 
+# === Read the matrices back ===
+print("A(4,1) =", A(4, 1), " token 4 (it) retrieves token 1 (mat); uniform would give 0.25");
+print("A(2,1) =", A(2, 1), " the verb finds its subject");
+print("A(5,1), A(5,4) =", A(5, 1), A(5, 4), " the second verb splits between two candidate subjects");
+print("O(4,:) =", O(4, :), " the `it` row now carries the noun's content");
+
 # === Verify: row 1 of O equals row 1 of V ===
-# Token 1 attends only to itself (A(1,1) = 1), so O(1, :) must equal V(1, :).
 diff_row1 = max(abs(O(1, :) - V(1, :)));
 print("max|O(1, :) - V(1, :)| (should be 0 — token 1 attends only to itself):", diff_row1);
 
 # === Parameter count ===
-# One self-attention block: W_Q, W_K, W_V   (no output projection yet — Lesson 09).
 n_params_qkv = 3 * d_model * d_k;
-print("Learnable parameters in W_Q, W_K, W_V:", n_params_qkv);
-print("Formula: 3 * d_model * d_k  =  3 *", d_model, "*", d_k, "=", n_params_qkv);
-print("Note: parameter count is independent of sequence length T.");
+print("Learnable parameters in W_Q, W_K, W_V: 3 *", d_model, "*", d_k, "=", n_params_qkv, " (independent of T)");
 
 # === Plots ===
-# Rows are token positions; columns are projected feature dimensions for
-# Q/K/V/O and key positions for A.  Categorical labels make this explicit.
-positions = {"t1", "t2", "t3", "t4", "t5"};
-qk_dims  = {"d1", "d2", "d3", "d4"};
+qk_dims  = {"q/k 1", "q/k 2", "q/k 3", "q/k 4"};
+out_dims = {"noun", "verb", "adj", "pron"};
 
 figure();
 subplot(1, 3, 1)
-heatmap(qk_dims, positions, Q, "Q = X W_Q (queries)", "viridis")
+heatmap(qk_dims, tokens, Q, "Q = X W_Q (what each token looks for)", "viridis")
 subplot(1, 3, 2)
-heatmap(qk_dims, positions, K, "K = X W_K (keys)", "viridis")
+heatmap(qk_dims, tokens, K, "K = X W_K (what each token advertises)", "viridis")
 subplot(1, 3, 3)
-heatmap(qk_dims, positions, V, "V = X W_V (values)", "viridis")
+heatmap(out_dims, tokens, V, "V = X W_V (what each token hands over)", "viridis")
 savefig("qkv_projections.svg")
 print("Saved qkv_projections.svg");
 
 figure();
 subplot(1, 2, 1)
-heatmap(positions, positions, A, "Attention weights A", "viridis")
+heatmap(tokens, tokens, A, "Attention weights A (rows: query, cols: key)", "viridis")
 subplot(1, 2, 2)
-heatmap(qk_dims, positions, O, "Output O = A V  (rows: positions, cols: value dims)", "viridis")
+heatmap(out_dims, tokens, O, "Output O = A V  (rows: tokens, cols: value features)", "viridis")
 savefig("attention_output.svg")
 print("Saved attention_output.svg");

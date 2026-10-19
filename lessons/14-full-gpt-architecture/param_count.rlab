@@ -65,11 +65,18 @@ print("Weight-tied total       :", n_gpt2_med_tied);
 print("Reference (paper)       : 354,823,168");
 print("Discrepancy             :", 354823168 - n_gpt2_med_tied);
 
-# === Bar chart of toy-config breakdown ===
-labels = {"embed", "blocks", "LN_f", "LM head"};
-counts = [n_embed_toy, n_blocks_toy, n_ln_f_toy, n_lm_toy];
+# === Bar charts: toy-config breakdown beside GPT-2 small (weight-tied) ===
+n_embed_gpt2 = 50257 * 768;
+n_blocks_gpt2 = 12 * block_params(768, 4 * 768);
+print("");
+print("GPT-2 small embedding share:", n_embed_gpt2 / n_gpt2_small_tied, "  blocks share:", n_blocks_gpt2 / n_gpt2_small_tied);
 figure();
-bar(labels, counts)
-title("Toy GPT parameter count by component")
+subplot(1, 2, 1)
+bar({"embed", "blocks", "LN_f", "LM head"}, [n_embed_toy, n_blocks_toy, n_ln_f_toy, n_lm_toy])
+title("toy GPT (V=50, d=64, N=4)")
+ylabel("parameters")
+subplot(1, 2, 2)
+bar({"embed", "PE", "blocks", "LN_f", "LM head"}, [n_embed_gpt2, 1024 * 768, n_blocks_gpt2, 2 * 768, 0])
+title("GPT-2 small (V=50257, d=768, N=12, tied)")
 ylabel("parameters")
 savefig("param_count.svg")

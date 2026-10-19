@@ -1,10 +1,15 @@
 # Script:  head_concatenation.rlab
 # System:  Multi-head attention — concatenation and output projection
-# Concept: Each of H heads produces an independent output O_h ∈ R^(T × d_v).
-#          Concatenate along the feature dimension to get T × (H * d_v), then
-#          project with W_O ∈ R^(H*d_v × d_model) to produce the final output.
-# Equations: O_h = A_h V_h;   Concat = [O_1, O_2, ..., O_H];   O = Concat * W_O
-# Units:     Real-valued reals
+# Concept: Each of H heads produces an independent output O_h in R^(T x d_v).
+#          Concatenate along the feature axis to get T x (H*d_v), then project
+#          with W_O in R^(H*d_v x d_model).  A MIXING W_O is what lets one
+#          output channel combine two heads; the packed W_Q shows why the
+#          parameter count is 4 d_model^2 whatever H is.
+# Equations: O_h = A_h V_h;  Concat = [O_1, ..., O_H];  O = Concat * W_O
+#            params = 3 d_model^2 (Q, K, V) + d_model^2 (W_O)
+# Units:     dimensionless reals
+
+run "../../lib/transformer.rlab"
 
 # === Dimensions ===
 T = 4;           # sequence length
@@ -13,129 +18,71 @@ H = 2;           # number of heads
 d_k = 2;         # per-head key/query dim   (= d_model / H)
 d_v = 2;         # per-head value dim       (= d_model / H)
 scale = 1.0 / sqrt(d_k);
+X = eye(T);      # one-hot tokens (T x d_model)
+M = causal_mask(T);
 
-# === Input X  (T × d_model) ===
-X = [ 1.0, 0.0, 0.0, 0.0;
-      0.0, 1.0, 0.0, 0.0;
-      0.0, 0.0, 1.0, 0.0;
-      0.0, 0.0, 0.0, 1.0 ];
-
-# === Head 1 — "self" pattern ==========================================
-# K_1[i] and Q_1[t] encode position on the unit circle, so dot product
-# peaks at i = t.  V_1 is taken as the first d_v columns of X.
-K1 = zeros(T, d_k);
-Q1 = zeros(T, d_k);
-for t = 1:T
-  K1(t, 1) = 3.0 * cos(2.0 * pi * t / T);
-  K1(t, 2) = 3.0 * sin(2.0 * pi * t / T);
-  Q1(t, 1) = K1(t, 1);
-  Q1(t, 2) = K1(t, 2);
-end
-
-V1 = zeros(T, d_v);
-for t = 1:T
-  V1(t, 1) = X(t, 1);
-  V1(t, 2) = X(t, 2);
-end
-
-# === Head 2 — "uniform over past" =====================================
-# All-zero Q, K means every score is 0 → softmax gives uniform weights.
-# V_2 is the last d_v columns of X.
-Q2 = zeros(T, d_k);
-K2 = zeros(T, d_k);
-
-V2 = zeros(T, d_v);
-for t = 1:T
-  V2(t, 1) = X(t, 3);
-  V2(t, 2) = X(t, 4);
-end
-
-# === Shared causal mask ===
-NEG_INF = -1.0e9;
-M = zeros(T, T);
-for i = 1:T
-  for j = (i + 1):T
-    M(i, j) = NEG_INF;
-  end
-end
-
-# === Per-head attention weights ===
-function A = attn_weights(Q, K, scale, M, T)
+function A = attn_weights(Q, K, scale, M)
   S = Q * K' * scale;
-  % softmax(M) does per-row softmax of the whole T×T block (dim=2 default).
   A = softmax(S + M);
 end
 
-A1 = attn_weights(Q1, K1, scale, M, T);
-A2 = attn_weights(Q2, K2, scale, M, T);
+# === Head 1 — "self" on a cyclic position code; V_1 = features x3, x4 ===
+K1 = zeros(T, d_k);
+for t = 1:T
+  K1(t, 1) = 3.0 * cos(2.0 * pi * t / T);
+  K1(t, 2) = 3.0 * sin(2.0 * pi * t / T);
+end
+V1 = X(:, 3:4);
 
-print("Head 1 attention weights:");
-print(A1);
-print("Head 2 attention weights (uniform over past):");
-print(A2);
+# === Head 2 — "uniform over past"; V_2 = features x1, x2 (so both heads are non-zero in the same rows) ===
+Q2 = zeros(T, d_k);
+K2 = zeros(T, d_k);
+V2 = X(:, 1:2);
 
-# === Per-head outputs O_h = A_h V_h  (T × d_v) ===
+A1 = attn_weights(K1, K1, scale, M);
+A2 = attn_weights(Q2, K2, scale, M);
 O1 = A1 * V1;
 O2 = A2 * V2;
-
-print("O_1 = A_1 V_1  (T × d_v):");
-print(O1);
-print("O_2 = A_2 V_2  (T × d_v):");
-print(O2);
-print("Shape of O_1:", size(O1));
-print("Shape of O_2:", size(O2));
-
-# === Concatenate along the feature dimension ===
-# [O_1, O_2]  →  T × (H * d_v)  =  T × d_model
 O_concat = [O1, O2];
-print("Shape of concat:", size(O_concat));
-print("Concat:");
+print("Concat = [O_1, O_2]  (T x H*d_v):");
 print(O_concat);
 
-# === Output projection W_O  (H*d_v × d_model) ===
-# Normally learned by gradient descent.  We hand-set a permutation that
-# swaps the first two columns with the last two so the projection has a
-# visible effect.
-W_O = [ 0.0, 0.0, 1.0, 0.0;
-        0.0, 0.0, 0.0, 1.0;
-        1.0, 0.0, 0.0, 0.0;
-        0.0, 1.0, 0.0, 0.0 ];
-
+# === Output projection: a MIXING W_O ===
+# rows = concat columns (h1.1, h1.2, h2.1, h2.2), cols = output channels d1..d4
+# d1 = h1.1 + h2.1 (sum across heads), d2 = h1.2, d3 = -h2.1, d4 = h2.2.
+W_O = [ 1.0, 0.0,  0.0, 0.0;
+        0.0, 1.0,  0.0, 0.0;
+        1.0, 0.0, -1.0, 0.0;
+        0.0, 0.0,  0.0, 1.0 ];
 O = O_concat * W_O;
-print("Final MHA output  O = Concat * W_O  (T × d_model):");
+print("O = Concat * W_O  (T x d_model):");
 print(O);
-print("Shape of O:", size(O));
+print("row 3: d1 = h1.1 + h2.1 =", O_concat(3, 1), "+", O_concat(3, 3), "=", O(3, 1), ";  d3 = -h2.1 =", O(3, 3));
 
-# === Parameter count for the full block ===
-# Packing per-head projections into a single d_model × d_model matrix
-# (each head is a slice of size d_model × d_k), the total parameters are:
-#   Q, K, V projections : 3 * d_model^2
-#   Output projection   : d_model^2
-#   Full MHA block      : 4 * d_model^2
+# === Packed W_Q: with X = I the per-head Q_h ARE the projection slices ===
+W_Q_packed = [K1, Q2];                 # columns 1-2 = head 1, 3-4 = head 2
+Q_all = X * W_Q_packed;                # one matmul computes every head's Q
+print("max |Q_all(:, 1:2) - Q_1| =", max(max(abs(Q_all(:, 1:2) - K1))));
+
+# === Parameter count ===
 n_qkv = 3 * d_model * d_model;
 n_wo  = d_model * d_model;
-n_tot = n_qkv + n_wo;
+print("params at d_model =", d_model, ": Q+K+V =", n_qkv, "  W_O =", n_wo, "  total 4 d_model^2 =", n_qkv + n_wo, " (independent of H)");
 
-print("--- Parameter counts at d_model =", d_model, ", H =", H, ", d_k =", d_k, "---");
-print("  Q + K + V projections (3 * d_model^2):", n_qkv);
-print("  Output projection W_O (d_model^2)   :", n_wo);
-print("  Full MHA block (4 * d_model^2)      :", n_tot);
-print("");
-print("The count is independent of H when d_k = d_model / H.  Heads get narrower");
-print("as H grows, but the total width (H * d_k) and parameter count are unchanged.");
-
-# === Plots ===
-# Rows are token positions; columns are feature dimensions.  Naming the
-# concat columns by which head they come from (h1.* vs h2.*) makes the
-# block-stacked structure of multi-head attention visible at a glance.
+# === Figures ===
 positions   = {"t1", "t2", "t3", "t4"};
 concat_cols = {"h1.1", "h1.2", "h2.1", "h2.2"};
 out_cols    = {"d1", "d2", "d3", "d4"};
+figure();
+subplot(1, 3, 1)
+heatmap(out_cols, concat_cols, W_O, "W_O (H*d_v x d_model)", "viridis")
+subplot(1, 3, 2)
+heatmap(concat_cols, positions, O_concat, "Concat = [O_1, O_2]", "viridis")
+subplot(1, 3, 3)
+heatmap(out_cols, positions, O, "O = Concat * W_O", "viridis")
+savefig("head_concatenation.svg")
 
 figure();
-subplot(1, 2, 1)
-heatmap(concat_cols, positions, O_concat, "Concatenated head outputs (T × H*d_v)", "viridis")
-subplot(1, 2, 2)
-heatmap(out_cols, positions, O, "Final output O = Concat * W_O", "viridis")
-savefig("head_concatenation.svg")
-print("Saved head_concatenation.svg");
+heatmap({"h1.q1", "h1.q2", "h2.q1", "h2.q2"}, {"x1", "x2", "x3", "x4"}, W_Q_packed, "Packed W_Q: columns 1-2 = head 1, 3-4 = head 2", "viridis")
+savefig("packed_wq.svg")
+print("Saved head_concatenation.svg, packed_wq.svg");

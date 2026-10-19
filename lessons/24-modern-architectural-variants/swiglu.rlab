@@ -9,9 +9,11 @@
 #          where Swish(z) = z * sigmoid(z).  Three projection matrices
 #          instead of two — but to keep the parameter budget similar,
 #          LLaMA picks d_ff = (8/3) * d_model rather than the standard
-#          4 * d_model.  The gating multiplies an activated path by a
-#          linear gate, which empirically improves perplexity at the same
-#          parameter count by ~1-2%.
+#          4 * d_model.  The element-wise product is a MULTIPLIER between
+#          two projections of the same input: for small signals
+#          silu(u) ~ u/2, so each hidden unit is (x w1)(x w2)/2, an explicit
+#          second-order term.  Empirically worth ~1-2 % perplexity at the
+#          same parameter count (Shazeer 2020 offers no explanation).
 # Equations:
 #   GELU FFN:   y = W2 * GELU(W1 x + b1) + b2
 #   SwiGLU FFN: u = W1 x                 (1 x d_ff_swig — gate / activated path, SiLU here)
@@ -83,43 +85,47 @@ print("Standard FFN output shape:", size(H_std));
 print("SwiGLU   FFN output shape:", size(H_swig));
 print("Both = (T, d_model) — interchangeable as a transformer sublayer.");
 
-# === 6. Why the gate helps: a small toy where linear-only and SwiGLU
-# === differ.  Take a one-token input that has a single discriminative
-# === dimension, and check that SwiGLU can produce a strongly-nonlinear
-# === response (the silu(u) gate amplifies one path while suppressing
-# === another) that a single-matmul GELU cannot. ===
+# === 6. Why the gate helps: the hidden unit is a multiplier ===
+# One hidden unit, one input direction.  Route dimension 1 through both
+# paths with gains 5 (gate) and 1 (linear): the unit computes
+# silu(5 a) * a = 5 a^2 sigma(5 a) -- quadratic in the input amplitude a,
+# ~2.5 a^2 for small a, ~5 a^2 for a > 0.5, switched off for a < 0.
 print("");
-print("Toy gate demo:");
-print("  Two inputs to compare: x_a, x_b — same direction, different magnitude.");
-x_a = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];        % strong signal
-x_b = [0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];        % weak signal
+print("Multiplier demo: one hidden unit, input amplitude a along dimension 1.");
+W1_g = zeros(d_model, 1); W1_g(1, 1) = 5.0;             # gate path sees 5 a
+W2_g = zeros(d_model, 1); W2_g(1, 1) = 1.0;             # linear path sees a
+W3_g = zeros(1, d_model); W3_g(1, 1) = 1.0;             # back to dimension 1
+for a = [0.1, 0.5, 1.0, -1.0]
+  x_in = zeros(1, d_model); x_in(1, 1) = a;
+  y = ffn_swiglu(x_in, W1_g, W2_g, W3_g);
+  print("  a =", a, "  unit output =", y(1, 1), "  2.5 a^2 =", 2.5 * a ^ 2, "  5 a^2 =", 5 * a ^ 2);
+end
+print("  A linear-then-GELU path has no such product of two projections;");
+print("  its second-order terms come only from the activation's curvature.");
 
-% Hand-pick weights that route x_a through the open gate, x_b through closed.
-W1_g = zeros(d_model, 1); W1_g(1, 1) = 5.0;             % gate dim 1 -> sees x*5
-W2_g = zeros(d_model, 1); W2_g(1, 1) = 1.0;             % linear path also dim 1
-W3_g = zeros(1, d_model); W3_g(1, 1) = 1.0;             % output back to dim 1
-
-H_a = ffn_swiglu(reshape(x_a, 1, d_model), W1_g, W2_g, W3_g);
-H_b = ffn_swiglu(reshape(x_b, 1, d_model), W1_g, W2_g, W3_g);
-print("  SwiGLU(x_a)[1] =", H_a(1, 1), "  (gate open:  silu(5*x)*x ~ 5*x_a(1)^2)");
-print("  SwiGLU(x_b)[1] =", H_b(1, 1), "  (gate mostly closed -> small)");
-print("  A pure-matmul layer (no nonlinearity) gives x_a(1) and x_b(1) directly,");
-print("  losing the gate's data-dependent on/off behaviour.");
-
-# === 7. Plot: silu vs gelu vs relu over a range ===
+# === 7. Figure: activations, and one unit as a product of two projections ===
 z = linspace(-5, 5, 200);
-silu_v = z ./ (1.0 + exp(-z));
-gelu_v = gelu(z);
-relu_v = relu(z);
+a_sw = linspace(-1.5, 1.5, 301);
+y_unit = silu(5 * a_sw) .* a_sw;
 
 figure();
-plot(z, silu_v, "color", "blue",  "label", "silu (z*sigmoid(z), LLaMA/Mistral)")
+subplot(1, 2, 1)
+plot(z, silu(z), "color", "blue",  "label", "silu (z*sigmoid(z), LLaMA/Mistral)")
 hold("on")
-plot(z, gelu_v, "color", "red",   "label", "gelu (Lesson 11, GPT-2)")
-plot(z, relu_v, "color", "green", "label", "relu (early Transformer)")
+plot(z, gelu(z), "color", "red",   "label", "gelu (Lesson 11, GPT-2)")
+plot(z, relu(z), "color", "green", "label", "relu (early Transformer)")
 hold("off")
 title("Activation functions: silu vs gelu vs relu")
 xlabel("z"); ylabel("activation")
 legend("silu", "gelu", "relu")
+subplot(1, 2, 2)
+plot(a_sw, y_unit, "color", "blue", "label", "silu(5a) * a")
+hold("on")
+plot(a_sw, 2.5 * a_sw .^ 2, "color", "gray", "label", "2.5 a^2", "style", "dashed")
+plot(a_sw, 5 * a_sw .^ 2, "color", "red", "label", "5 a^2", "style", "dashed")
+hold("off")
+title("One SwiGLU unit: a product of two projections")
+xlabel("input amplitude a"); ylabel("unit output")
+legend("silu(5a) * a", "2.5 a^2 (small-signal)", "5 a^2")
 savefig("swiglu.svg")
 print("Saved swiglu.svg");

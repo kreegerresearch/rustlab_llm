@@ -136,8 +136,10 @@ end
 
 figure();
 plot(n_kv_sweep, cache_sweep, "color", "blue", "label", "KV cache (GB)")
+hold("on")
+hline(cache_sweep(4), "red", "GQA at n_kv=8 (LLaMA-2 70B's actual value)")
+hold("off")
 title("LLaMA-2-70B-shaped KV cache vs n_kv_heads (T = 8192, fp16)")
 xlabel("n_kv_heads"); ylabel("KV cache size (GB)")
-hline(cache_sweep(4), "red", "GQA at n_kv=8 (LLaMA-2 70B's actual value)")
 savefig("gqa.svg")
 print("Saved gqa.svg");

@@ -1,0 +1,109 @@
+# Script:  gd_stability.rlab
+# System:  Gradient descent on a quadratic as the LTI error system e_{k+1} = (I - eta H) e_k
+# Concept: The poles are 1 - eta lambda_i; the loop is stable iff eta < 2 / lambda_max.
+#          Three regimes (monotone / oscillating / diverging) and the -grad L flow field.
+# Equations: e_{k+1} = (I - eta H) e_k;  z_i = 1 - eta lambda_i;  |z_i| < 1  <=>  eta < 2/lambda_i
+# Units:     eta dimensionless; poles dimensionless; loss in squared y-units
+
+# === Dataset and Hessian ===
+x = [1.0, 2.0, 3.0, 4.0];
+y = [2.0, 4.0, 6.0, 8.0];
+npts = 4.0;
+H = (2.0 / npts) * [sum(x .* x), sum(x); sum(x), npts];
+[V, D] = eig(H);  V = real(V);  lam = real(diag(D));
+i_fast = argmax(lam);  i_slow = argmin(lam);
+lam_fast = lam(i_fast);  lam_slow = lam(i_slow);
+v_fast = V(:, i_fast);
+kappa = lam_fast / lam_slow;
+
+# === Poles for four learning rates ===
+eta_crit = 2.0 / lam_fast;
+eta_star = 2.0 / (lam_fast + lam_slow);
+print("stability limit 2/lambda_max =", eta_crit, "   best fixed step =", eta_star, "  (pole magnitude", (kappa - 1) / (kappa + 1), ")");
+etas = [0.05, 0.10, 0.12, 0.20];
+for i = 1:length(etas)
+  poles = 1.0 - etas(i) * [lam_fast, lam_slow];
+  print("eta =", etas(i), "   poles =", poles, "   tau_slow =", -1.0 / log(abs(poles(2))), "steps");
+end
+
+# === (I - eta H)^200 by repeated multiplication (A^k is element-wise in rustlab) ===
+A_gd = eye(2) - 0.05 * H;
+e_k = [-2.0; 0.0];
+for k = 1:200
+  e_k = A_gd * e_k;
+end
+print("(I - 0.05 H)^200 e0 =", e_k');
+
+# === Poles on the unit circle ===
+theta = linspace(0, 2 * pi, 200);
+pole_cols = {"blue", "green", "orange", "red"};
+figure();
+hold("on")
+plot(cos(theta), sin(theta), "color", "gray", "label", "unit circle")
+for i = 1:length(etas)
+  poles = 1.0 - etas(i) * [lam_fast, lam_slow];
+  scatter(poles, [0.0, 0.0], "color", pole_cols(i), "label", sprintf("eta = %.2f", etas(i)))
+end
+axis("equal")
+xlim([-2.5, 1.5])
+ylim([-1.2, 1.2])
+title("Poles 1 - eta lambda_i of the GD error system")
+xlabel("Re z")
+ylabel("Im z")
+legend()
+hold("off")
+savefig("gd_poles.svg")
+print("Saved gd_poles.svg");
+
+# === Three regimes: loss and the signed fast-mode coordinate ===
+function [loss_hist, c_fast] = gd_run(x, y, eta, n_steps, v_fast)
+  w = 0.0; b = 0.0; npts = length(x);
+  loss_hist = zeros(n_steps + 1); c_fast = zeros(n_steps + 1);
+  loss_hist(1) = mean((w * x + b - y) .^ 2);
+  c_fast(1) = v_fast(1) * (w - 2.0) + v_fast(2) * b;
+  for k = 1:n_steps
+    r  = w * x + b - y;
+    w -= eta * (2.0 / npts) * sum(r .* x);
+    b -= eta * (2.0 / npts) * sum(r);
+    loss_hist(k + 1) = mean((w * x + b - y) .^ 2);
+    c_fast(k + 1) = v_fast(1) * (w - 2.0) + v_fast(2) * b;
+  end
+end
+
+etas3 = [0.05, 0.10, 0.20];
+cols3 = {"blue", "green", "red"};
+k25 = 0:25;
+figure();
+for j = 1:3
+  [L_run, c_run] = gd_run(x, y, etas3(j), 25, v_fast);
+  print("eta =", etas3(j), "  loss after 25 steps =", L_run(26), "  fast-mode error, steps 0-3 =", c_run(1:4));
+  subplot(2, 3, j)
+  semilogy(k25, L_run, "color", cols3(j), "label", "loss")
+  title(sprintf("eta = %.2f: loss", etas3(j)))
+  subplot(2, 3, 3 + j)
+  hold("on")
+  plot(k25, c_run, "color", cols3(j), "label", "fast-mode error c_fast")
+  hline(0.0, "gray", "0")
+  xlabel("step")
+  hold("off")
+end
+savefig("gd_regimes.svg")
+print("Saved gd_regimes.svg");
+
+# === The -grad L flow field over the loss contours ===
+n_grid = 50;
+[W_mesh, B_mesh] = meshgrid(linspace(-0.5, 3.5, n_grid), linspace(-3.0, 3.0, n_grid));
+L_matrix = 7.5 * W_mesh .^ 2 + B_mesh .^ 2 + 5.0 * W_mesh .* B_mesh - 30.0 * W_mesh - 10.0 * B_mesh + 30.0;
+[W_q, B_q] = meshgrid(linspace(-0.5, 3.5, 9), linspace(-3.0, 3.0, 13));
+U_q = -(H(1, 1) * (W_q - 2.0) + H(1, 2) * B_q);
+V_q = -(H(2, 1) * (W_q - 2.0) + H(2, 2) * B_q);
+figure();
+hold("on")
+contour(W_mesh, B_mesh, L_matrix, [0.03, 0.3, 3.0, 30.0])
+quiver(W_q, B_q, U_q, V_q)
+title("-grad L = -H (theta - theta*): the flow gradient descent follows")
+xlabel("w")
+ylabel("b")
+hold("off")
+savefig("gd_flow_field.svg")
+print("Saved gd_flow_field.svg");

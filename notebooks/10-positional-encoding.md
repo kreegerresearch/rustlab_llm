@@ -1,36 +1,44 @@
 # Lesson 10: Positional Encoding
 
-Attention as built so far ([Lessons 07–09](07-context-and-naive-averaging.md)) is **permutation-equivariant**: shuffle the input tokens and the output positions shuffle the same way — no information about *order* enters the computation. That is fatal for language: "dog bites man" and "man bites dog" use the same multiset of tokens with completely different meanings. Positional encoding is the fix — a deterministic vector added to each token's embedding that tags it with its position.
+Attention as built so far ([[07-context-and-naive-averaging]] to [[09-multi-head-attention]]) is **permutation-equivariant**: shuffle the input tokens and the output rows shuffle the same way — no information about *order* enters the computation. That is fatal for language: "dog bites man" and "man bites dog" use the same multiset of tokens with completely different meanings. Positional encoding is the fix — a deterministic vector added to each token's embedding that tags it with its position. The sinusoidal version is a **bank of phasors**: sixteen clocks ticking at geometrically spaced rates, so that "how far apart" is a phase difference the model can read linearly.
 
 ## Learning Objectives
 
-- Show that scaled dot-product attention is permutation-equivariant and explain why this rules out language modelling without a positional signal.
-- Write the **sinusoidal positional encoding** formula and identify the role of each variable.
-- Compute the full $T \times d_{\text{model}}$ PE matrix and read its banded heatmap structure.
-- Verify that the dot product $\mathrm{PE}_t \cdot \mathrm{PE}_{t+k}$ depends only on the offset $k$, not on the absolute position $t$ — the property that lets attention reason about relative position.
+- Show that scaled dot-product attention is permutation-equivariant, state precisely what the causal mask changes, and explain why this rules out language modelling without a positional signal.
+- Write the **sinusoidal positional encoding** formula, identify the role of each variable, and read each $(\sin, \cos)$ pair as a phasor $e^{j\omega_k t}$.
+- Compute the full $T \times d_{\text{model}}$ PE matrix, read its banded heatmap, and verify the closed form $\mathrm{PE}_t \cdot \mathrm{PE}_{t+k} = \sum_j \cos(\omega_j k)$.
+- Explain, with the aliasing / unambiguous-range argument, why the frequencies form a geometric ladder and why its base is $10^4$.
 - Explain the trade-off between **fixed sinusoidal** PE and **learned** PE.
 
 ## Background
 
-Scaled dot-product attention from [Lesson 08](08-scaled-dot-product-attention.md). Embeddings as dense rows from [Lesson 04](04-embeddings-and-similarity.md). Sine and cosine over arbitrary arguments. Mutual information from the [Lesson 07](07-context-and-naive-averaging.md) and [Lesson 08](08-scaled-dot-product-attention.md) info-theory framings.
+Scaled dot-product attention from [[08-scaled-dot-product-attention]] and the causal-mask helper in `lib/transformer.rlab`. Embeddings as dense rows from [[04-embeddings-and-similarity]]. Sine and cosine over arbitrary arguments, complex exponentials $e^{j\theta} = \cos\theta + j\sin\theta$, the discrete Fourier transform, and the notion of aliasing.
+
+<!-- hide -->
+```rustlab
+run "../lib/info.rlab"
+run "../lib/transformer.rlab"
+```
 
 ## Why Attention is Order-Blind
 
 ### Theory
 
-Let $\mathbf{P}$ be a $T \times T$ permutation matrix. If we permute the input rows, $\mathbf{X}' = \mathbf{P}\mathbf{X}$, then the projections become
+Let $\boldsymbol{\Pi}$ be a $T \times T$ permutation matrix. If we permute the input rows, $\mathbf{X}' = \boldsymbol{\Pi}\mathbf{X}$, then the projections become
 
-$$\mathbf{Q}' = \mathbf{P}\mathbf{Q}, \qquad \mathbf{K}' = \mathbf{P}\mathbf{K}, \qquad \mathbf{V}' = \mathbf{P}\mathbf{V}.$$
+$$\mathbf{Q}' = \boldsymbol{\Pi}\mathbf{Q}, \qquad \mathbf{K}' = \boldsymbol{\Pi}\mathbf{K}, \qquad \mathbf{V}' = \boldsymbol{\Pi}\mathbf{V}.$$
 
-The score matrix transforms as $\mathbf{S}' = \mathbf{Q}'\mathbf{K}'^\top = \mathbf{P}\mathbf{S}\mathbf{P}^\top$ — the same scores, just relabelled. After softmax and multiplying by $\mathbf{V}'$ the output is $\mathbf{O}' = \mathbf{P}\mathbf{O}$: the output rows are simply the permuted original rows. **No information about the original order survived.** This is what "permutation-equivariant" means and why a vanilla self-attention layer cannot learn that adjacent tokens are different from far-apart tokens.
+The score matrix transforms as $\mathbf{S}' = \mathbf{Q}'\mathbf{K}'^\top = \boldsymbol{\Pi}\mathbf{S}\boldsymbol{\Pi}^\top$ — the same scores, just relabelled. After softmax and multiplying by $\mathbf{V}'$ the output is $\mathbf{O}' = \boldsymbol{\Pi}\mathbf{O}$: the output rows are simply the permuted original rows. **No information about the original order survived.** This is what "permutation-equivariant" means and why a vanilla self-attention layer cannot learn that adjacent tokens are different from far-apart tokens.
 
-The causal mask from [Lesson 08](08-scaled-dot-product-attention.md) breaks *full* permutation invariance — token $t$ only sees tokens $1..t$ — but it leaves the relative order *within* the prefix untouched. The model still has no way to distinguish "the cat sat" from "sat the cat" within the visible window. We need to inject position into the *features* themselves.
+The causal mask from [[08-scaled-dot-product-attention]] does not restore order. With the mask, output row $t$ is $\mathbf{o}_t = \sum_{i \le t} A_{ti}\mathbf{v}_i$ where $A_{ti}$ depends on $\mathbf{q}_t$ and $\mathbf{k}_i$ only, so
 
-(One caveat worth flagging: the hard permutation argument here applies to the *single* attention layer we build in this lesson. Multi-layer causal decoders trained with *no* explicit positional encoding can still recover positional information indirectly through the causal mask — each layer can count how many tokens precede it — as shown by Haviv et al., 2022. The sinusoidal scheme below is the direct, single-layer way to supply that signal.)
+$$\mathbf{o}_t = f\big(\mathbf{x}_t,\ \{\!\{\mathbf{x}_1, \dots, \mathbf{x}_{t-1}\}\!\}\big):$$
 
-### Example — Permutation equivariance at unit scale
+a function of the current token and the **unordered multiset** of its predecessors. Shuffle the prefix and the prediction made at $t$ does not change — the model's next-token distribution after *the cat sat* equals its distribution after *cat the sat*. We need to inject position into the *features* themselves. (One caveat: this applies to the *single* attention layer built here. Multi-layer causal decoders trained with *no* explicit positional encoding can still recover position indirectly through the mask — each layer can count how many tokens precede it, Haviv et al., 2022. The sinusoidal scheme below is the direct, single-layer way to supply the signal.)
 
-Build a tiny attention block, run it on $\mathbf{X}$ and on a row-shuffled $\mathbf{X}'$, and check that the outputs differ only by the same permutation:
+### Example — Permutation equivariance, with and without the mask
+
+Build a tiny attention block, run it on $\mathbf{X}$ and on a row-shuffled $\boldsymbol{\Pi}\mathbf{X}$, and check that the unmasked outputs differ only by the same permutation; then add the causal mask, shuffle only the prefix $\mathbf{x}_1..\mathbf{x}_3$, and check that row 4 does not move at all:
 
 ```rustlab
 seed(10);
@@ -42,26 +50,28 @@ W_K = randn(d_model, d_model) * 0.5;
 W_V = randn(d_model, d_model) * 0.5;
 scale = 1.0 / sqrt(d_model);
 
-function O = attn(X, W_Q, W_K, W_V, scale)
-  Q = X * W_Q;
-  K = X * W_K;
-  V = X * W_V;
-  S = Q * K' * scale;
-  % softmax(M) does per-row softmax (dim=2 default, ML convention).
-  A = softmax(S);
-  O = A * V;
+function O = attn(X, W_Q, W_K, W_V, scale, M)
+  S = (X * W_Q) * (X * W_K)' * scale;
+  A = softmax(S + M);          % M = 0: unmasked; M = causal_mask(T): causal
+  O = A * (X * W_V);
 end
 
-P = [0, 1, 0, 0; 0, 0, 0, 1; 1, 0, 0, 0; 0, 0, 1, 0];   % row permutation
+Pi = [0, 1, 0, 0; 0, 0, 0, 1; 1, 0, 0, 0; 0, 0, 1, 0];          % full row permutation
+no_mask = zeros(T, T);
+O      = attn(X, W_Q, W_K, W_V, scale, no_mask);
+O_perm = attn(Pi * X, W_Q, W_K, W_V, scale, no_mask);
+perm_err = max(max(abs(O_perm - Pi * O)));
+print("unmasked: max |attn(Pi X) - Pi attn(X)| =", perm_err);
 
-O      = attn(X, W_Q, W_K, W_V, scale);
-O_perm = attn(P * X, W_Q, W_K, W_V, scale);
-
-perm_err = max(reshape(abs(O_perm - P * O), 1, T * d_model));
-print("max |attn(P*X) - P*attn(X)| =", perm_err);
+M = causal_mask(T);
+Pi_prefix = [0, 0, 1, 0; 1, 0, 0, 0; 0, 1, 0, 0; 0, 0, 0, 1];   % shuffles rows 1-3, fixes row 4
+O_c        = attn(X, W_Q, W_K, W_V, scale, M);
+O_c_prefix = attn(Pi_prefix * X, W_Q, W_K, W_V, scale, M);
+prefix_err = max(abs(O_c(4, :) - O_c_prefix(4, :)));
+print("causal:   max |row 4 after shuffling the prefix - row 4| =", prefix_err);
 ```
 
-The discrepancy ${perm_err:%.2e}$ is at machine precision — attention is *exactly* equivariant under row permutation. Without a positional signal, "the cat sat" and any permutation of those three tokens produce indistinguishable hidden states.
+Both discrepancies are at machine precision — ${perm_err:%.2e}$ (unmasked: equivariance) and ${prefix_err:%.2e}$ (masked: the last row is invariant to the order of its prefix). Without a positional signal, the prediction made at position 4 cannot depend on the order of positions 1–3.
 
 ## The Sinusoidal Positional Encoding
 
@@ -72,15 +82,17 @@ The original transformer paper uses a fixed (non-learned) encoding built from si
 $$\mathrm{PE}_{t, 2k}   = \sin\!\left(\frac{t}{10000^{\,2k/d_{\text{model}}}}\right), \qquad
   \mathrm{PE}_{t, 2k+1} = \cos\!\left(\frac{t}{10000^{\,2k/d_{\text{model}}}}\right),$$
 
-with $k = 0, 1, \dots, d_{\text{model}}/2 - 1$. The $k = 0$ pair has wavelength $2\pi$ (one full cycle every $\sim 6$ tokens); for $d_{\text{model}} = 32$ the slowest pair ($k = 15$) has wavelength $2\pi \cdot 10000^{30/32} \approx 2\pi \cdot 5623$ (essentially constant over any practical sequence). The $2\pi \cdot 10000$ figure is the asymptotic design bound, reached only as the pair exponent $2k/d_{\text{model}} \to 1$. The model gets fast and slow position clocks at every dimension pair, so it can read both fine-grained ("which token am I?") and coarse ("which half of the sequence am I in?") position from the same vector.
+with $k = 0, 1, \dots, d_{\text{model}}/2 - 1$. Write $\omega_k = 10000^{-2k/d_{\text{model}}}$ for the angular rate of pair $k$ in radians per token. The $k = 0$ pair has wavelength $2\pi$ (one full cycle every $\sim 6$ tokens); for $d_{\text{model}} = 32$ the slowest pair ($k = 15$) has wavelength $2\pi \cdot 10000^{30/32} \approx 35\,300$ tokens (essentially constant over any practical sequence). The $2\pi \cdot 10000$ figure is the asymptotic design bound, reached only as the pair exponent $2k/d_{\text{model}} \to 1$. The model gets fast and slow position clocks at every dimension pair, so it can read both fine-grained ("which token am I?") and coarse ("which half of the sequence am I in?") position from the same vector.
 
 The encoding is *added* to the token embedding, not concatenated:
 
 $$\mathbf{X}'_t \;=\; \mathbf{E}_{x_t} + \mathrm{PE}_t.$$
 
-This works because the token embedding starts small ($\sim 0.1$ from initialisation) compared to the unit-amplitude PE — so early in training *position* dominates the representation, and token identity reasserts itself only once the embedding is trained up.
+Why addition is enough is taken up below, once the attention scores are in view.
 
 ### Example — Build the PE matrix for T=64, d=32
+
+The loop mirrors the textbook formula one cell at a time (Exercise 1 vectorises it with `meshgrid`; `lib/transformer.rlab` ships the same table as `sinusoidal_pe(T, d)` with 0-based positions for the later lessons).
 
 ```rustlab
 T_seq = 64;
@@ -91,11 +103,11 @@ for t = 1:T_seq
   for i = 1:d_model_pe
     pair_idx = floor((i - 1) / 2);                            % k = 0,0,1,1,2,2,...
     div = 10000.0 ^ (2.0 * pair_idx / d_model_pe);
-    angle = t / div;
+    theta = t / div;
     if mod(i - 1, 2) == 0
-      PE(t, i) = sin(angle);
+      PE(t, i) = sin(theta);
     else
-      PE(t, i) = cos(angle);
+      PE(t, i) = cos(theta);
     end
   end
 end
@@ -107,25 +119,6 @@ print("PE(64, 1:6):", PE(64, 1:6));
 
 Position 1 produces $[\sin(1), \cos(1), \sin(0.562), \cos(0.562), \dots]$ — the $k = 1$ pair uses angle $1/10000^{2/32} = 0.5623$, so `PE(1, 3)` renders as $\sin(0.5623) = 0.533$. Position 64 cycles much further around the fastest sinusoids while barely moving on the slowest ones.
 
-### Example — Vectorized PE construction
-
-The nested loop above mirrors the textbook formula one cell at a time, but every entry of `PE` is independent — there is no sequential dependency. We can build the same matrix in five lines using `meshgrid` to materialise the $(t, i)$ index grids, then computing $\sin$/$\cos$ element-wise. The two forms must agree to machine precision.
-
-```rustlab
-% mod(., 2) is 0 on even columns and 1 on odd, so `1 - mod(...)` is the
-% even-column mask — written this way to avoid a matrix-vs-scalar comparison.
-[I_grid, T_grid] = meshgrid(1:d_model_pe, 1:T_seq);    % both T_seq × d_model_pe
-pair_idx = floor((I_grid - 1) / 2);                    % k repeated as 0,0,1,1,...
-angles   = T_grid ./ (10000.0 .^ (2.0 * pair_idx / d_model_pe));
-even_col = 1 - mod(I_grid - 1, 2);                     % 1 on even columns, 0 on odd
-PE_vec   = even_col .* sin(angles) + (1 - even_col) .* cos(angles);
-
-max_diff = max(reshape(abs(PE - PE_vec), 1, T_seq * d_model_pe));
-print("Max |loop - vectorized| =", max_diff);
-```
-
-The vectorized form reads top-to-bottom as the formula does: build the index grids, compute the angles, pick $\sin$ on even dimensions and $\cos$ on odd ones. The loop is easier to step through with a debugger; the vectorized form is easier to recognise as the equation in the paper.
-
 ### Example — Heatmap of the full PE matrix
 
 ```rustlab
@@ -136,7 +129,8 @@ xlabel("Embedding dimension")
 ylabel("Position t")
 ```
 
-The columns on the right (high-$i$, slow sinusoids) are near-constant down the page — their value barely changes from one position to the next. The left columns oscillate rapidly. Each row is a unique fingerprint, and the structure is smooth — nearby rows look similar, far-apart rows look different. That smoothness is what makes "relative position" a learnable feature.
+> [!TIP]
+> The left columns (fast clocks) stripe rapidly down the page; the right half is nearly constant over 64 positions because those clocks have wavelengths of hundreds to tens of thousands of tokens. Each row is a unique fingerprint, and nearby rows look alike — the smoothness that makes relative position a learnable feature.
 
 ## Why Sinusoids: Translation in Position is a Linear Map
 
@@ -148,73 +142,104 @@ $$\begin{pmatrix} \sin(\omega_k(t+\delta)) \\ \cos(\omega_k(t+\delta)) \end{pmat
 \underbrace{\begin{pmatrix} \cos(\omega_k \delta) & \sin(\omega_k \delta) \\ -\sin(\omega_k \delta) & \cos(\omega_k \delta) \end{pmatrix}}_{R_k(\delta)}
 \begin{pmatrix} \sin(\omega_k t) \\ \cos(\omega_k t) \end{pmatrix},$$
 
-where $\omega_k = 1/10000^{2k/d_{\text{model}}}$. Translation by $\delta$ acts as a fixed rotation $R_k(\delta)$ on each $(2k, 2k+1)$ pair. The Q/K projection matrices the model learns can therefore implement "look $\delta$ tokens back" as a *linear* operation, independent of the absolute $t$. This is the property that lets attention generalise to sequence lengths it never saw at training time.
+where $\omega_k = 1/10000^{2k/d_{\text{model}}}$. Translation by $\delta$ acts as a fixed rotation $R_k(\delta)$ on each $(2k, 2k+1)$ pair. The Q/K projection matrices the model learns can therefore implement "look $\delta$ tokens back" as a *linear* operation, independent of the absolute $t$: relative offset is **linearly decodable** from the code (demonstrated in the Systems lens below). This is a property of the code, not a guarantee about unseen lengths — sinusoidal models are known to degrade on sequences longer than they were trained on, because the *learned* projections were never calibrated for the phases those positions produce.
+
+The same identity gives the dot product between two positions in closed form. For pair $j$, $\sin(\omega_j t)\sin(\omega_j(t+k)) + \cos(\omega_j t)\cos(\omega_j(t+k)) = \cos(\omega_j k)$, so summing over pairs,
+
+$$\mathrm{PE}_t \cdot \mathrm{PE}_{t+k} \;=\; \sum_{j=0}^{d_{\text{model}}/2 - 1} \cos(\omega_j k),$$
+
+independent of $t$. At $k = 0$ every cosine is 1 and the sum is $d_{\text{model}}/2 = 16$; for $k > 0$ the fast pairs oscillate while the slow pairs ($\omega_j k \ll 1$) stay near 1.
 
 ### Example — Dot-product similarity vs. distance
 
-The similarity $\mathrm{PE}_t \cdot \mathrm{PE}_{t+k}$ depends only on $k$, not $t$ — verify it numerically:
+The similarity $\mathrm{PE}_t \cdot \mathrm{PE}_{t+k}$ depends only on $k$, not $t$, and equals the closed form — verify both numerically and plot the curve:
 
 ```rustlab
+n_pairs = d_model_pe / 2;
+omega = 10000.0 .^ (-2 * (0:(n_pairs - 1)) / d_model_pe);   % ω_0 = 1 ... ω_15 = 1.78e-4 rad/token
 sims_short = zeros(40);                        % similarity for offsets k=0..39 starting at t=10
 sims_far   = zeros(40);                        % same offsets starting at t=20
-
+sims_cf    = zeros(40);                        % closed form sum_j cos(ω_j k)
 for k = 0:39
-  sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));   % row t=10 vs row t=10+k
+  sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));
+  sims_far(k + 1)   = sum(PE(20, :) .* PE(20 + k, :));
+  sims_cf(k + 1)    = sum(cos(omega * k));
 end
-for k = 0:39
-  sims_far(k + 1) = sum(PE(20, :) .* PE(20 + k, :));      % row t=20 vs row t=20+k
-end
-
-drift = max(abs(sims_short - sims_far));
+drift  = max(abs(sims_short - sims_far));
+cf_err = max(abs(sims_short - sims_cf));
+[sim_min, k_min] = min(sims_short);
+k_min = k_min - 1;
+n_slow = sum(cos(omega * 39) > 0.9);
 print("max |sim_t=10(k) - sim_t=20(k)| over k=0..39 =", drift);
-```
+print("max |sim(k) - sum_j cos(omega_j k)|        =", cf_err);
+print("minimum", sim_min, "at k =", k_min, ";  pairs with cos(omega_j 39) > 0.9:", n_slow);
 
-Drift across base position $t$: ${drift:%.2e}$ — within a hair of zero. Whatever similarity we measure between two positions is a function of *only* their separation.
-
-### Example — Plot the similarity-vs-distance curve
-
-```rustlab
 figure();
-plot(0:39, sims_short, "color", "blue", "label", "PE_t · PE_{t+k}")
+hold("on")
+plot(0:39, sims_short, "color", "blue", "label", "PE_t · PE_{t+k}  (t = 10)")
+plot(0:39, sims_cf, "color", "red", "style", "dashed", "label", "sum_j cos(omega_j k)")
+hline(n_pairs, "gray", "k = 0 value: d/2 = 16")
+hold("off")
 title("PE Dot-Product Similarity vs. Offset k")
 xlabel("Offset k (tokens)")
 ylabel("Dot product")
 ```
 
-The curve peaks sharply at $k = 0$ (each PE has unit-ish self-similarity), decays through several oscillations, then settles. The decaying envelope is what lets attention treat "close" and "far" as different — without it, every position would look like every other.
+> [!TIP]
+> The curve starts at $d/2 = 16$ and never returns there: it drops to ${sims_short(17):%.1f} at $k = 16$, rebounds to ${sims_short(20):%.1f} at $k = 19$, bottoms out at ${sim_min:%.1f} at $k = ${k_min}$ and climbs again. The dashed closed form lies exactly on it.
+
+Drift across base position $t$ is ${drift:%.2e}$ and the closed form matches to ${cf_err:%.1e}$: whatever similarity we measure between two positions is a function of *only* their separation. Read the sum. ${n_slow} of the 16 cosines have $\omega_j \cdot 39 < 0.45$ rad and stay above $0.9$ across the whole plot, so they contribute a near-constant floor of about ${n_slow}; the fast pairs beat against each other on top of it. There is no decay to zero and no settling — the curve is the **autocorrelation of a 16-tone signal**, and a sum of undamped cosines is itself undamped. What attention can use is that the value is a fixed function of the offset $k$ alone: with learned Q/K projections that reweight the pairs, "close" and "far" become distinguishable scores.
 
 ## Adding PE to Embeddings
 
 ### Theory
 
-In a real transformer block the embedded sequence is $\mathbf{H} = \mathbf{X}_{\text{onehot}} \mathbf{E} + \mathrm{PE}$ (with PE truncated to length $T$). The embedding magnitude is set by the random init scale ($\sim 0.1$), and PE has unit amplitude — so positional information dominates the representation when the token embedding is small, and token identity reasserts itself once the embedding is trained up. Some implementations multiply the embedding by $\sqrt{d_{\text{model}}}$ to balance the two; we skip that here for clarity.
+In a real transformer block the embedded sequence is $\mathbf{H} = \mathbf{X}_{\text{onehot}} \mathbf{E} + \mathrm{PE}$ (with PE truncated to length $T$). The embedding magnitude is set by the initialisation scale ($\sim 0.1$) while PE has unit amplitude, so early in training *position* dominates the representation and token identity reasserts itself as $\mathbf{E}$ is trained up; some implementations multiply the embedding by $\sqrt{d_{\text{model}}}$ to balance the two from the start.
 
-### Example — Token + PE produces unique per-position vectors
+**Why addition is enough.** Write the row for position $t$ as $\mathbf{e}_t + \mathbf{p}_t$. With $\mathbf{W} = \mathbf{W}_Q \mathbf{W}_K^\top$ the attention score between positions $t$ and $i$ expands into four terms,
+
+$$(\mathbf{e}_t + \mathbf{p}_t)\,\mathbf{W}\,(\mathbf{e}_i + \mathbf{p}_i)^\top = \underbrace{\mathbf{e}_t \mathbf{W} \mathbf{e}_i^\top}_{\text{content–content}} + \underbrace{\mathbf{e}_t \mathbf{W} \mathbf{p}_i^\top + \mathbf{p}_t \mathbf{W} \mathbf{e}_i^\top}_{\text{content–position}} + \underbrace{\mathbf{p}_t \mathbf{W} \mathbf{p}_i^\top}_{\text{position–position}},$$
+
+so one learned bilinear form scores "what is there", "where it is", and their interaction. Concatenating $[\mathbf{e}, \mathbf{p}]$ instead would produce the same four terms through a block-structured $\mathbf{W}$ of twice the width: addition is concatenation with a shared projection, at no extra width, relying on the $d_{\text{model}}$ dimensions being roomy enough to keep the two parts roughly separable.
+
+### Example — Token + PE, and the attention matrix with and without it
+
+An alternating sequence of two tokens: without PE every copy of token 1 is the same row, so a causal head with random projections must give identical weight to every visible copy. The embeddings are scaled by $\sqrt{d_{\text{model}}}$ so that content and position are comparable in the second half:
 
 ```rustlab
 seed(42);
 vocab_pe = 6;
 T_demo = 8;
 E_pe = randn(vocab_pe, d_model_pe) * 0.1;
-
-% Token sequence: alternating tokens 1 and 2 — without PE, every "1" position is identical
 ids = [1, 2, 1, 2, 1, 2, 1, 2];
-X_tok = zeros(T_demo, d_model_pe);
-for t = 1:T_demo
-  X_tok(t, :) = E_pe(ids(t), :);      % assign whole row from the embedding lookup
-end
+X_tok = E_pe(ids, :) * sqrt(d_model_pe);        % row gather: token content only
+X_pos = X_tok + PE(1:T_demo, :);                % content + position (matrix + matrix)
+diff_tok_only = max(abs(X_tok(1, :) - X_tok(3, :)));   % both rows are token 1
+diff_with_pe  = max(abs(X_pos(1, :) - X_pos(3, :)));
+print("max |row1 - row3|  token only:", diff_tok_only, "  token + PE:", diff_with_pe);
 
-% Add the first T_demo rows of PE directly — matrix + matrix.
-X_pos = X_tok + PE(1:T_demo, :);
+seed(7);
+W_Qa = randn(d_model_pe, d_model_pe) * 0.1;
+W_Ka = randn(d_model_pe, d_model_pe) * 0.1;
+M_demo = causal_mask(T_demo);
+scale_pe = 1.0 / sqrt(d_model_pe);
+A_noPE = softmax((X_tok * W_Qa) * (X_tok * W_Ka)' * scale_pe + M_demo);
+A_PE   = softmax((X_pos * W_Qa) * (X_pos * W_Ka)' * scale_pe + M_demo);
+print("row 5 weights on the token-1 positions 1, 3, 5 -- no PE:", A_noPE(5, 1), A_noPE(5, 3), A_noPE(5, 5));
+print("row 5 weights on the token-1 positions 1, 3, 5 -- PE:   ", A_PE(5, 1), A_PE(5, 3), A_PE(5, 5));
 
-% Two positions of the SAME token: are their representations actually distinct?
-diff_tok_only = max(abs(X_tok(1, :) - X_tok(3, :)));   % both rows are token 1, no PE → identical
-diff_with_pe  = max(abs(X_pos(1, :) - X_pos(3, :)));   % same token, different positions → differ
-print("max |row1 - row3| (token only):", diff_tok_only);
-print("max |row1 - row3| (token + PE):", diff_with_pe);
+pos8 = {"t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8"};
+figure();
+subplot(1, 2, 1)
+heatmap(pos8, pos8, A_noPE, "A without PE  (tokens 1,2,1,2,...)", "viridis")
+subplot(1, 2, 2)
+heatmap(pos8, pos8, A_PE, "A with PE added", "viridis")
 ```
 
-Without PE, the token-1 rows at positions 1 and 3 are bit-identical — the model literally cannot tell them apart. Adding PE opens a gap of up to ${diff_with_pe:%.4f}$ between the two rows (the largest difference across all dimensions), and any downstream attention head can now compute features sensitive to *which* token-1 it is looking at.
+> [!TIP]
+> Left: a two-colour checkerboard — every row gives *identical* weight to every visible copy of the same token (row 5 puts ${A_noPE(5,1):%.3f} on each of positions 1, 3 and 5), because identical tokens produce identical keys. Right: the copies separate (${A_PE(5,1):%.3f}, ${A_PE(5,3):%.3f}, ${A_PE(5,5):%.3f}) — position is now in the keys.
+
+Without PE the token-1 rows at positions 1 and 3 are bit-identical (difference ${diff_tok_only}); adding PE opens a gap of ${diff_with_pe:%.2f} in the largest coordinate, and the attention pattern stops being a function of token identity alone.
 
 ## Sinusoidal vs. Learned Positional Encoding
 
@@ -224,37 +249,196 @@ Two practical choices coexist in modern transformers:
 
 | Choice | How it works | Pros | Cons |
 |---|---|---|---|
-| **Sinusoidal (fixed)** | Closed-form $\sin / \cos$ table, no parameters | Generalises to *any* sequence length, zero parameters | No way to adapt the encoding to the data |
+| **Sinusoidal (fixed)** | Closed-form $\sin / \cos$ table, no parameters | Defined for *any* sequence length, zero parameters | No way to adapt the encoding to the data; accuracy still degrades beyond the training length |
 | **Learned** | Add a separate `randn(T_max, d_model)` and train it like an embedding | Can specialise per dataset, marginally better at training-length contexts | Bounded by `T_max`; must extrapolate or interpolate to go longer |
 
-GPT-2 and the original BERT use **learned** PE; the original Vaswani transformer uses the fixed sinusoidal table above. Recent long-context work favours other *fixed* schemes applied to the attention computation rather than added to the embedding. **RoPE** rotates the query and key vectors by a position-dependent angle, so it shares the sinusoidal "translation = rotation" property derived below. **ALiBi** takes a different route entirely: it adds *no* positional vector at all, instead biasing each attention score by a fixed penalty proportional to the query–key distance. Either way *some* positional signal must enter, and the rotation property derived above is the geometric reason the sinusoidal family works.
+GPT-2 and the original BERT use **learned** PE; the original Vaswani transformer uses the fixed sinusoidal table above. Recent long-context work favours other *fixed* schemes applied to the attention computation rather than added to the embedding. **RoPE** rotates the query and key vectors by a position-dependent angle, so it shares the sinusoidal "translation = rotation" property derived above but applies it to $\mathbf{q}$ and $\mathbf{k}$ instead of $\mathbf{x}$ ([[24-modern-architectural-variants]]). **ALiBi** takes a different route entirely: it adds *no* positional vector at all, instead biasing each attention score by a fixed penalty proportional to the query–key distance. Either way *some* positional signal must enter, and the rotation property is the geometric reason the sinusoidal family works.
 
-## Connection to Information Theory
+## Engineering Lenses
 
-Without positional encoding, the input distribution that attention sees is **invariant to permutation**: the multiset of tokens carries the same Shannon entropy regardless of order. But the conditional distribution over the next token, $P(X_{t+1} \mid X_{1..t})$, very much depends on order — "dog bites man" and "man bites dog" have different next-token distributions and therefore different conditional entropies.
+### Signals
 
-The mismatch is information that the model literally cannot extract:
+**Exact.** *Phasor bank.* Pair $k$ of the code is the imaginary and real part of one phasor,
 
-$$I(X_{t+1}; \mathrm{order \ of \ } X_{1..t} \mid \mathrm{multiset}) > 0$$
+$$z_k(t) = e^{j\omega_k t} = \cos(\omega_k t) + j\sin(\omega_k t), \qquad (\mathrm{PE}_{t,2k}, \mathrm{PE}_{t,2k+1}) = (\operatorname{Im} z_k(t), \operatorname{Re} z_k(t)),$$
 
-for almost any natural-language source, but a permutation-equivariant network maps every permutation to the same intermediate state — discarding all of it. Positional encoding is the device that makes that mutual information *recoverable* by attention. It does not add new bits about the corpus; it makes the bits already present in token *order* visible to the network. The sinusoidal scheme is, in this view, a fixed *minimum sufficient encoding* of position — enough for the model to undo the permutation-equivariance bottleneck, no more.
+and translation by $\delta$ is multiplication by a unit complex number: $z_k(t+\delta) = e^{j\omega_k\delta}\, z_k(t)$. The rotation matrix $R_k(\delta)$ above is this complex multiply written out in real coordinates. RoPE ([[24-modern-architectural-variants]]) uses the same phasor on $\mathbf{q}$ and $\mathbf{k}$ instead of adding it to $\mathbf{x}$, so a score depends on the phase difference $\omega_k(t - i)$ alone.
 
-This is why removing positional encoding tanks language-modelling perplexity by a large factor while leaving bag-of-words tasks (sentence classification, topic detection) almost unchanged — the latter genuinely *don't* depend on order, so no information is lost when permutation-equivariance is in effect.
+```rustlab
+t0 = 10;
+delta = 3;
+z_t  = exp(1j * omega * t0);                % 16 phasors at position t
+z_td = exp(1j * omega * (t0 + delta));      % the same phasors δ tokens later
+rot  = exp(1j * omega * delta);             % one unit complex number per pair
+phasor_err = max(abs(z_t .* rot - z_td));
+print("max |e^{j w d} z(t) - z(t+d)| =", phasor_err);
+print("PE(10, 1:2) =", PE(10, 1:2), "  [Im, Re] of z_0(10) =", imag(z_t(1)), real(z_t(1)));
+
+figure();
+hold("on")
+circ = linspace(0, 2 * pi, 200);
+polar(circ, ones(1, 200), "color", "gray")
+pick = [1, 3, 5];                            % pairs k = 0, 2, 4
+cols = {"blue", "red", "green"};
+for m = 1:3
+  k = pick(m);
+  polar([angle(z_t(k)), angle(z_t(k))], [0, 1], "color", cols(m), "label", sprintf("pair %d at t = 10", k - 1))
+  polar([angle(z_td(k)), angle(z_td(k))], [0, 1], "color", cols(m), "style", "dashed", "label", sprintf("pair %d at t = 13", k - 1))
+end
+hold("off")
+title("Three of the sixteen phasors, before and after a shift of 3 tokens")
+```
+
+> [!TIP]
+> Each pair advances by its own angle $\omega_k \delta$: the fast pair 0 swings 3 rad (almost half a turn), pair 2 about 0.95 rad, pair 4 only 0.3 rad. The same $\delta$ is read on three clocks of different rates.
+
+One complex multiply per pair reproduces the rotation identity to ${phasor_err:%.1e}$.
+
+**Exact.** *Frequency ladder and spectrum.* The 16 rates $\omega_k = 10000^{-2k/d}$ are geometrically spaced — a straight line on a log axis, wavelengths $\lambda_k = 2\pi/\omega_k$ from $6.28$ to $35\,300$ tokens — constant-Q coverage from one token to the ten-thousand-token scale. Each column of PE is a single tone, so the DFT of a column shows one spectral line.
+
+```rustlab
+lambda = 2 * pi ./ omega;
+F1 = abs(fft(PE(:, 1)));                     % column 1: ω_0 = 1 rad/token
+F9 = abs(fft(PE(:, 9)));                     % column 9: ω_4 = 0.1 rad/token
+f  = fftfreq(T_seq, 1);                      % cycles per token
+[peak1, i1] = max(F1(1:32));
+[peak9, i9] = max(F9(1:32));
+print("wavelengths (tokens): pair 0 =", lambda(1), " pair 4 =", lambda(5), " pair 15 =", lambda(16));
+print("spectral lines: column 1 at f =", f(i1), " (omega_0 / 2 pi =", omega(1) / (2 * pi), "),  column 9 at f =", f(i9), " (omega_4 / 2 pi =", omega(5) / (2 * pi), ")");
+
+figure();
+subplot(1, 3, 1)
+stem(0:(n_pairs - 1), log10(omega), "color", "blue")
+title("log10 of omega_k vs pair k")
+subplot(1, 3, 2)
+hold("on")
+semilogy(0:(n_pairs - 1), lambda, "color", "blue", "label", "wavelength lambda_k")
+semilogy(0:(n_pairs - 1), T_seq * ones(1, n_pairs), "color", "red", "style", "dashed", "label", "T = 64")
+hold("off")
+title("wavelength (tokens) vs pair k")
+subplot(1, 3, 3)
+hold("on")
+stem(f(1:32), F1(1:32), "color", "blue", "label", "column 1 (omega_0 = 1)")
+stem(f(1:32), F9(1:32), "color", "red", "label", "column 9 (omega_4 = 0.1)")
+hold("off")
+title("|DFT| of one PE column (cycles per token)")
+```
+
+> [!TIP]
+> Left: the ladder is a straight line — one decade of frequency every 4 pairs. Middle: pairs above the dashed line have a wavelength longer than the whole $T = 64$ context and barely move within it. Right: one line per column (column 9 falls almost exactly on a DFT bin; column 1's line leaks into neighbouring bins because 64 tokens is not a whole number of its cycles).
+
+**Exact.** *Aliasing and the unambiguous range — why 10000.* A single clock $e^{j\omega k}$ is one-to-one in $k$ only over one period: offsets $k$ and $k + 2\pi/\omega$ give the same phasor. So the **fastest** clock sets the resolution — $\omega_0 = 1$ rad/token is below the Nyquist rate of $\pi$ rad/token at one sample per token, so adjacent positions are never aliased and differ by $2\sin(0.5) = 0.96$ on that pair alone — and the **slowest** clock sets the unambiguous range: $\lambda_{15} = 35\,300$ tokens here, approaching the design bound $2\pi \cdot 10^4 \approx 62\,800$ tokens as $2k/d \to 1$. The original model trained on 512-token contexts; base $10^4$ puts the slowest clock two decades above that, so absolute position stays monotone across any context the model will see while the fastest clock still resolves single tokens. Any base within an order of magnitude would do the same job — $10^4$ is a margin, not a magic number. From the closed form, $\lVert\mathrm{PE}_t - \mathrm{PE}_{t+k}\rVert^2 = \sum_j (2 - 2\cos\omega_j k)$, which lets the distance be traced far beyond the 64 rows built above:
+
+```rustlab
+kk = 0:130;
+dist_pair0 = sqrt(2 - 2 * cos(omega(1) * kk));            % pair 0 only (λ = 6.3)
+dist_pair4 = sqrt(2 - 2 * cos(omega(5) * kk));            % pair 4 only (λ = 62.8)
+dist_all   = zeros(length(kk));
+for i = 1:length(kk)
+  dist_all(i) = sqrt(sum(2 - 2 * cos(omega * kk(i))));    % all 16 pairs
+end
+dist_floor = min(dist_all(2:end));
+print("pair 4 alone: |PE_t - PE_{t+63}| =", dist_pair4(64), "   all 16 pairs:", dist_all(64), "   smallest full-code distance (k = 1):", dist_floor);
+
+figure();
+hold("on")
+plot(kk, dist_pair0, "color", "gray", "label", "pair 0 only (wavelength 6.3)")
+plot(kk, dist_pair4, "color", "red", "label", "pair 4 only (wavelength 62.8)")
+plot(kk, dist_all, "color", "blue", "label", "all 16 pairs")
+hold("off")
+title("Distance between PE_t and PE_{t+k}")
+xlabel("offset k (tokens)")
+ylabel("Euclidean distance")
+```
+
+> [!TIP]
+> Each single clock returns to zero every wavelength — pair 4 cannot tell $t$ from $t + 63$ (distance ${dist_pair4(64):%.3f}). The full code never comes back below ${dist_floor:%.2f}, its neighbour distance, because no two clocks share a period.
+
+### Systems
+
+**Exact.** *An autonomous oscillator bank.* Stack the pair rotations into $\Phi = \mathrm{blockdiag}(R_0(1), \dots, R_{15}(1))$. The code obeys a linear state update with no input,
+
+$$\mathrm{PE}_{t+1} = \Phi\,\mathrm{PE}_t, \qquad \Phi = \exp(\Omega), \quad \Omega = \mathrm{blockdiag}(\omega_k \mathbf{J}), \quad \mathbf{J} = \begin{pmatrix} 0 & 1 \\ -1 & 0 \end{pmatrix}$$
+
+(in the course's row convention, $\mathrm{PE}(t+1, :) = \mathrm{PE}(t, :)\,\Phi^\top$). $\Omega$ is skew-symmetric, so $\Phi$ is orthogonal and its eigenvalues are $e^{\pm j\omega_k}$ — all on the unit circle: a marginally stable, lossless system with no damping and sixteen natural frequencies. Position is the time index of this oscillator bank started from $\mathrm{PE}_1$, and "position $t + \delta$" is $\Phi^\delta = \exp(\delta\Omega)$, which is why offsets are linear maps.
+
+```rustlab
+J = [0, 1; -1, 0];
+Omega = zeros(d_model_pe, d_model_pe);
+for k = 1:n_pairs
+  c = 2 * k - 1;
+  Omega(c:(c + 1), c:(c + 1)) = omega(k) * J;
+end
+Phi = expm(Omega);                                          % block-diagonal rotations
+step_err = max(max(abs(PE(2:T_seq, :) - PE(1:(T_seq - 1), :) * Phi')));
+Phi63 = expm(63 * Omega);                                   % Φ^63 — rustlab's A^k is element-wise, so use expm
+jump_err = max(abs(PE(64, :) - PE(1, :) * Phi63'));
+eig_dev = max(abs(abs(eig(Phi)) - 1));
+orth_err = max(max(abs(Phi' * Phi - eye(d_model_pe))));
+print("max |PE_{t+1} - Phi PE_t| =", step_err, "   |PE_64 - Phi^63 PE_1| =", jump_err);
+print("max ||lambda(Phi)| - 1| =", eig_dev, "   |Phi' Phi - I| =", orth_err);
+```
+
+**Exact.** *Relative offset is linearly decodable — from data.* Fit, by least squares and without being told the answer, the $2 \times 2$ map that carries each pair from position $t$ to position $t+3$ over the 61 available row pairs. The residual is zero and the fitted blocks are the analytic $\Phi^3$ blocks:
+
+```rustlab
+offset = 3;
+P_in  = PE(1:(T_seq - offset), :);
+P_out = PE((1 + offset):T_seq, :);
+B_fit = zeros(d_model_pe, d_model_pe);
+for k = 1:n_pairs
+  c = 2 * k - 1;
+  Pk = P_in(:, c:(c + 1));
+  Yk = P_out(:, c:(c + 1));
+  B_fit(c:(c + 1), c:(c + 1)) = inv(Pk' * Pk) * (Pk' * Yk);   % normal equations, 2 unknowns per output
+end
+fit_resid  = max(max(abs(P_in * B_fit - P_out)));
+fit_vs_phi = max(max(abs(B_fit - expm(offset * Omega)')));
+rank_in = rank(P_in);
+print("least-squares residual of PE_t -> PE_{t+3}:", fit_resid, "   max |B_fit - (Phi^3)'| =", fit_vs_phi);
+print("numerical rank of the 61 x 32 input block:", rank_in);
+```
+
+A $\mathbf{W}_Q/\mathbf{W}_K$ pair can therefore implement "attend 3 back" as a fixed linear map. One honest caveat sits in the last line: over 64 tokens the input block has numerical rank ${rank_in} — the slow columns are all $\approx \omega_k t$ and collinear — so an *unconstrained* $32 \times 32$ fit would not be unique. At short range the slow clocks carry no information; they exist for the ten-thousand-token scale.
+
+### Information
+
+**Exact.** *A redundant, multi-resolution code.* Naming a position in $T = 64$ takes $\log_2 64 = 6$ bits; the code spends 32 real numbers. It is not a minimal encoding but a redundant one, and the redundancy is what buys linear decodability (Systems) and an unambiguous range of $10^4$ tokens at one-token resolution (Signals). At this $T$ only some of the pairs actually vary, and because distance depends on the offset alone, the closest two of the 64 codes are neighbours:
+
+```rustlab
+bits_needed = log2(T_seq);
+var_pair = zeros(n_pairs);
+for k = 1:n_pairs
+  var_pair(k) = std(PE(:, 2 * k - 1))^2;                    % variance of the sin column down the 64 rows
+end
+n_active = sum(var_pair > 0.1);
+print("bits to name a position in T = 64:", bits_needed, "   reals spent:", d_model_pe);
+print("pairs whose sin column has variance > 0.1 over 64 rows:", n_active, "of", n_pairs, "   smallest distance between two codes:", dist_floor);
+```
+
+Only ${n_active} of 16 pairs move appreciably within 64 tokens (the rest are the long-range clocks), yet all 64 codes are distinct with a margin of ${dist_floor:%.2f} — the code is well separated, and the separation is carried entirely by the fast pairs.
+
+**Model.** *What PE makes recoverable.* Without a positional signal the network maps every permutation of a prefix to the same state (the masked check above), so whatever information the *order* of $X_{1..t}$ carries about $X_{t+1}$ beyond its multiset — $I(X_{t+1}; \text{order} \mid \text{multiset})$, positive for any natural-language source — is discarded before it can be used. PE creates no bits about the corpus; it makes those bits visible to attention, which is why removing it collapses language-modelling perplexity while leaving bag-of-words tasks nearly unchanged. This is stated as a model because the mutual information is not computed here; the attention heatmaps above show the mechanism.
 
 ## Key Takeaways
 
-- Self-attention is permutation-equivariant; without a positional signal it cannot distinguish word orders.
-- **Sinusoidal PE** uses paired $\sin/\cos$ at geometrically spaced frequencies. Translation in position becomes a fixed linear map (rotation per pair), which lets attention represent relative offsets cleanly.
-- Adding PE to the token embedding is the standard injection point. The dot product $\mathrm{PE}_t \cdot \mathrm{PE}_{t+k}$ depends only on $k$ — verified numerically.
-- **Learned PE** is a viable alternative; it specialises to the data but is bounded by the maximum trained sequence length.
-- Information-theoretically, PE makes the order-dependent component of $I(X_{t+1}; X_{1..t})$ recoverable. Permutation-equivariant networks systematically discard it.
+- Self-attention is permutation-equivariant; with the causal mask, row $t$ is a function of $\mathbf{x}_t$ and the *unordered* multiset of its predecessors — order is invisible either way.
+- **Sinusoidal PE** is a bank of 16 phasors $e^{j\omega_k t}$ at geometrically spaced rates. Translation is multiplication by $e^{j\omega_k\delta}$ (a rotation per pair), and $\mathrm{PE}_t \cdot \mathrm{PE}_{t+k} = \sum_j \cos(\omega_j k)$ depends on $k$ alone — both verified numerically.
+- The fastest clock sets one-token resolution (below Nyquist); the slowest sets the unambiguous range ($\sim 10^4$ tokens). That is what base 10000 buys: a margin, not a magic number.
+- $\mathrm{PE}_{t+1} = \Phi\,\mathrm{PE}_t$ with $\Phi = \exp(\Omega)$ orthogonal — an undamped oscillator bank; relative offsets are linear maps, recoverable by least squares from the code itself.
+- Adding PE to the token embedding is the standard injection point; the score expands into content–content, content–position and position–position terms, so addition is concatenation with a shared projection. **Learned PE** specialises to the data but is bounded by the trained length.
+- Information: 6 bits of position spent as 32 reals — a redundant code that trades bits for linear decodability; PE makes the order-dependent part of $I(X_{t+1}; X_{1..t})$ recoverable.
 
 ## Standalone Scripts
 
 | Script | What it computes |
 |---|---|
-| `pe_matrix.rlab` | the $64 \times 32$ sinusoidal PE matrix; heatmap |
-| `pe_translation.rlab` | similarity vs. offset curves at two base positions; verifies translation-only dependence |
+| `pe_matrix.rlab` | the $64 \times 32$ sinusoidal PE matrix (loop and vectorised forms); signed heatmap |
+| `pe_translation.rlab` | similarity vs. offset at two base positions against the closed form $\sum_j \cos(\omega_j k)$; translation-only dependence |
+| `pe_phasor_bank.rlab` | phasor form $e^{j\omega_k t}$ and translation as one complex multiply; polar plot; frequency ladder, wavelengths and the DFT of two columns |
+| `pe_aliasing.rlab` | distance vs. offset for single clocks and the full bank; resolution and unambiguous range |
+| `pe_oscillator_bank.rlab` | $\Phi = \exp(\Omega)$ state update, unit-circle eigenvalues, least-squares recovery of the offset-3 map |
+| `pe_attention_order.rlab` | equivariance with and without the mask; attention matrices with and without PE |
 
 Run all with `make lesson-10` (or `rustlab run lessons/10-positional-encoding/<name>.rlab`).
 
@@ -262,23 +446,29 @@ Run all with `make lesson-10` (or `rustlab run lessons/10-positional-encoding/<n
 
 | Variable | Expected Value |
 |---|---|
-| `perm_err` ($\max\|\text{attn}(PX) - P\,\text{attn}(X)\|$) | ≈ `0` (machine epsilon) |
-| `size(PE)` | `[64, 32]` |
-| `PE(1, 1)` ($\sin(1)$) | ≈ `0.841` |
-| `PE(1, 2)` ($\cos(1)$) | ≈ `0.540` |
-| `drift` (translation invariance check) | ≈ `0` (machine epsilon) |
-| `sims_short(1)` (= `PE(10) · PE(10)`) | $d_{\text{model}}/2 \cdot 1 = $ `16` |
-| `diff_tok_only` | `0` (same token = same vector without PE) |
-| `diff_with_pe` | > `0` (PE breaks the tie) |
+| `perm_err`, `prefix_err` | ≈ `0` (machine epsilon) |
+| `size(PE)`; `PE(1, 1)`, `PE(1, 2)` | `[64, 32]`; ≈ `0.841` ($\sin 1$), ≈ `0.540` ($\cos 1$) |
+| `drift`, `cf_err` | ≈ `0`, ≈ `5e-15` |
+| `sims_short(1)`; `sims_short(17)`; `sim_min` at `k_min` | `16` ($= d/2$); ≈ `7.9`; ≈ `5.97` at $k = 28$ |
+| `diff_tok_only`, `diff_with_pe` | `0`; ≈ `1.53` |
+| `A_noPE(5, [1 3 5])`; `A_PE(5, [1 3 5])` | three identical values ≈ `0.211`; ≈ `0.181, 0.197, 0.254` |
+| `phasor_err` | ≈ `1e-16` |
+| `lambda(1)`, `lambda(5)`, `lambda(16)` | `6.28`, `62.8`, `35333` tokens |
+| spectral lines, columns 1 and 9 | `0.156` and `0.0156` cycles/token ($\omega/2\pi$ = `0.159`, `0.0159`) |
+| `dist_pair4(64)`, `dist_all(64)`, `dist_floor` | ≈ `0.017`, ≈ `3.78`, ≈ `1.17` |
+| `step_err`, `jump_err`, `eig_dev`, `orth_err` | all ≈ `1e-15` – `1e-14` |
+| `fit_resid`, `fit_vs_phi`, `rank_in` | ≈ `4e-15`, ≈ `1e-13`, `15` |
+| `bits_needed`, `n_active` | `6`; `6` of 16 |
 
 ## Exercises
 
-1. **Frequency span.** What fraction of one full sine cycle does the *fastest* PE pair complete over $T = 64$? What fraction does the *slowest* pair complete? Confirm from the formula and the heatmap.
-2. **Wavelength of pair $k$.** Show algebraically that the wavelength of the $k$-th sinusoid pair is $2\pi \cdot 10000^{2k/d_{\text{model}}}$. For $d_{\text{model}} = 32$, $k = 15$, what is the wavelength in tokens?
-3. **Permutation breaking.** Rebuild the sinusoidal PE at $d_{\text{model}} = 4$ for the demo's $T = 4$ positions (the `PE` from the heatmap example was built at $d = 32$ and will not conform to the $4 \times 4$ input), add `PE(1:T, :)` to `X` before applying `attn`, and re-check `O_perm` against `P * O`. Does it still match? Explain why not.
-4. **Replace with learned.** Sketch the parameter count for a learned PE table at `T_max = 1024` and `d_model = 512`. Is this larger or smaller than the token embedding for $|\mathcal{V}| = 50000$? What goes wrong if you ever feed a sequence longer than `T_max`?
-5. **Order matters how much?** For a random transformer with random weights, compute the average per-token cosine similarity between `attn(X)` and `attn(P*X)` (after un-permuting). Without PE this should be 1.0; *with* PE it should be much less. The drop is a rough measure of how much information PE injects.
+1. **Vectorise the table.** Rebuild `PE` without loops: `[I_grid, T_grid] = meshgrid(1:d, 1:T)`, `angles = T_grid ./ 10000 .^ (2 floor((I_grid - 1)/2) / d)`, and an even-column mask `1 - mod(I_grid - 1, 2)` to pick $\sin$ or $\cos$. Check `max(abs(PE - PE_vec))` is exactly 0 (`pe_matrix.rlab` has the answer).
+2. **Wavelength of pair $k$.** Show algebraically that the wavelength of the $k$-th sinusoid pair is $2\pi \cdot 10000^{2k/d_{\text{model}}}$. For $d_{\text{model}} = 32$, $k = 15$, what is the wavelength in tokens, and for which $k$ does it first exceed the 512-token training context of the original transformer?
+3. **Permutation breaking.** Rebuild the sinusoidal PE at $d_{\text{model}} = 4$ for the demo's $T = 4$ positions (the `PE` from the heatmap example was built at $d = 32$ and will not conform to the $4 \times 4$ input), add `PE(1:T, :)` to `X` before applying `attn`, and re-check `O_perm` against `Pi * O` and the masked prefix test. Does either still match? Explain why not.
+4. **Replace with learned.** Sketch the parameter count for a learned PE table at `T_max = 1024` and `d_model = 512`. Is this larger or smaller than the token embedding for $\lvert\mathcal{V}\rvert = 50000$? What goes wrong if you ever feed a sequence longer than `T_max`?
+5. **Choosing the base.** Rebuild `omega` with bases $10^2$ and $10^6$ at $d_{\text{model}} = 32$ and redraw the distance-vs-offset figure. For each base, at what offset does the *full* code first come within 0.5 of itself, and which pairs are effectively constant over 512 tokens?
+6. **RoPE in one line.** Instead of adding PE to $\mathbf{x}$, multiply the phasor form of $\mathbf{q}_t$ by $e^{j\omega_k t}$ and of $\mathbf{k}_i$ by $e^{j\omega_k i}$ (pair by pair) and take the real part of $\mathbf{q}_t \bar{\mathbf{k}}_i$. Show numerically that the score depends only on $t - i$. [[24-modern-architectural-variants]] builds the full mechanism.
 
 ## What's next
 
-Lesson 11 introduces the second sublayer of every transformer block: the **position-wise feed-forward network**. Each token's representation passes through the same two-layer MLP independently — a per-position non-linearity that gives the model the expressive power a stack of pure linear projections lacks. The non-linearity is **GELU**, a smooth cousin of ReLU, and we'll see why the smoothness matters for gradient flow.
+[[11-feed-forward-block]] introduces the second sublayer of every transformer block: the **position-wise feed-forward network**. Each token's representation passes through the same two-layer MLP independently — a per-position non-linearity that gives the model the expressive power a stack of pure linear projections lacks. The non-linearity is **GELU**, a smooth cousin of ReLU, and we'll see why the smoothness matters for gradient flow.

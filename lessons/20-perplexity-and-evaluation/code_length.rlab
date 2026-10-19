@@ -1,0 +1,65 @@
+# Script:  code_length.rlab
+# System:  The Lesson 18 24-parameter embedding+head LM (trained here via
+#          lib/bigram_lm.rlab) scored as an arithmetic coder on the period-4
+#          corpus over {a, b, c}.
+# Concept: Cross-entropy in bits per token IS the compression rate: the
+#          arithmetic-coded file length is sum_t -log2 q(x_{t+1} | x_t)
+#          (+ < 2 bits), and perplexity is its antilog 2^(bits/token).
+#          Bits per character is the tokeniser-invariant version.
+# Equations:
+#   bits_model = log2|V| + sum_{t=1}^{19} -log2 q(x_{t+1} | x_t)   (20 tokens)
+#   bits_unif  = 20 log2 3 = 31.70
+#   PPL        = 2^(bits per predicted token) = exp(mean CE in nats)
+#   BPC        = (N_tok / N_char) * L_nats / ln 2
+# Units:   code lengths in bits; loss in nats; BPC in bits per character.
+
+run "../../lib/bigram_lm.rlab"
+run "../../lib/info.rlab"
+
+# === 1. Corpus and trained model (same seed and split as the notebook) ===
+pat = [1, 2, 3, 2];
+corpus = zeros(60);
+for i = 1:60
+  corpus(i) = pat(mod(i - 1, 4) + 1);
+end
+train_ids = corpus(1:50);  val_ids = corpus(50:59);
+vocab = 3;  d_emb = 4;
+seed(20);
+[E, W] = train_bigram_lm(train_ids, vocab, d_emb, 600, 0.15, 0.015, 60);
+
+function L = mean_loss(ids, E, W)
+  L = 0.0;
+  for k = 1:(length(ids) - 1)
+    p = softmax(E(ids(k), :) * W);
+    L = L - log(p(ids(k + 1)));
+  end
+  L = L / (length(ids) - 1);
+end
+
+# === 2. Arithmetic-coding length of the first 20 tokens ===
+ids = corpus(1:20);
+bits_model = 0.0;
+for t = 1:19
+  q = softmax(E(ids(t), :) * W);
+  bits_model = bits_model + (-log2(q(ids(t + 1))));
+end
+bits_first = log2(3);
+print("model code   : first token", bits_first, "+ 19 predicted", bits_model, "=", bits_first + bits_model, "bits");
+print("uniform code : 20 * log2(3) =", 20 * log2(3), "bits");
+print("2^(bits per predicted token) =", 2 ^ (bits_model / 19), "  PPL on these 20 tokens =", exp(mean_loss(ids, E, W)));
+
+# === 3. Bits per character (1 token per character on this corpus) ===
+L_tr = mean_loss(train_ids, E, W);  L_va = mean_loss(val_ids, E, W);
+print("train PPL", exp(L_tr), "  held-out PPL", exp(L_va));
+print("BPC train", L_tr / log(2), "  held-out", L_va / log(2), "  uniform reference log2 3 =", log2(3));
+print("BPE example: L = 3.0 nats/token at 4.4 char/token -> BPC =", 3.0 / (4.4 * log(2)));
+
+# === 4. The toy model on Shannon's bits-per-character axis ===
+figure();
+labels = {"8-bit ASCII", "uniform over 3", "unigram (1/4,1/2,1/4)", "trained (held-out)", "optimal bigram", "Shannon English", "LLM on English"};
+bpc_axis = [8, log2(3), entropy_bits([0.25, 0.5, 0.25]), L_va / log(2), 0.5, 1.0, 0.8];
+bar(labels, bpc_axis)
+title("Bits per character: the toy corpus and English on one axis")
+ylabel("bits/char")
+savefig("code_length.svg")
+print("Saved code_length.svg");

@@ -3,25 +3,23 @@
 #          query / key pair.  Replaces the sinusoidal-PE-add-to-embedding
 #          recipe from Lesson 10 with a per-position rotation applied
 #          directly to the Q and K matrices inside attention.
-# Concept: RoPE replaces additive positional encoding (Lesson 10) with a
-#          rotation matrix R(m) applied to Q and K.  Each consecutive pair
-#          of dimensions (2k, 2k+1) is rotated by angle m * theta_k where
-#          theta_k = base^(-2k/d_head) (default base = 10000).
-#          The key identity:
-#              <R(m) q, R(n) k> = q^T (R(m)^T R(n)) k = q^T R(n - m) k
-#          The dot product between a query at position m and a key at
-#          position n depends only on the RELATIVE position (n - m), not
-#          on the absolute positions.  This is what makes RoPE attractive
-#          for long-context work: the relative-only score makes context
-#          EXTENSION cheap (interpolate positions or rescale the base
-#          frequency -- position interpolation / NTK / YaRN).  Note that
-#          vanilla RoPE does NOT extrapolate zero-shot beyond the trained
-#          context; scores degrade past the offsets seen during training.
+# Concept: RoPE is complex modulation.  Read each pair of coordinates as a
+#          phasor z_k = x_{2k-1} + j x_{2k} and multiply it by a carrier
+#          e^{j m theta_k} at position m, theta_k = base^(-2(k-1)/d_head).
+#          The attention score is then
+#              Re sum_k z_k conj(w_k) e^{j (m - n) theta_k}
+#          which depends only on the phase DIFFERENCE (m - n) of two
+#          carriers at the same frequency: relative position, by algebra.
+#          The real 2x2-rotation form is how it is stored; both forms are
+#          computed here and agree bit-for-bit.  Vanilla RoPE does NOT
+#          extrapolate zero-shot beyond the trained context: offsets past
+#          T_max are new inputs (the slow pairs never completed a cycle).
 # Equations:
-#   theta_k    = base^(-2k / d_head)            k = 0, 1, ..., d_head/2 - 1
-#   phi_{m,k}  = m * theta_k                    position m's rotation angle
-#   rot(x, m)_{2k}   = x_{2k} cos(phi) - x_{2k+1} sin(phi)
-#   rot(x, m)_{2k+1} = x_{2k} sin(phi) + x_{2k+1} cos(phi)
+#   theta_k        = base^(-2(k-1) / d_head)     k = 1, ..., d_head/2
+#   RoPE(x, m)_k   = z_k e^{j m theta_k}          (phasor form)
+#   rot(x, m)_{2k-1} = x_{2k-1} cos(m theta_k) - x_{2k} sin(m theta_k)
+#   rot(x, m)_{2k}   = x_{2k-1} sin(m theta_k) + x_{2k} cos(m theta_k)
+#   <RoPE(q, m), RoPE(k, n)> = Re sum_k z_k conj(w_k) e^{j(m-n) theta_k}
 # Units:   angles in radians; activations dimensionless.
 
 # === 1. Setup ===
@@ -41,9 +39,19 @@ for k = 0:(n_pairs - 1)
   theta(k + 1) = base ^ (-2 * k / d_head);
 end
 print("theta_k (k = 0..", n_pairs - 1, "):", theta);
+print("wavelengths 2 pi / theta_k (tokens):", 2 * pi ./ theta);
 # d_head = 4: theta_0 = 1.0, theta_1 = 0.01.
 
-# === 3. Apply RoPE to a single vector at position m ===
+# === 3. Phasor form: pairs as complex numbers, one carrier per (m, k) ===
+pos = (0:(T - 1))';
+carrier = exp(1i * pos * theta);                    # (T, d/2)
+Qz = Q(:, 1:2:end) + 1i * Q(:, 2:2:end);
+Kz = K(:, 1:2:end) + 1i * K(:, 2:2:end);
+Qz_rot = Qz .* carrier;
+Kz_rot = Kz .* carrier;
+S_phasor = real(Qz_rot * Kz_rot');                  # ' conjugates -> e^{j(m-n)theta}
+
+# === 4. Real (storage) form: the 2x2 rotation on interleaved pairs ===
 function x_rot = rope_apply(x, m, theta)
   d = length(x);
   n_pairs = d / 2;
@@ -52,82 +60,80 @@ function x_rot = rope_apply(x, m, theta)
     phi = m * theta(k);
     cos_p = cos(phi);
     sin_p = sin(phi);
-    x_2k   = x(2 * k - 1);     % 1-indexed: pair (2k-1, 2k)
+    x_2k   = x(2 * k - 1);     # 1-indexed: pair (2k-1, 2k)
     x_2k1  = x(2 * k);
     x_rot(2 * k - 1) = x_2k * cos_p - x_2k1 * sin_p;
     x_rot(2 * k)     = x_2k * sin_p + x_2k1 * cos_p;
   end
 end
 
-# === 4. Rotate Q and K row by row ===
 Q_rot = zeros(T, d_head);
 K_rot = zeros(T, d_head);
 for m = 0:(T - 1)
-  Q_rot(m + 1) = rope_apply(Q(m + 1, :), m, theta);
-  K_rot(m + 1) = rope_apply(K(m + 1, :), m, theta);
+  Q_rot(m + 1, :) = rope_apply(Q(m + 1, :), m, theta);
+  K_rot(m + 1, :) = rope_apply(K(m + 1, :), m, theta);
 end
-
-# === 5. Key identity: dot product depends only on relative position ===
-# Compute <Q_rot(m), K_rot(n)> for all (m, n) pairs and inspect the matrix.
-# It should equal a function of (n - m), modulo high-frequency content.
-S_rope = (Q_rot * K_rot');                          % (T x T)
-S_orig = (Q * K');                                   % (T x T) — original, no PE
+S_rope = Q_rot * K_rot';
+S_orig = Q * K';
 print("");
 print("Original Q K' (no positional information):");
 print(S_orig);
-print("Q_rot K_rot' (RoPE-rotated):");
+print("Q_rot K_rot' (RoPE-rotated, real form):");
 print(S_rope);
+print("max |S_phasor - S_rope| (phasor form vs 2x2 rotation):", max(max(abs(S_phasor - S_rope))));
 
-# === 6. Direct verification of the relative-position property ===
-# For any (m, n) and any shift s, S_rope(m + s, n + s) should approximately
-# equal S_rope(m, n).  Verify on a fresh Q, K with longer T.
+# === 5. Direct verification of the relative-position property ===
 T_long = 8;
 Q_long = randn(T_long, d_head);
 K_long = randn(T_long, d_head);
-Q_long_rot = zeros(T_long, d_head);
-K_long_rot = zeros(T_long, d_head);
-for m = 0:(T_long - 1)
-  Q_long_rot(m + 1) = rope_apply(Q_long(m + 1, :), m, theta);
-  K_long_rot(m + 1) = rope_apply(K_long(m + 1, :), m, theta);
-end
-
-# Take a fixed q at position 2 and a fixed k at position 5 (relative 3).
-# Compare to rotating BOTH by the same shift: q at 4 vs k at 7 (still 3).
-# The dot product should match.
 q2 = rope_apply(Q_long(3, :), 2, theta);
 k5 = rope_apply(K_long(3, :), 5, theta);
 q4 = rope_apply(Q_long(3, :), 4, theta);
 k7 = rope_apply(K_long(3, :), 7, theta);
+qz = Q_long(3, 1:2:end) + 1i * Q_long(3, 2:2:end);
+kz = K_long(3, 1:2:end) + 1i * K_long(3, 2:2:end);
 print("");
 print("Relative-position invariance test:");
 print("  <RoPE(q, 2), RoPE(k, 5)> =", q2 * k5');
 print("  <RoPE(q, 4), RoPE(k, 7)> =", q4 * k7');
-print("  (Both have relative offset 3; should match.)");
+print("  heterodyne form at m - n = -3:", real(sum(qz .* conj(kz) .* exp(1i * (2 - 5) * theta))));
+print("  (Both have relative offset 3; all three agree.)");
 
-# === 7. Heatmap: <RoPE(q, m), RoPE(k, n)> as a function of (m, n) ===
-# Use the SAME q, k vector everywhere and vary the positions m, n.
-# Expect: the value depends only on (n - m), so the heatmap is constant
-# along each diagonal.
+# === 6. Heatmap: <RoPE(q, m), RoPE(k, n)> as a function of (m, n) ===
+# Same q, k everywhere; only the positions vary.  The value depends only
+# on (n - m), so the matrix is constant along each diagonal.
 q_fixed = [1.0, 0.5, 0.2, -0.3];
 k_fixed = [0.8, -0.4, 0.6, 0.1];
-M = zeros(T_long, T_long);
-for m = 0:(T_long - 1)
-  qr = rope_apply(q_fixed, m, theta);
-  for n = 0:(T_long - 1)
-    kr = rope_apply(k_fixed, n, theta);
-    M(m + 1, n + 1) = qr * kr';
-  end
-end
+qz = q_fixed(1:2:end) + 1i * q_fixed(2:2:end);
+kz = k_fixed(1:2:end) + 1i * k_fixed(2:2:end);
+pos8 = (0:(T_long - 1))';
+Qf = repmat(qz, T_long, 1) .* exp(1i * pos8 * theta);
+Kf = repmat(kz, T_long, 1) .* exp(1i * pos8 * theta);
+M = real(Qf * Kf');
 print("");
 print("Heatmap of <RoPE(q, m), RoPE(k, n)> — diagonals are constant:");
 print(M);
+print("M(1, 4) =", M(1, 4), "  M(4, 7) =", M(4, 7), "  (same offset 3)");
 
-# rustlab 0.3.6 colormaps by |value|; shift so min = 0 so the render is faithful
-# (see docs/rustlab-issues-2026-07-12.md §6)
+# === 7. Figure: signed heatmap + the fast and slow phasor arcs, m = 0..7 ===
+m_fine = linspace(0, 7, 141);
 figure();
-imagesc(M - min(min(M)), "viridis")
-title("<RoPE(q,m), RoPE(k,n)> - min — constant along (n - m) diagonals")
+subplot(1, 3, 1)
+imagesc(M, "viridis")
+title("<RoPE(q,m), RoPE(k,n)> — constant along (n - m) diagonals")
 xlabel("key position n")
 ylabel("query position m")
+subplot(1, 3, 2)
+polar(angle(qz(1)) + m_fine * theta(1), abs(qz(1)) * ones(141))
+hold("on")
+scatter(abs(qz(1)) * cos(angle(qz(1)) + pos8' * theta(1)), abs(qz(1)) * sin(angle(qz(1)) + pos8' * theta(1)))
+hold("off")
+title("pair 1: theta_1 = 1 rad/token, m = 0..7")
+subplot(1, 3, 3)
+polar(angle(qz(2)) + m_fine * theta(2), abs(qz(2)) * ones(141))
+hold("on")
+scatter(abs(qz(2)) * cos(angle(qz(2)) + pos8' * theta(2)), abs(qz(2)) * sin(angle(qz(2)) + pos8' * theta(2)))
+hold("off")
+title("pair 2: theta_2 = 0.01 rad/token, 0.07 rad in 7 tokens")
 savefig("rope.svg")
 print("Saved rope.svg");

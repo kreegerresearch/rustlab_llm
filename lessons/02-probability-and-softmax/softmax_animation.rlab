@@ -1,0 +1,22 @@
+# Script:  softmax_animation.rlab
+# System:  Softmax probability distribution over a vocabulary under a temperature sweep
+# Concept: The PMF morphs continuously from the hard argmax (tau -> 0) to the
+#          uniform distribution (tau -> infinity)
+# Equations: p_i(tau) = exp(z_i / tau) / sum_j exp(z_j / tau)
+# Units:     tau dimensionless; probabilities in [0, 1]; output is an animated GIF
+
+z = [2.0, 1.0, 0.5, -0.5];
+n_frames = 32;
+taus = logspace(log10(0.05), log10(50), n_frames);
+
+figure();
+for k = 1:n_frames
+  pk = softmax(z / taus(k));
+  stem(1:4, pk)
+  title(sprintf("softmax(z / tau),  tau = %.2f", taus(k)))
+  ylim([0, 1])
+  frame()
+end
+saveanim("softmax_temperature.gif", 8)
+print("Saved softmax_temperature.gif with", n_frames, "frames");
+print("p(1) at tau = 0.05:", softmax(z / taus(1))(1), "   at tau = 50:", softmax(z / taus(end))(1));

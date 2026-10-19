@@ -1,12 +1,14 @@
 # Script:  pe_translation.rlab
 # System:  Sinusoidal positional encoding — relative-position structure
-# Concept: Verify that PE_t . PE_{t+k} depends only on the offset k, not on t
+# Concept: PE_t . PE_{t+k} depends only on the offset k, not on t, and equals
+#          the closed form sum_j cos(w_j k): the autocorrelation of a 16-tone
+#          signal, which oscillates without settling.
 # Equations:
-#   sim(t, k) = sum(PE(t) .* PE(t+k))
-#   Translation property:  R_k(d) is a fixed rotation per (2k, 2k+1) pair
-# Units:   integer positions, dimensionless similarity
+#   sim(t, k) = sum(PE(t) .* PE(t+k)) = sum_j cos(w_j k),  w_j = 10000^(-2j/d)
+#   Translation property: R_j(k) is a fixed rotation per (2j, 2j+1) pair
+# Units:   integer positions and offsets in tokens; dimensionless similarity
 
-# === Build the PE matrix (same scheme as pe_matrix.r) ===
+# === Build the PE matrix (same scheme as pe_matrix.rlab, positions 1..T) ===
 T = 80;
 d_model = 32;
 
@@ -15,38 +17,47 @@ for t = 1:T
   for i = 1:d_model
     pair_idx = floor((i - 1) / 2);
     div = 10000.0 ^ (2.0 * pair_idx / d_model);
-    angle = t / div;
+    theta = t / div;
     if mod(i - 1, 2) == 0
-      PE(t, i) = sin(angle);
+      PE(t, i) = sin(theta);
     else
-      PE(t, i) = cos(angle);
+      PE(t, i) = cos(theta);
     end
   end
 end
 
-# === Compute similarity vs. offset at two base positions ===
+# === Similarity vs. offset at two base positions, and the closed form ===
+n_pairs = d_model / 2;
+omega = 10000.0 .^ (-2 * (0:(n_pairs - 1)) / d_model);
 n_offsets = 40;
 sims_short = zeros(n_offsets);
 sims_far   = zeros(n_offsets);
+sims_cf    = zeros(n_offsets);
 for k = 0:(n_offsets - 1)
   sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));   # row t=10 vs row t=10+k
   sims_far(k + 1)   = sum(PE(20, :) .* PE(20 + k, :));   # row t=20 vs row t=20+k
+  sims_cf(k + 1)    = sum(cos(omega * k));               # closed form
 end
 
-drift = max(abs(sims_short - sims_far));
+drift  = max(abs(sims_short - sims_far));
+cf_err = max(abs(sims_short - sims_cf));
+[sim_min, k_min] = min(sims_short);
 print("max |sim_t=10(k) - sim_t=20(k)| over k=0..39 =", drift);
-print("sims_short(1) (self-similarity at t=10) =", sims_short(1));
-print("sims_short(2) (offset 1)                 =", sims_short(2));
-print("sims_short(end) (offset 39)              =", sims_short(n_offsets));
+print("max |sim(k) - sum_j cos(omega_j k)|        =", cf_err);
+print("sims_short(1) (self-similarity, = d/2)     =", sims_short(1));
+print("sims_short(17) (offset 16)                  =", sims_short(17));
+print("minimum", sim_min, "at offset k =", k_min - 1);
+print("pairs with cos(omega_j * 39) > 0.9 (the near-constant floor):", sum(cos(omega * 39) > 0.9));
 
 # === Plot ===
 figure();
 hold("on")
 plot(0:(n_offsets - 1), sims_short, "color", "blue", "label", "base t=10")
 plot(0:(n_offsets - 1), sims_far,   "color", "red",  "label", "base t=20")
+plot(0:(n_offsets - 1), sims_cf,    "color", "green", "style", "dashed", "label", "sum_j cos(omega_j k)")
+hline(n_pairs, "gray", "d/2 = 16")
+hold("off")
 title("PE Dot-Product Similarity vs. Offset k")
 xlabel("Offset k (tokens)")
 ylabel("Dot product")
-legend()
-hold("off")
 savefig("pe_translation.svg")

@@ -1,0 +1,58 @@
+# Script:  kv_cache_memory.rlab
+# System:  LLaMA-2-70B-shaped decoder (80 layers, 8 KV heads of width 128,
+#          70e9 parameters) decoding on one accelerator with 3.35 TB/s of
+#          memory bandwidth.
+# Concept: KV-cache memory per token and per context, the weight budget,
+#          and the bandwidth-bound decode rate, at 16 / 8 / 4 bits.
+# Equations: bytes/token = 2 * N_layers * H_kv * d_head * b / 8
+#            cache = T * bytes/token;   weights = N * b / 8
+#            tok/s <= BW / (weights + cache)      (arithmetic assumed free)
+# Units:   bytes, GB (1e9 bytes), KiB (1024 bytes); tokens per second.
+
+# === 1. Model and device ===
+N_layers = 80;  H_kv = 8;  d_head = 128;   # LLaMA-2-70B uses GQA with 8 KV heads
+N_params = 70e9;
+BW = 3.35e12;                              # bytes/s, one H100 SXM (HBM3)
+T_ctx = 8192;
+bits = [16, 8, 4];
+
+# === 2. Memory table ===
+bytes_tok = 2 * N_layers * H_kv * d_head * bits / 8;
+cache_GB = bytes_tok * T_ctx / 1e9;
+w_GB = N_params * bits / 8 / 1e9;
+tok_w = BW ./ (w_GB * 1e9);                # weights only
+tok_both = BW ./ ((w_GB + cache_GB) * 1e9);  # weights + cache, same width
+print("=== LLaMA-2-70B (GQA, H_kv = 8), T =", T_ctx, "===");
+print("bits   KiB/token   cache GB   weights GB   tok/s (weights)   tok/s (weights + cache)");
+for i = 1:3
+  print(sprintf("%3d   %8.0f   %8.2f   %10.1f   %14.1f   %20.1f", bits(i), bytes_tok(i) / 1024, cache_GB(i), w_GB(i), tok_w(i), tok_both(i)));
+end
+print("");
+print("cache share of the per-token traffic at fp16:", 100 * cache_GB(1) / (w_GB(1) + cache_GB(1)), "%");
+T_cross = w_GB * 1e9 ./ bytes_tok;
+print("context length at which cache = weights (same width):", T_cross, "tokens");
+print("cache at 128k tokens, fp16:", bytes_tok(1) * 131072 / 1e9, "GB");
+mha_factor = 64 / H_kv;
+print("without GQA (H_kv = 64) every cache figure is", mha_factor, "x larger:", cache_GB * mha_factor, "GB");
+
+# === 3. Figure ===
+T_sweep = (1:32) * 4096;
+figure();
+subplot(1, 2, 1)
+hold("on")
+plot(T_sweep / 1024, bytes_tok(1) * T_sweep / 1e9, "color", "blue", "label", "16-bit cache")
+plot(T_sweep / 1024, bytes_tok(2) * T_sweep / 1e9, "color", "red", "label", "8-bit cache")
+plot(T_sweep / 1024, bytes_tok(3) * T_sweep / 1e9, "color", "green", "label", "4-bit cache")
+yline(80, "gray", "one 80 GB device")
+hold("off")
+title("LLaMA-2-70B KV cache vs context length")
+xlabel("context length (k tokens)"); ylabel("GB")
+subplot(1, 2, 2)
+bar({"16-bit", "8-bit", "4-bit"}, tok_both)
+legend("tok/s upper bound")
+ylim([0, 100])
+title("Bandwidth-bound decode rate (weights + cache, T = 8192)")
+xlabel("bits per weight and cache element"); ylabel("tok/s upper bound")
+savefig("kv_cache_memory.svg")
+print("");
+print("Saved kv_cache_memory.svg");
