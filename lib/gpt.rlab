@@ -1,0 +1,460 @@
+# Library: gpt.rlab
+# System:  A trainable decoder-only GPT of arbitrary depth and head count —
+#          the Lesson 14 architecture (token embedding + fixed sinusoidal
+#          positions + L Pre-LN blocks + final LN + LM head) with the full
+#          analytical backward pass of Lessons 15 and 22 generalised to
+#          multi-head attention and a stack of blocks.  Used by the
+#          standalone Sherlock tutorial (tutorial/sherlock/) for training,
+#          supervised fine-tuning, distillation and generation.
+# Concept: Parameters live in one struct P whose per-layer matrices are
+#          stacked along rows (layer l owns rows (l-1)*d+1 .. l*d); a flat
+#          vector view (gpt_flatten / gpt_unflatten) makes the optimiser,
+#          checkpoints and data-parallel gradient sums one-liners.
+#          Every forward intermediate the backward pass needs is kept in a
+#          cache struct of stacked matrices.  All arithmetic is dense f64
+#          matrix algebra so the cost is dominated by native matmuls.
+# Usage:   from a script:          run "../../lib/gpt.rlab"
+#          from a notebook block:  run "../lib/gpt.rlab"
+#          cfg = gpt_config(vocab, d_model, n_layer, n_head, d_ff, T_max);
+#          P = gpt_init(cfg, 0.02);
+#          [logits, L, cache] = gpt_forward(ids, mask, P, cfg);
+#          G = gpt_backward(ids, gpt_dlogits(ids, mask, logits, cache.total), cache, P, cfg);
+# Units:   activations and parameters dimensionless; losses in nats.
+
+# === Configuration ===
+# One struct carries every dimension.  d_k = d_model / n_head must divide.
+function cfg = gpt_config(vocab, d_model, n_layer, n_head, d_ff, T_max)
+  cfg = struct("V", vocab, "d", d_model, "L", n_layer, "H", n_head, ...
+               "dff", d_ff, "Tmax", T_max, "dk", d_model / n_head);
+end
+
+# === Parameters ===
+# Field       shape              meaning
+# E           V x d              token embedding
+# PE          Tmax x d           fixed sinusoidal positions (not trained)
+# Wqkv        (L d) x 3d         packed Q | K | V projections per layer
+# Wo          (L d) x d          attention output projection per layer
+# W1, b1      (L d) x dff, L x dff   FFN expand
+# W2, b2      (L dff) x d, L x d     FFN contract
+# g1, be1     L x d              LayerNorm 1 gain / bias per layer
+# g2, be2     L x d              LayerNorm 2 gain / bias per layer
+# gf, bf      d                  final LayerNorm
+# W_U         d x V              LM head (untied)
+function P = gpt_init(cfg, std)
+  V = cfg.V;  d = cfg.d;  L = cfg.L;  dff = cfg.dff;
+  # nanoGPT recipe: N(0, std^2) everywhere, residual-branch projections
+  # (Wo, W2) scaled by 1/sqrt(2L) so the stream stays bounded with depth.
+  res = std / sqrt(2 * L);
+  P = struct("E", randn(V, d) * std, ...
+             "PE", gpt_sinusoidal_pe(cfg.Tmax, d), ...
+             "Wqkv", randn(L * d, 3 * d) * std, ...
+             "Wo", randn(L * d, d) * res, ...
+             "W1", randn(L * d, dff) * std, ...
+             "b1", zeros(L, dff), ...
+             "W2", randn(L * dff, d) * res, ...
+             "b2", zeros(L, d), ...
+             "g1", ones(L, d), "be1", zeros(L, d), ...
+             "g2", ones(L, d), "be2", zeros(L, d), ...
+             "gf", ones(d), "bf", zeros(d), ...
+             "W_U", randn(d, V) * std);
+end
+
+function PE = gpt_sinusoidal_pe(T_max, d)
+  PE = zeros(T_max, d);
+  for t = 1:T_max
+    for k = 0:(d / 2 - 1)
+      omega = 10000.0 ^ (-2 * k / d);
+      PE(t, 2 * k + 1) = sin((t - 1) * omega);
+      PE(t, 2 * k + 2) = cos((t - 1) * omega);
+    end
+  end
+end
+
+# Number of trainable scalars (everything except PE).
+function n = gpt_n_params(cfg)
+  V = cfg.V;  d = cfg.d;  L = cfg.L;  dff = cfg.dff;
+  n = V * d + L * (3 * d * d + d * d + d * dff + dff + dff * d + d + 4 * d) + 2 * d + d * V;
+end
+
+# === Flat vector view (optimiser state, checkpoints, parallel sums) ===
+# Order: E, Wqkv, Wo, W1, b1, W2, b2, g1, be1, g2, be2, gf, bf, W_U.
+# Matrices are flattened column-major by reshape (the same order reshape
+# restores), which is all that matters as long as both directions agree.
+function v = gpt_flatten(S, cfg)
+  v = [reshape(S.E, 1, numel(S.E)), reshape(S.Wqkv, 1, numel(S.Wqkv)), ...
+       reshape(S.Wo, 1, numel(S.Wo)), reshape(S.W1, 1, numel(S.W1)), ...
+       reshape(S.b1, 1, numel(S.b1)), reshape(S.W2, 1, numel(S.W2)), ...
+       reshape(S.b2, 1, numel(S.b2)), reshape(S.g1, 1, numel(S.g1)), ...
+       reshape(S.be1, 1, numel(S.be1)), reshape(S.g2, 1, numel(S.g2)), ...
+       reshape(S.be2, 1, numel(S.be2)), reshape(S.gf, 1, numel(S.gf)), ...
+       reshape(S.bf, 1, numel(S.bf)), reshape(S.W_U, 1, numel(S.W_U))];
+end
+
+# Rebuild a parameter struct from a flat vector.  PE is regenerated.
+function P = gpt_unflatten(v, cfg)
+  V = cfg.V;  d = cfg.d;  L = cfg.L;  dff = cfg.dff;
+  i = 1;
+  n = V * d;          E    = reshape(v(i:i + n - 1), V, d);           i = i + n;
+  n = L * d * 3 * d;  Wqkv = reshape(v(i:i + n - 1), L * d, 3 * d);   i = i + n;
+  n = L * d * d;      Wo   = reshape(v(i:i + n - 1), L * d, d);       i = i + n;
+  n = L * d * dff;    W1   = reshape(v(i:i + n - 1), L * d, dff);     i = i + n;
+  n = L * dff;        b1   = reshape(v(i:i + n - 1), L, dff);         i = i + n;
+  n = L * dff * d;    W2   = reshape(v(i:i + n - 1), L * dff, d);     i = i + n;
+  n = L * d;          b2   = reshape(v(i:i + n - 1), L, d);           i = i + n;
+  n = L * d;          g1   = reshape(v(i:i + n - 1), L, d);           i = i + n;
+  n = L * d;          be1  = reshape(v(i:i + n - 1), L, d);           i = i + n;
+  n = L * d;          g2   = reshape(v(i:i + n - 1), L, d);           i = i + n;
+  n = L * d;          be2  = reshape(v(i:i + n - 1), L, d);           i = i + n;
+  n = d;              gf   = v(i:i + n - 1);                          i = i + n;
+  n = d;              bf   = v(i:i + n - 1);                          i = i + n;
+  n = d * V;          W_U  = reshape(v(i:i + n - 1), d, V);           i = i + n;
+  P = struct("E", E, "PE", gpt_sinusoidal_pe(cfg.Tmax, d), "Wqkv", Wqkv, "Wo", Wo, ...
+             "W1", W1, "b1", b1, "W2", W2, "b2", b2, "g1", g1, "be1", be1, ...
+             "g2", g2, "be2", be2, "gf", gf, "bf", bf, "W_U", W_U);
+end
+
+# 1 where decoupled weight decay applies (weight matrices), 0 for biases
+# and LayerNorm gains/biases — same order as gpt_flatten.
+function m = gpt_wd_mask(cfg)
+  V = cfg.V;  d = cfg.d;  L = cfg.L;  dff = cfg.dff;
+  m = [ones(V * d), ones(L * d * 3 * d), ones(L * d * d), ones(L * d * dff), zeros(L * dff), ...
+       ones(L * dff * d), zeros(L * d), zeros(L * d), zeros(L * d), zeros(L * d), zeros(L * d), ...
+       zeros(d), zeros(d), ones(d * V)];
+end
+
+# === Row broadcasting helper ===
+# A row slice M(l, :) and a plain vector carry no orientation in rustlab, so
+# repmat(v, T, 1) would tile them side by side.  Force a 1 x n row first.
+function R = gpt_rows(v, T)
+  R = outer(ones(T), reshape(v, 1, length(v)));
+end
+
+# Broadcast a length-T vector (or T x 1 matrix) down the rows of a T x d
+# matrix.  reshape(v, T, 1) collapses back to a bare vector in rustlab and
+# repmat(v, 1, d) would tile it side by side, so use an outer product.
+function C = gpt_cols(v, d)
+  C = outer(reshape(v, 1, length(v)), ones(d));
+end
+
+# === LayerNorm with affine, vectorised over rows, with backward ===
+function [Y, xn, sig] = gpt_ln_fwd(X, gamma, beta)
+  T = size(X)(1);  d = size(X)(2);
+  mu = sum(X, 2) / d;                       # T x 1
+  Xc = X - gpt_cols(mu, d);
+  var = sum(Xc .^ 2, 2) / d;                # T x 1
+  sig = sqrt(var + 1e-5);                   # T x 1
+  xn = Xc ./ gpt_cols(sig, d);
+  Y = xn .* gpt_rows(gamma, T) + gpt_rows(beta, T);
+end
+
+# dY (T x d), xn (T x d), sig (T x 1), gamma (d) -> dX, dgamma, dbeta.
+function [dX, dgamma, dbeta] = gpt_ln_bwd(dY, xn, sig, gamma)
+  T = size(dY)(1);  d = size(dY)(2);
+  dgamma = sum(dY .* xn, 1);
+  dbeta  = sum(dY, 1);
+  dxn = dY .* gpt_rows(gamma, T);
+  m1 = sum(dxn, 2) / d;                     # T x 1  mean(dxn)
+  m2 = sum(dxn .* xn, 2) / d;               # T x 1  mean(dxn .* xn)
+  dX = (dxn - gpt_cols(m1, d) - xn .* gpt_cols(m2, d)) ./ gpt_cols(sig, d);
+end
+
+# Derivative of the tanh-approximation GELU (matches the gelu builtin).
+function y = gpt_gelu_grad(z)
+  c = sqrt(2.0 / pi);
+  u = c * (z + 0.044715 * z .^ 3);
+  th = tanh(u);
+  du = c * (1.0 + 0.044715 * 3.0 * z .^ 2);
+  y = 0.5 * (1.0 + th) + 0.5 * z .* (1.0 - th .^ 2) .* du;
+end
+
+# === Forward pass for one sequence ===
+# ids: 1 x T token ids (T <= Tmax); mask: 1 x (T-1), position t counts
+# toward the loss when mask(t) > 0.  Returns logits (T x V), the masked
+# mean cross-entropy L, and a cache struct of stacked per-layer matrices.
+function [logits, L, cache] = gpt_forward(ids, mask, P, cfg)
+  d = cfg.d;  Lyr = cfg.L;  H = cfg.H;  dk = cfg.dk;  dff = cfg.dff;  V = cfg.V;
+  T = length(ids);
+  E = P.E;  PE = P.PE;
+  Wqkv = P.Wqkv;  Wo = P.Wo;  W1 = P.W1;  b1 = P.b1;  W2 = P.W2;  b2 = P.b2;
+  g1 = P.g1;  be1 = P.be1;  g2 = P.g2;  be2 = P.be2;
+  scale = 1.0 / sqrt(dk);
+  M = -1.0e9 * (1 - cumsum(eye(T), 1));     # additive causal mask
+
+  # Stacked caches: layer l owns rows (l-1)*T+1 .. l*T.
+  Hin_all = zeros(Lyr * T, d);  xn1_all = zeros(Lyr * T, d);  sig1_all = zeros(Lyr * T, 1);
+  QKV_all = zeros(Lyr * T, 3 * d);  A_all = zeros(Lyr * H * T, T);  cat_all = zeros(Lyr * T, d);
+  Hmid_all = zeros(Lyr * T, d);  xn2_all = zeros(Lyr * T, d);  sig2_all = zeros(Lyr * T, 1);
+  pre_all = zeros(Lyr * T, dff);  hid_all = zeros(Lyr * T, dff);
+
+  X = E(ids, :) + PE(1:T, :);
+  for l = 1:Lyr
+    r = ((l - 1) * T + 1):(l * T);          # cache rows for this layer
+    w = ((l - 1) * d + 1):(l * d);          # weight rows for this layer
+    Hin_all(r, :) = X;
+    [Xn1, xn1, sig1] = gpt_ln_fwd(X, g1(l, :), be1(l, :));
+    xn1_all(r, :) = xn1;  sig1_all(r, 1) = sig1;
+    QKV = Xn1 * Wqkv(w, :);
+    QKV_all(r, :) = QKV;
+    cat_h = zeros(T, d);
+    for h = 1:H
+      c = ((h - 1) * dk + 1):(h * dk);
+      Q = QKV(:, c);  K = QKV(:, d + c);  Vh = QKV(:, 2 * d + c);
+      A = softmax(Q * K' * scale + M);
+      A_all((((l - 1) * H + (h - 1)) * T + 1):(((l - 1) * H + h) * T), :) = A;
+      cat_h(:, c) = A * Vh;
+    end
+    cat_all(r, :) = cat_h;
+    Hmid = X + cat_h * Wo(w, :);
+    Hmid_all(r, :) = Hmid;
+    [Xn2, xn2, sig2] = gpt_ln_fwd(Hmid, g2(l, :), be2(l, :));
+    xn2_all(r, :) = xn2;  sig2_all(r, 1) = sig2;
+    pre = Xn2 * W1(w, :) + gpt_rows(b1(l, :), T);
+    hid = gelu(pre);
+    pre_all(r, :) = pre;  hid_all(r, :) = hid;
+    wf = ((l - 1) * dff + 1):(l * dff);
+    X = Hmid + hid * W2(wf, :) + gpt_rows(b2(l, :), T);
+  end
+  [Hf, xnf, sigf] = gpt_ln_fwd(X, P.gf, P.bf);
+  logits = Hf * P.W_U;
+
+  # Masked mean cross-entropy over positions 1..T-1 (target ids(t+1)).
+  L = 0.0;  total = 0.0;
+  if T > 1
+    Pm = softmax(logits(1:(T - 1), :));
+    for t = 1:(T - 1)
+      if mask(t) > 0
+        L = L - log(Pm(t, ids(t + 1)));
+        total = total + 1.0;
+      end
+    end
+  end
+  if total > 0
+    L = L / total;
+  end
+  cache = struct("T", T, "Hin_all", Hin_all, "xn1_all", xn1_all, "sig1_all", sig1_all, ...
+                 "QKV_all", QKV_all, "A_all", A_all, "cat_all", cat_all, "Hmid_all", Hmid_all, ...
+                 "xn2_all", xn2_all, "sig2_all", sig2_all, "pre_all", pre_all, "hid_all", hid_all, ...
+                 "HL", X, "Hf", Hf, "xnf", xnf, "sigf", sigf, "logits", logits, "total", total);
+end
+
+# Upstream gradient at the logits for the masked mean cross-entropy.
+function dl = gpt_dlogits(ids, mask, logits, total)
+  T = size(logits)(1);  V = size(logits)(2);
+  dl = zeros(T, V);
+  if total > 0 && T > 1
+    Pm = softmax(logits(1:(T - 1), :));
+    for t = 1:(T - 1)
+      if mask(t) > 0
+        row = Pm(t, :);
+        row(ids(t + 1)) = row(ids(t + 1)) - 1.0;
+        dl(t, :) = row / total;
+      end
+    end
+  end
+end
+
+# === Backward pass for one sequence ===
+# Returns a struct G of gradients with the same fields as P (minus PE).
+function G = gpt_backward(ids, dlogits, cache, P, cfg)
+  d = cfg.d;  Lyr = cfg.L;  H = cfg.H;  dk = cfg.dk;  dff = cfg.dff;  V = cfg.V;
+  T = cache.T;
+  Wqkv = P.Wqkv;  Wo = P.Wo;  W1 = P.W1;  W2 = P.W2;
+  g1 = P.g1;  g2 = P.g2;  gf = P.gf;  W_U = P.W_U;  be1 = P.be1;  be2 = P.be2;
+  Hin_all = cache.Hin_all;  xn1_all = cache.xn1_all;  sig1_all = cache.sig1_all;
+  QKV_all = cache.QKV_all;  A_all = cache.A_all;  cat_all = cache.cat_all;
+  Hmid_all = cache.Hmid_all;  xn2_all = cache.xn2_all;  sig2_all = cache.sig2_all;
+  pre_all = cache.pre_all;  hid_all = cache.hid_all;
+  scale = 1.0 / sqrt(dk);
+
+  dE = zeros(V, d);  dWqkv = zeros(Lyr * d, 3 * d);  dWo = zeros(Lyr * d, d);
+  dW1 = zeros(Lyr * d, dff);  db1 = zeros(Lyr, dff);  dW2 = zeros(Lyr * dff, d);  db2 = zeros(Lyr, d);
+  dg1 = zeros(Lyr, d);  dbe1 = zeros(Lyr, d);  dg2 = zeros(Lyr, d);  dbe2 = zeros(Lyr, d);
+
+  # LM head and final LayerNorm.
+  dW_U = cache.Hf' * dlogits;
+  dHf = dlogits * W_U';
+  [dX, dgf, dbf] = gpt_ln_bwd(dHf, cache.xnf, cache.sigf, gf);
+
+  for l = Lyr:-1:1
+    r = ((l - 1) * T + 1):(l * T);
+    w = ((l - 1) * d + 1):(l * d);
+    wf = ((l - 1) * dff + 1):(l * dff);
+    hid = hid_all(r, :);  pre = pre_all(r, :);  xn2 = xn2_all(r, :);  sig2 = sig2_all(r, 1);
+    Xn2 = xn2 .* gpt_rows(g2(l, :), T) + gpt_rows(be2(l, :), T);
+
+    # FFN sublayer: X = Hmid + gelu(Xn2 W1 + b1) W2 + b2
+    dHmid = dX;
+    dW2(wf, :) = hid' * dX;
+    db2(l, :) = sum(dX, 1);
+    dhid = dX * W2(wf, :)';
+    dpre = dhid .* gpt_gelu_grad(pre);
+    dW1(w, :) = Xn2' * dpre;
+    db1(l, :) = sum(dpre, 1);
+    dXn2 = dpre * W1(w, :)';
+    [dH2, dgam2, dbet2] = gpt_ln_bwd(dXn2, xn2, sig2, g2(l, :));
+    dg2(l, :) = dgam2;  dbe2(l, :) = dbet2;
+    dHmid = dHmid + dH2;
+
+    # Attention sublayer: Hmid = Hin + concat * Wo
+    cat_h = cat_all(r, :);
+    dHin = dHmid;
+    dWo(w, :) = cat_h' * dHmid;
+    dcat = dHmid * Wo(w, :)';
+    QKV = QKV_all(r, :);
+    dQKV = zeros(T, 3 * d);
+    for h = 1:H
+      c = ((h - 1) * dk + 1):(h * dk);
+      Q = QKV(:, c);  K = QKV(:, d + c);  Vh = QKV(:, 2 * d + c);
+      A = A_all((((l - 1) * H + (h - 1)) * T + 1):(((l - 1) * H + h) * T), :);
+      dO = dcat(:, c);
+      dA = dO * Vh';
+      dV = A' * dO;
+      dS = A .* (dA - gpt_cols(sum(A .* dA, 2), T));
+      dQ = dS * K * scale;
+      dK = dS' * Q * scale;
+      dQKV(:, c) = dQ;  dQKV(:, d + c) = dK;  dQKV(:, 2 * d + c) = dV;
+    end
+    xn1 = xn1_all(r, :);  sig1 = sig1_all(r, 1);
+    Xn1 = xn1 .* gpt_rows(g1(l, :), T) + gpt_rows(be1(l, :), T);
+    dWqkv(w, :) = Xn1' * dQKV;
+    dXn1 = dQKV * Wqkv(w, :)';
+    [dH1, dgam1, dbet1] = gpt_ln_bwd(dXn1, xn1, sig1, g1(l, :));
+    dg1(l, :) = dgam1;  dbe1(l, :) = dbet1;
+    dX = dHin + dH1;
+  end
+
+  # Embedding scatter-add (positions are fixed sinusoids: no gradient).
+  for t = 1:T
+    dE(ids(t), :) = dE(ids(t), :) + dX(t, :);
+  end
+  G = struct("E", dE, "Wqkv", dWqkv, "Wo", dWo, "W1", dW1, "b1", db1, "W2", dW2, "b2", db2, ...
+             "g1", dg1, "be1", dbe1, "g2", dg2, "be2", dbe2, "gf", dgf, "bf", dbf, "W_U", dW_U);
+end
+
+# === Convenience: loss and flat gradient of one window ===
+# ids is a 1 x T window; every position counts.
+function L = gpt_loss(ids, P, cfg)
+  [lo, L, cache] = gpt_forward(ids, ones(length(ids) - 1), P, cfg);
+end
+
+# Flat gradient vector (gpt_flatten order) of the mean loss on one window,
+# plus the loss itself appended as the last element so parmap callers get
+# both from one call: g = [grad, L].
+function g = gpt_grad_flat(ids, mask, P, cfg)
+  [lo, L, cache] = gpt_forward(ids, mask, P, cfg);
+  G = gpt_backward(ids, gpt_dlogits(ids, mask, lo, cache.total), cache, P, cfg);
+  g = [gpt_flatten(G, cfg), L];
+end
+
+# === AdamW on the flat vector (Lesson 16) ===
+# theta, m, v, g: flat vectors; wd_mask selects decayed coordinates.
+function [theta, m, v] = gpt_adamw(theta, g, m, v, eta, step, bet1, bet2, eps_a, wd, wd_mask)
+  m = bet1 * m + (1 - bet1) * g;
+  v = bet2 * v + (1 - bet2) * (g .^ 2);
+  if wd > 0
+    theta = theta - eta * wd * (theta .* wd_mask);
+  end
+  theta = theta - eta * ((m / (1 - bet1 ^ step)) ./ (sqrt(v / (1 - bet2 ^ step)) + eps_a));
+end
+
+# Warmup + cosine schedule (Lesson 17).
+function eta_t = gpt_lr(step, n_steps, T_w, eta_max, eta_min)
+  if step <= T_w
+    eta_t = eta_max * (step / T_w);
+  else
+    prog = (step - T_w) / (n_steps - T_w);
+    eta_t = eta_min + 0.5 * (eta_max - eta_min) * (1 + cos(pi * prog));
+  end
+end
+
+# Global-norm gradient clipping: returns the scaled vector and the norm.
+function [g, gn] = gpt_clip(g, max_norm)
+  gn = sqrt(sum(g .^ 2));
+  if gn > max_norm
+    g = g * (max_norm / gn);
+  end
+end
+
+# === Generation (Lesson 21) ===
+# Next-token distribution after a prefix (last Tmax tokens are the context).
+function p = gpt_next_dist(prefix, P, cfg, tau)
+  n = length(prefix);
+  if n > cfg.Tmax
+    prefix = prefix((n - cfg.Tmax + 1):n);
+    n = cfg.Tmax;
+  end
+  [logits, L, cache] = gpt_forward(prefix, zeros(max(n - 1, 1)), P, cfg);
+  p = softmax(logits(n, :) / tau);
+end
+
+# Inverse-CDF sample from a probability vector.
+function tok = gpt_sample(p)
+  c = cumsum(p);
+  r = rand();
+  N = length(p);
+  i = 1;
+  while i < N && c(i) < r
+    i = i + 1;
+  end
+  tok = i;
+end
+
+# Keep the top-K entries of p (K_top = 0 keeps all), renormalise.
+function q = gpt_topk(p, K_top)
+  if K_top <= 0 || K_top >= length(p)
+    q = p;
+  else
+    [s_asc, idx] = sort(p);
+    N = length(p);
+    keep = idx(N:-1:(N - K_top + 1));
+    q = zeros(N);
+    mass = 0.0;
+    for j = 1:K_top
+      mass = mass + p(keep(j));
+    end
+    for j = 1:K_top
+      q(keep(j)) = p(keep(j)) / mass;
+    end
+  end
+end
+
+# Autoregressive generation: tau = temperature (tau <= 0 means greedy),
+# K_top = 0 means no truncation.  Returns prompt followed by n_new tokens.
+function seq = gpt_generate(P, cfg, prompt, n_new, tau, K_top)
+  seq = prompt;
+  for i = 1:n_new
+    if tau <= 0
+      p = gpt_next_dist(seq, P, cfg, 1.0);
+      nxt = argmax(p);
+    else
+      p = gpt_topk(gpt_next_dist(seq, P, cfg, tau), K_top);
+      nxt = gpt_sample(p);
+    end
+    seq = [seq, nxt];
+  end
+end
+
+# Encode text to ids with a string array of characters: O(len * V) is fine
+# for prompts.  Unknown characters are skipped.
+function ids = gpt_encode(s, vocab_chars)
+  ids = [];
+  V = length(vocab_chars);
+  for i = 1:length(s)
+    c = s(i);
+    j = 1;
+    while j < V && vocab_chars(j) != c
+      j = j + 1;
+    end
+    if vocab_chars(j) == c
+      ids = [ids, j];
+    end
+  end
+end
+
+# Decode ids to text with a string array of characters (vocab_chars(id)).
+function s = gpt_decode(ids, vocab_chars)
+  s = "";
+  for i = 1:length(ids)
+    s = s + vocab_chars(ids(i));
+  end
+end

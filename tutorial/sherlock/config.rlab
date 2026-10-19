@@ -1,0 +1,56 @@
+# Script:  config.rlab
+# System:  Every knob of the Sherlock tutorial in one place.  train.rlab,
+#          generate.rlab, sft.rlab and distill.rlab all start with
+#          `run "config.rlab"` and read the struct C built here.  Edit the
+#          values, re-run a stage; nothing else needs touching.
+# Concept: Model size, context, optimiser and schedule are the design
+#          parameters of Lessons 13-18; this file is where you set them for
+#          a real corpus.
+# Units:   sizes in tokens/characters; learning rates dimensionless; time in s.
+
+C = struct();
+
+# --- Data (written by prepare_corpus.py) -------------------------------
+C.ids_csv    = "data/ids.csv";      # 1-based character ids, one per line
+C.val_frac   = 0.05;                # last 5 % of the corpus is held out
+C.max_chars  = 0;                   # 0 = use the whole corpus; else truncate
+
+# --- Model (Lesson 14) ---------------------------------------------------
+C.d_model    = 128;                 # residual-stream width
+C.n_layer    = 4;                   # transformer blocks
+C.n_head     = 4;                   # heads per block (d_model / n_head = d_k)
+C.d_ff       = 512;                 # FFN hidden width (4 x d_model)
+C.T          = 128;                 # context length (tokens per window)
+C.init_std   = 0.02;                # nanoGPT init scale
+
+# --- Optimiser and schedule (Lessons 16-18) ------------------------------
+C.n_steps    = 3000;                # optimisation steps
+C.batch      = 8;                   # windows per step (run in parallel by parmap)
+C.eta_max    = 2.0e-3;              # peak learning rate
+C.eta_min    = 2.0e-4;              # final learning rate (cosine floor)
+C.warmup     = 150;                 # linear warmup steps
+C.beta1      = 0.9;
+C.beta2      = 0.95;                # LLM-style second-moment horizon
+C.eps_adam   = 1e-8;
+C.weight_decay = 0.1;               # decoupled, weight matrices only
+C.clip_norm  = 1.0;                 # global-norm gradient clip
+
+# --- Logging, evaluation, checkpoints -----------------------------------
+C.log_every  = 50;                  # print train loss / throughput
+C.eval_every = 250;                 # held-out loss on C.eval_windows windows
+C.eval_windows = 16;
+C.ckpt_every = 500;                 # save checkpoints/ckpt_latest.npz
+C.ckpt_dir   = "checkpoints";
+C.resume     = false;               # true: continue from ckpt_latest.npz
+C.seed       = 1;
+
+# --- Generation (Lesson 21) ---------------------------------------------
+C.prompt     = "Sherlock Holmes ";  # text the sampler continues
+C.gen_tokens = 300;                 # characters to generate
+C.temperature = 0.8;                # tau; <= 0 means greedy
+C.top_k      = 20;                  # 0 disables top-k truncation
+
+# --- Preset overrides (last word wins) -----------------------------------
+# `make sherlock-quick` / `make sherlock-preset PRESET=large` copy a file
+# from presets/ to preset.rlab; the default preset overrides nothing.
+run "preset.rlab"

@@ -27,6 +27,11 @@ top of a script with a quoted, script-relative path:
 run "../../lib/transformer.rlab"
 ```
 
+For a complete, `make`-driven training run on a real corpus — one
+program per stage rather than one concept per script — see
+[`../tutorial/sherlock/`](../tutorial/sherlock/), which follows the same
+script conventions and uses `lib/gpt.rlab`.
+
 ## Running
 
 ```sh

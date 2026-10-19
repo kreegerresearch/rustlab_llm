@@ -17,7 +17,7 @@ This file guides AI coding tools working in this repository.
 
 Each lesson pairs step-by-step mathematical theory with runnable Rustlab scripts and integrated notebooks that produce visualisations. The series builds from raw probability and linear algebra to a complete GPT-style decoder — nothing is a black box.
 
-**Curriculum status:** 27 notebooks (Lessons 00–26), all complete. Lesson 00 is the course map. Phases 1–8 (Lessons 01–23) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end: Lesson 22 derives the full analytical backward pass through the Lesson 13 block (the shared `lib/transformer.rlab`), and the Lesson 23 capstone trains the full architecture end-to-end (PPL → 1.00008 on a corpus whose optimal-bigram floor is ≈ 1.47). Phase 9 (Lesson 24) covers RoPE, RMSNorm, SwiGLU, GQA; Phase 10 (Lesson 25) SFT and DPO; Lesson 26 quantisation and fixed-point inference. Phases 11–15 (2026-09-27) moved the toolchain to rustlab 0.3.7, introduced `lib/`, renumbered 22–25, and re-centred every lesson on the **Engineering Lenses** (Signals / Systems / Information, see below) per `docs/proposal-2026-09-27-ee-controls-it-revision.md`; the record is in `PLAN.md`.
+**Curriculum status:** 27 notebooks (Lessons 00–26), all complete. Lesson 00 is the course map. Phases 1–8 (Lessons 01–23) cover the nanoGPT / *Attention Is All You Need* baseline end-to-end: Lesson 22 derives the full analytical backward pass through the Lesson 13 block (the shared `lib/transformer.rlab`), and the Lesson 23 capstone trains the full architecture end-to-end (PPL → 1.00008 on a corpus whose optimal-bigram floor is ≈ 1.47). Phase 9 (Lesson 24) covers RoPE, RMSNorm, SwiGLU, GQA; Phase 10 (Lesson 25) SFT and DPO; Lesson 26 quantisation and fixed-point inference. Phases 11–15 (2026-09-27) moved the toolchain to rustlab 0.3.7, introduced `lib/`, renumbered 22–25, and re-centred every lesson on the **Engineering Lenses** (Signals / Systems / Information, see below) per `docs/proposal-2026-09-27-ee-controls-it-revision.md`; the record is in `PLAN.md`. A standalone, `make`-driven tutorial (`tutorial/sherlock/`, Phase 16) pre-trains, fine-tunes, distils and queries a character-level GPT on *The Adventures of Sherlock Holmes* with `lib/gpt.rlab`; `docs/sherlock-performance-and-rustlab-requests.md` records its throughput and the upstream asks.
 
 **Learning goal:** Derive every core LLM algorithm — tokenisation, attention, transformer blocks, training, fine-tuning, and inference — with working code and plots at each step. Follows the architecture of [nanoGPT](https://github.com/karpathy/nanoGPT) through Phase 8 and extends it through Phases 9–10.
 
@@ -48,6 +48,15 @@ lib/
   sampling.rlab          # sample_categorical, topk_mass, topp_mass (L21/23)
   bigram_lm.rlab         # train_bigram_lm — the Lesson 18 model used by L20/21
   info.rlab              # entropy_bits/nats, cross_entropy_bits, kl_bits, row_entropies_bits, ppl_from_nats
+  gpt.rlab               # trainable decoder-only GPT of any depth / head count (L14 forward,
+                         # L15/22 backward, AdamW, schedule, clipping, generation, encode/decode)
+                         # — used only by tutorial/sherlock/; API summary in its header
+
+tutorial/
+  sherlock/              # standalone tutorial (Phase 16): config.rlab, prepare_corpus.py (Python,
+    README.md            #   stdlib only), train / generate / sft / qa_pairs / distill / benchmark
+    data/adventures.txt  #   .rlab, test_gpt_lib.rlab; corpus committed, ids.csv / vocab.rlab /
+    checkpoints/         #   checkpoints / figures / logs gitignored. Driven by `make sherlock-*`.
 
 book/                    # rendered output for GitHub display
   README.md              # hand-written GitHub landing page
@@ -58,7 +67,7 @@ book/                    # rendered output for GitHub display
 
 PLAN.md                  # phase status, handoff notes
 README.md                # project overview + lesson roadmap
-Makefile                 # notebooks / html / lesson-NN / clean
+Makefile                 # notebooks / html / lesson-NN / sherlock-* / clean
 ```
 
 There is no per-lesson `lesson.md` — the notebook *is* the lesson (theory, code, plots, exercises in one file). When `.rlab` scripts mirror notebook code blocks, they live under `lessons/<slug>/` and call `savefig("foo.svg")` next to themselves (artefacts gitignored).
@@ -78,11 +87,18 @@ make notebooks-check    # CI drift guard: fails if book/ is out of sync with sou
 make validate           # lint rendered markdown via `rustlab-notebook validate` (markdownlint-cli2)
 make lesson-01          # run only lesson 01's .rlab scripts (pattern target: lesson-NN for any 01–26; fails on the first script error)
 make clean              # delete the interactive HTML build and .rlab artefacts
+make sherlock-quick     # Sherlock tutorial: every stage with the 3-minute preset -> tutorial/sherlock/report.md
+make sherlock           # same with the selected preset (default model: ~30 min); stages: sherlock-data / -train / -generate / -sft / -distill / -report
+make sherlock-ask Q="Who is the woman?"   # question to the fine-tuned model; also sherlock-status / -doctor / -preset / -bench / -test / -clean
 ```
 
 The notebook render is directory-mode: `rustlab-notebook render notebooks --format markdown --output book --jail-root .` produces `book/<slug>.md` plus `book/plots/<slug>/plot-N.svg` for each lesson. The `--jail-root .` is required so notebook blocks may `run "../lib/<name>.rlab"` (0.3.7 jails notebook file I/O to the collection root by default). The hand-written `book/README.md` is preserved because the source tree has no `README.md` (rustlab 0.3.9 renders a source `README.md` as a notebook and would overwrite the landing page; the editor notes therefore live in `notebooks/_authoring.md`). Note: as of rustlab 0.3.4 (May 2026) the renderer is a separate binary `rustlab-notebook` — the old `rustlab notebook ...` subcommand has been removed. `make notebooks` is updated accordingly.
 
 `make validate` shells out to `rustlab-notebook validate -f markdown notebooks`, which re-renders every notebook to a temp dir and pipes it through `markdownlint-cli2` using the project-root `.markdownlint-cli2.jsonc` (mirrors rustlab's own noise floor plus `MD024: { siblings_only: true }` so the curriculum's repeated `### Theory` H3s under distinct H2 parents pass). Install the linter with `npm i -g markdownlint-cli2`; without it, validate reports SKIPPED rather than failing. HTML / LaTeX / PDF validation are opt-in via `-f html|latex|pdf` and require additional linters (`vnu` + JRE, `chktex`, `qpdf`/`pdfinfo`).
+
+**Standalone tutorial.** `tutorial/sherlock/` is a `make`-driven set of scripts, not a notebook. `make sherlock-quick` (3-minute preset) and `make sherlock` (selected preset) run every stage in order — `sherlock-doctor` (toolchain check), `sherlock-data` (`python3 prepare_corpus.py data/adventures.txt`, once; rustlab cannot read text files or convert characters to codes, so this step is Python, standard library only), `sherlock-train`, `sherlock-generate`, `sherlock-sft`, `sherlock-distill`, `sherlock-report` — and every stage target is `cd tutorial/sherlock && rustlab run <script> --plot none 2>&1 | tee <stage>.log` so the scripts' relative paths (`config.rlab`, `data/`, `checkpoints/`, `../../lib/gpt.rlab`) resolve and the logs survive. `make sherlock-status` summarises the logs and checkpoints of a running or finished run (the training log itself prints `[percent done  ETA]` every `log_every` steps); `make sherlock-report` assembles `tutorial/sherlock/report.md` from the logs and figures (`report.py`); `make sherlock-ask Q="…"` writes `question.rlab` and runs `ask.rlab` against the SFT checkpoint. All knobs are fields of the struct `C` in `tutorial/sherlock/config.rlab`, which ends with `run "preset.rlab"` so a preset copied from `presets/` (`make sherlock-preset PRESET=quick|large|default`) has the last word; the `quick` preset trains into `checkpoints-quick/` and sets `C.sft_steps = 800`; the optional fields `C.sft_steps` / `C.sft_eta` / `C.kd_steps` let a preset scale the SFT and distillation stages, whose other knobs live in the `C_sft` / `C_kd` structs at the top of their scripts. A complete default run (811 k parameters, 3,000 steps, 1,216 s at 2,527 tok/s on a 14-core laptop, 2.203 held-out bits/char; SFT 43 / 46 answers, +0.24 bits/char forgetting; distilled student 3.420 vs 3.439 bits/char hard-target) is committed under `tutorial/sherlock/example-run/`. After any change to `lib/gpt.rlab`, run `make sherlock-test` (finite-difference gradient check on every parameter block). The tutorial page is `tutorial/sherlock/README.md`; measurements and rustlab requests are in `docs/sherlock-performance-and-rustlab-requests.md`.
+
+**`lib/gpt.rlab` API** (every function takes the `cfg` struct from `gpt_config`): `gpt_config(V, d, L, H, d_ff, T_max)`, `gpt_init(cfg, std)`, `gpt_n_params(cfg)`, `gpt_flatten(P, cfg)` / `gpt_unflatten(theta, cfg)`, `gpt_wd_mask(cfg)`, `gpt_forward(ids, mask, P, cfg) -> [logits, L, cache]`, `gpt_dlogits(ids, mask, logits, total)`, `gpt_backward(ids, dlogits, cache, P, cfg) -> G`, `gpt_loss(ids, P, cfg)`, `gpt_grad_flat(ids, mask, P, cfg) -> [g, L]` (the `parmap` worker), `gpt_adamw(theta, g, m, v, eta, step, b1, b2, eps, wd, wd_mask)`, `gpt_lr(step, n_steps, warmup, eta_max, eta_min)`, `gpt_clip(g, max_norm) -> [g, norm]`, `gpt_next_dist(prefix, P, cfg, tau)`, `gpt_sample(p)`, `gpt_topk(p, K)`, `gpt_generate(P, cfg, prompt_ids, n_new, tau, K_top)` (`tau <= 0` greedy, `K_top = 0` no truncation), `gpt_encode(str, vocab_chars)`, `gpt_decode(ids, vocab_chars)`; internals `gpt_rows` / `gpt_cols` (broadcast a vector over rows / columns with `outer`, because `repmat` of a bare vector tiles sideways), `gpt_ln_fwd` / `gpt_ln_bwd`, `gpt_gelu_grad`. Parameters of layer `l` are rows `(l-1)*d+1 .. l*d` of the stacked matrices (`Wqkv`, `Wo`, `W1`, `W2`, …); the cache holds every forward intermediate the backward pass needs.
 
 Single script:
 ```bash
@@ -222,6 +238,7 @@ Do not use the `<!-- solution -->` directive — it is broken in markdown output
 - Always `print()` key numerical results a student should verify by hand
 - Name files descriptively: `gradient_descent.rlab`, not `script1.rlab`
 - Keep scripts short enough to read in one sitting (split if over ~60 lines)
+- Scripts under `tutorial/` follow every rule above (header block, `# ===` sections, printed results, library via quoted `run`) but **may exceed 60 lines**: each is a complete program (data → model → loop → curves → sample) rather than one concept, and splitting it would hide the pipeline the tutorial exists to show
 - Each script must run independently given `lib/`: shared code is pulled in with `run "../../lib/<name>.rlab"` (quoted, script-relative path) at the top of the script; never copy a function between scripts
 
 ---
@@ -389,6 +406,12 @@ When a needed function is missing from rustlab, record it here with the format:
 
 ### Markdown render captures one plot per code block
 **Current state (0.3.7):** a block with several `figure()` calls emits one SVG in `-f markdown`; `<!-- grid: N -->` is HTML-only. Side-by-side panels use `subplot`.
+
+### Training-workflow performance and text I/O (Sherlock tutorial, 0.3.9, 2026-10-18)
+**Needed for:** `tutorial/sherlock/` — corpus-scale training, SFT, distillation and generation.
+**Measured:** 811 k-parameter character GPT, `T = 128`: forward 48 ms, backward 99 ms per window; 814 tok/s serial, 4,106 tok/s inside `parmap(8)`, 2,527 tok/s for the whole training step; bare matmul 8.0–8.2 GFLOP/s because storage is `Complex<f64>` and `*` is ndarray's `zgemm` with no BLAS linked. Full tables, breakdown and cost model: `docs/sherlock-performance-and-rustlab-requests.md`.
+**Requests, ranked by measured impact:** (1) real-valued BLAS `dgemm` behind `*` (optionally `single`) — matmul share ÷5–30, a training window 2–3× faster today and ≈ 7× with the interpreter overhead also addressed; (2) `pagemtimes` / threads inside `*` — recovers the `parmap` efficiency loss (5.2× on 14 cores) and collapses the per-head loops; (3) text I/O and string ↔ code conversion (`fileread`, `double(str)`, `char(codes)`, `\n` / `\"` escapes in literals, `sa(i) = "x"` into a string array) — removes `prepare_corpus.py`; (4) fused causal `attention(Q, K, V, "causal")` with a backward; (5) reverse-mode autodiff (deletes ≈ 150 of the 460 lines of `lib/gpt.rlab`); (6) in-place `M(r, :) += X` / `s.f += X`; (7) `rustlab run` script arguments (`make sherlock-ask` writes `question.rlab` because there is no `argv`); (8) `--profile` attribution for nested user functions and operators (today `gpt_forward` / `gpt_backward` never appear).
+**Quirks hit (each reproduced):** `"\n"` in a plain literal is two characters and `"\""` terminates the literal (use `sprintf("%c", 10)` / `sprintf("%c", 34)`); a string-array element cannot be assigned by index (build the array in one `{…}`); `reshape(v, n, 1)` of a vector collapses to a bare vector so `repmat(v, 1, d)` tiles sideways (use `outer`); user functions cannot read script variables (pass everything as arguments); `sprintf("%d", true)` errors (`expected scalar, got bool`); a one-line `for i = 1:3 y = y + i; end` is a parse error; `strcat`, `unique`, `char`, `upper`, `fileread` are undefined (`+` concatenates strings); `s.a += 1` and `M(r, :) += X` are parse errors; `save` does not create directories and there is no `mkdir` / `exist` / `isfile` (the `make` targets create the checkpoint directories).
 
 ### ~~Module / import system~~ — ✅ resolved by `run` (0.3.7, verified 2026-09-27)
 `run "file.rlab"` merges a file's functions and variables into the caller's scope, from scripts and from notebook blocks (with `--jail-root .`). `lib/transformer.rlab`, `lib/sampling.rlab`, `lib/bigram_lm.rlab` replaced ≈ 700 duplicated lines in Phase 11.

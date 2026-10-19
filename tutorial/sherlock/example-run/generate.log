@@ -1,0 +1,28 @@
+rustlab 0.3.9 — interpreting /Users/mike/projects/2026/rustlab_llm-sherlock/tutorial/sherlock/generate.rlab (.rlab)
+loaded checkpoints/ckpt_latest.npz  (step 3000 , 811008 params )
+
+=== greedy ===
+Sherlock Holmes of the start of the strange of the man of the
+more of the strange of the course of the strange of the star of there
+whists words the montt tofe tofe tofe tofe tofe tofe tofe tofe tofe to
+the severt tofe tofe tofe tofe tofe tofe tofe tofe tofe tofe tofe tofe
+tofe tofe tofe tofe tofe tofe tofe tofe to
+
+=== tau = 0.8  top-k = 20  ===
+Sherlock Holmes and dinent, with the tell so
+much the colots, and the took stuld to crived which had of this
+tarmed of my bellent, and ca esomise, and toro extrocy amongting the
+thir criecal. The simplent of the even my tonge his afttertion I wam
+windoness?"
+
+"It aske toffice."
+
+"We hold this cloine conclouse head 
+
+=== tau = 1.2, no truncation ===
+Sherlock Holmes cone, preve iut Then
+tot atempove thran wesed with I ament thicks we aboing the week
+little of the maasths anno my down by gofesive wherech, befon Stake an thar
+yeYep--with a his accnexe' skix abam. I line could his fa fake which
+doye; Mron, sust her fou. Hi Nold thakin-sone,' neveding us thicsite
+o

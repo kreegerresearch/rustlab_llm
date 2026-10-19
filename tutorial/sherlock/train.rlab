@@ -1,0 +1,159 @@
+# Script:  train.rlab
+# System:  Pre-train a character-level GPT (lib/gpt.rlab) on the corpus
+#          prepared by prepare_corpus.py, with the parameters in config.rlab.
+#          Data-parallel over the batch with parmap; AdamW with warmup +
+#          cosine; global-norm clipping; held-out evaluation; NPZ
+#          checkpoints that generate.rlab / sft.rlab / distill.rlab load.
+# Concept: The Lesson 18 training loop at corpus scale: sample windows ->
+#          forward/backward per window (in parallel) -> average -> clip ->
+#          AdamW step -> log.  Everything printed is what a production run
+#          prints: loss in nats per character, bits per character,
+#          tokens per second, elapsed time.
+# Equations: L = mean_t -log P(x_{t+1} | x_{<=t});  bits/char = L / ln 2
+# Units:   loss in nats/char; throughput in tokens/s; time in s.
+
+run "../../lib/gpt.rlab"
+run "config.rlab"
+run "data/vocab.rlab"
+
+# === 1. Data ===
+ids_all = load(C.ids_csv);
+N_all = length(ids_all);
+if C.max_chars > 0 && C.max_chars < N_all
+  ids_all = ids_all(1:C.max_chars);
+  N_all = C.max_chars;
+end
+n_val = floor(N_all * C.val_frac);
+n_train = N_all - n_val;
+ids_train = ids_all(1:n_train);
+ids_val = ids_all((n_train + 1):N_all);
+print("corpus:", N_all, "chars   vocab:", vocab_size, "   train:", n_train, "  val:", n_val);
+
+# === 2. Model ===
+cfg = gpt_config(vocab_size, C.d_model, C.n_layer, C.n_head, C.d_ff, C.T + 1);
+n_params = gpt_n_params(cfg);
+print("model: d =", C.d_model, " L =", C.n_layer, " H =", C.n_head, " d_ff =", C.d_ff, " T =", C.T, "  params =", n_params);
+print(sprintf("tokens per step: %d   steps: %d   total tokens: %d  (%.2f epochs)", ...
+              C.batch * C.T, C.n_steps, C.batch * C.T * C.n_steps, C.batch * C.T * C.n_steps / n_train));
+print("progress is printed every", C.log_every, "steps as [percent done  ETA min:sec]; held-out loss every", C.eval_every, "steps; checkpoints every", C.ckpt_every, "steps.");
+
+seed(C.seed);
+step0 = 0;
+if C.resume
+  theta = load(C.ckpt_dir + "/ckpt_latest.npz", "theta");
+  m_adam = load(C.ckpt_dir + "/ckpt_latest.npz", "m");
+  v_adam = load(C.ckpt_dir + "/ckpt_latest.npz", "v");
+  step0 = load(C.ckpt_dir + "/ckpt_latest.npz", "step");
+  print("resumed from step", step0);
+else
+  theta = gpt_flatten(gpt_init(cfg, C.init_std), cfg);
+  m_adam = zeros(length(theta));
+  v_adam = zeros(length(theta));
+end
+wd_mask = gpt_wd_mask(cfg);
+cfgv = [cfg.V, cfg.d, cfg.L, cfg.H, cfg.dff, cfg.Tmax];
+
+# === 3. Helpers ===
+# A batch of B windows of length T+1 (T predictions each) at random offsets.
+function W = sample_windows(ids, B, T)
+  N = length(ids);
+  W = zeros(B, T + 1);
+  for b = 1:B
+    s = floor(rand() * (N - T - 1)) + 1;
+    W(b, :) = ids(s:(s + T));
+  end
+end
+
+# Mean held-out loss over n_w fixed, evenly spaced windows (no RNG).
+function L = eval_loss(ids, n_w, T, P, cfg)
+  N = length(ids);
+  stride = floor((N - T - 1) / n_w);
+  L = 0.0;
+  for w = 1:n_w
+    s = (w - 1) * stride + 1;
+    L = L + gpt_loss(ids(s:(s + T)), P, cfg);
+  end
+  L = L / n_w;
+end
+
+# === 4. Training loop (Lesson 18) ===
+mask = ones(C.T);
+B = C.batch;
+hist_step = zeros(C.n_steps);  hist_loss = zeros(C.n_steps);  hist_gn = zeros(C.n_steps);
+val_steps = [];  val_losses = [];
+tic;
+t_last = toc;
+tokens_done = 0;
+run_loss = 0.0;  run_n = 0;
+for step = (step0 + 1):(step0 + C.n_steps)
+  eta_t = gpt_lr(step - step0, C.n_steps, C.warmup, C.eta_max, C.eta_min);
+  P = gpt_unflatten(theta, cfg);
+  W = sample_windows(ids_train, B, C.T);
+
+  # Data-parallel gradient: one window per worker, flat gradients stacked by row.
+  Gm = parmap(@(b) gpt_grad_flat(W(b, :), mask, P, cfg), 1:B);
+  n_th = size(Gm)(2) - 1;
+  g = sum(Gm(:, 1:n_th), 1) / B;
+  L = mean(Gm(:, n_th + 1));
+
+  [g, gn] = gpt_clip(g, C.clip_norm);
+  [theta, m_adam, v_adam] = gpt_adamw(theta, g, m_adam, v_adam, eta_t, step - step0, ...
+                                      C.beta1, C.beta2, C.eps_adam, C.weight_decay, wd_mask);
+
+  k = step - step0;
+  hist_step(k) = step;  hist_loss(k) = L;  hist_gn(k) = gn;
+  run_loss = run_loss + L;  run_n = run_n + 1;
+  tokens_done = tokens_done + B * C.T;
+
+  if mod(step, C.log_every) == 0
+    t_now = toc;
+    tps = B * C.T * C.log_every / (t_now - t_last);
+    t_last = t_now;
+    done_frac = k / C.n_steps;
+    eta_s = t_now / done_frac - t_now;                 # remaining seconds at the average rate
+    print(sprintf("[%3.0f%%  ETA %3d:%02d]  step %5d | loss %.4f nats (%.3f bits/char) | |g| %.3f | lr %.2e | %5.0f tok/s | %5.0f s", ...
+                  100 * done_frac, floor(eta_s / 60), mod(floor(eta_s), 60), step, run_loss / run_n, run_loss / run_n / log(2), gn, eta_t, tps, t_now));
+    run_loss = 0.0;  run_n = 0;
+  end
+  if mod(step, C.eval_every) == 0
+    Lv = eval_loss(ids_val, C.eval_windows, C.T, gpt_unflatten(theta, cfg), cfg);
+    val_steps = [val_steps, step];  val_losses = [val_losses, Lv];
+    print(sprintf("         held-out loss %.4f nats (%.3f bits/char)", Lv, Lv / log(2)));
+  end
+  if mod(step, C.ckpt_every) == 0 || step == step0 + C.n_steps
+    save(C.ckpt_dir + "/ckpt_latest.npz", "theta", theta, "m", m_adam, "v", v_adam, "step", step, "cfgv", cfgv);
+    save(C.ckpt_dir + sprintf("/ckpt_%06d.npz", step), "theta", theta, "step", step, "cfgv", cfgv);
+  end
+end
+t_total = toc;
+print(sprintf("done: %d steps, %d tokens, %.0f s, %.0f tok/s average", C.n_steps, tokens_done, t_total, tokens_done / t_total));
+
+# === 5. Curves and a sample ===
+save(C.ckpt_dir + "/train_history.npz", "step", hist_step, "loss", hist_loss, "gnorm", hist_gn, ...
+     "val_step", val_steps, "val_loss", val_losses);
+figure();
+subplot(1, 2, 1)
+plot(hist_step, hist_loss / log(2), "color", "blue", "label", "train")
+hold("on")
+if length(val_steps) > 0
+  plot(val_steps, val_losses / log(2), "color", "red", "label", "held-out")
+end
+hline(log2(vocab_size), "gray", "uniform")
+hold("off")
+title("Loss (bits per character)")
+xlabel("step"); ylabel("bits / char")
+legend("train", "held-out", "uniform")
+subplot(1, 2, 2)
+semilogy(hist_step, hist_gn, "color", "green")
+title("Gradient norm (after clipping threshold check)")
+xlabel("step"); ylabel("||g||")
+savefig("train_curves.svg")
+
+P = gpt_unflatten(theta, cfg);
+prompt_ids = gpt_encode(C.prompt, vocab_chars);
+seed(C.seed + 1);
+sample = gpt_generate(P, cfg, prompt_ids, C.gen_tokens, C.temperature, C.top_k);
+print("");
+print("=== sample (tau =", C.temperature, ", top-k =", C.top_k, ") ===");
+print(gpt_decode(sample, vocab_chars));
+print("Saved train_curves.svg and", C.ckpt_dir + "/ckpt_latest.npz");

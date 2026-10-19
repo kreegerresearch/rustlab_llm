@@ -1,0 +1,100 @@
+rustlab 0.3.9 — interpreting /Users/mike/projects/2026/rustlab_llm-sherlock/tutorial/sherlock/sft.rlab (.rlab)
+qa_pairs: 46 pairs   longest example: 82 chars   shortest: 38    characters outside the vocabulary: 0
+example 2 ( 48 ids, 18 scored positions ):
+Q: Where does Holmes live?
+A: 221B Baker Street
+loaded checkpoints/ckpt_latest.npz  (pre-training step 3000 , 811008 params )
+held-out corpus loss before SFT: 1.5269 nats (2.203 bits/char)
+greedy answers before SFT:
+    Who narrates the stories?                        -> I have been that he had been an the star (want: Dr. Watson)
+    Who is 'the woman'?                              -> I was a stare to the state the could of  (want: Irene Adler)
+    What is the speckled band?                       -> I have been that he had been and the str (want: A swamp adder)
+    Who is the narrator of the stories?              -> I have been that he had been and the sta (held-out paraphrase)
+batch: 4 QA examples + 4 replay windows   steps: 300   eta: 0.001
+step   25 | SFT loss 2.0424 nats | replay loss 1.8622 | |g| 2.916 |    11 s
+step   50 | SFT loss 1.1584 nats | replay loss 1.8387 | |g| 2.317 |    21 s
+    Who narrates the stories?                        -> Holmeser Street                (want: Dr. Watson)
+    Who is 'the woman'?                              -> Irene Holmeser pyser of the poose of the (want: Irene Adler)
+    What is the speckled band?                       -> Holmeses Holmes ofly the polder (want: A swamp adder)
+    Who is the narrator of the stories?              -> Her or St. Carte of St. Carte Star (held-out paraphrase)
+step   75 | SFT loss 0.7633 nats | replay loss 1.7640 | |g| 2.189 |    33 s
+step  100 | SFT loss 0.5405 nats | replay loss 1.8193 | |g| 1.876 |    42 s
+    Who narrates the stories?                        -> Dr. Watson                     (want: Dr. Watson)
+    Who is 'the woman'?                              -> Irene Holder Starte Stark      (want: Irene Adler)
+    What is the speckled band?                       -> A swamp adder                  (want: A swamp adder)
+    Who is the narrator of the stories?              -> Red                            (held-out paraphrase)
+step  125 | SFT loss 0.4016 nats | replay loss 1.7985 | |g| 3.615 |    51 s
+step  150 | SFT loss 0.3571 nats | replay loss 1.7979 | |g| 1.791 |    59 s
+    Who narrates the stories?                        -> Dr. Watson                     (want: Dr. Watson)
+    Who is 'the woman'?                              -> Irene Adler                    (want: Irene Adler)
+    What is the speckled band?                       -> A swamp adder                  (want: A swamp adder)
+    Who is the narrator of the stories?              -> Jephro Rad                     (held-out paraphrase)
+step  175 | SFT loss 0.2500 nats | replay loss 1.7539 | |g| 2.729 |    68 s
+step  200 | SFT loss 0.2423 nats | replay loss 1.8000 | |g| 2.083 |    77 s
+    Who narrates the stories?                        -> Dr. Watson                     (want: Dr. Watson)
+    Who is 'the woman'?                              -> Irene Adler                    (want: Irene Adler)
+    What is the speckled band?                       -> A doctor                       (want: A swamp adder)
+    Who is the narrator of the stories?              -> Victorly A goose               (held-out paraphrase)
+step  225 | SFT loss 0.1536 nats | replay loss 1.7255 | |g| 1.963 |    86 s
+step  250 | SFT loss 0.1166 nats | replay loss 1.7477 | |g| 1.072 |    94 s
+    Who narrates the stories?                        -> Dr. Watson                     (want: Dr. Watson)
+    Who is 'the woman'?                              -> Irene Adler                    (want: Irene Adler)
+    What is the speckled band?                       -> A swamp adder                  (want: A swamp adder)
+    Who is the narrator of the stories?              -> Victornin                      (held-out paraphrase)
+step  275 | SFT loss 0.0847 nats | replay loss 1.7513 | |g| 2.872 |   103 s
+step  300 | SFT loss 0.0734 nats | replay loss 1.7519 | |g| 0.884 |   112 s
+    Who narrates the stories?                        -> Dr. Watson                     (want: Dr. Watson)
+    Who is 'the woman'?                              -> Irene Adler                    (want: Irene Adler)
+    What is the speckled band?                       -> A swamp adder                  (want: A swamp adder)
+    Who is the narrator of the stories?              -> Victor Hatherley               (held-out paraphrase)
+greedy answers after SFT (up to 40 characters, stopped at newline):
+   ok   Who narrates the stories?                            -> Dr. Watson
+   ok   Where does Holmes live?                              -> 221B Baker Street
+   ok   Who is 'the woman'?                                  -> Irene Adler
+   ok   What instrument does Holmes play?                    -> The violin
+   ok   Who is Holmes's landlady?                            -> Mrs. Hudson
+   ok   What is Watson's profession?                         -> A doctor
+  MISS  Who hires Holmes in A Scandal in Bohemia?            -> The King of of Bohemia
+   ok   What does the King want back from Irene Adler?       -> A photograph
+   ok   What does Holmes ask the King for as his reward?     -> The photograph
+   ok   What colour is Jabez Wilson's hair?                  -> Red
+   ok   Who is Jabez Wilson's assistant?                     -> Vincent Spaulding
+   ok   What is Vincent Spaulding's real name?               -> John Clay
+  MISS  How much did the Red-Headed League pay each week?    -> Four poundar
+   ok   What did Jabez Wilson copy out for the League?       -> The Encyclopaedia Britannica
+   ok   Which bank did John Clay tunnel towards?             -> The City and Suburban Bank
+   ok   Who is Mary Sutherland's missing bridegroom?         -> Hosmer Angel
+  MISS  Who was really Hosmer Angel?                         -> James Ryder
+   ok   Who is accused of killing Charles McCarthy?          -> James McCarthy
+   ok   Who really killed Charles McCarthy?                  -> John Turner
+   ok   What were Charles McCarthy's dying words about?      -> A rat
+   ok   Which inspector works the Boscombe Valley case?      -> Lestrade
+   ok   What is sent to the Openshaws as a warning?          -> Five orange pips
+   ok   Which letters appear on the orange-pip envelopes?    -> K. K. K.
+   ok   What is the name of the ship Holmes traces the pips to? -> The Lone Star
+   ok   Who is the beggar Hugh Boone really?                 -> Neville St. Clair
+   ok   What is the name of the opium den?                   -> The Bar of Gold
+   ok   Inside which bird is the blue carbuncle found?       -> A goose
+   ok   To whom does the blue carbuncle belong?              -> The Countess of Morcar
+   ok   Who stole the blue carbuncle?                        -> James Ryder
+   ok   Who found the hat and the goose?                     -> Peterson
+   ok   What is the speckled band?                           -> A swamp adder
+   ok   Who is Helen Stoner's stepfather?                    -> Dr. Grimesby Roylott
+   ok   Where does Dr. Roylott live?                         -> Stoke Moran
+   ok   What does Holmes straighten after Roylott bends it?  -> The poker
+   ok   What is the name of the engineer?                    -> Victor Hatherley
+   ok   What did the engineer lose?                          -> His thumb
+   ok   Who hired Victor Hatherley?                          -> Colonel Lysander Stark
+   ok   Who is the noble bachelor?                           -> Lord St. Simon
+   ok   Who did Lord St. Simon marry?                        -> Hatty Doran
+   ok   How many beryls were missing from the coronet?       -> Three
+   ok   Who is the banker in The Beryl Coronet?              -> Alexander Holder
+   ok   Who really stole the beryls?                         -> Sir George Burnwell
+   ok   Who is the governess at the Copper Beeches?          -> Violet Hunter
+   ok   Who employs Violet Hunter?                           -> Jephro Rucastle
+   ok   What was Violet Hunter asked to cut?                 -> Her hair
+   ok   What is the name of the mastiff at the Copper Beeches? -> Carlo
+
+SFT accuracy: 43 / 46 = 93.5 %   (4 replay windows per batch, 300 steps, 113 s)
+forgetting probe: held-out corpus loss 1.5269 -> 1.6950 nats  (2.203 -> 2.445 bits/char)  delta +0.1681 nats (+0.243 bits/char)
+Saved checkpoints/ckpt_sft.npz and sft_curves.svg

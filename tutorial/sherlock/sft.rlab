@@ -1,0 +1,232 @@
+# Script:  sft.rlab
+# System:  Supervised fine-tuning of the pre-trained Sherlock character GPT
+#          (checkpoints/ckpt_latest.npz from train.rlab) on the question /
+#          answer pairs of qa_pairs.rlab, with Lesson 25's prompt masking,
+#          its catastrophic-forgetting probe, and optional replay of
+#          pre-training windows as the countermeasure.
+# Concept: SFT is the same architecture and the same cross-entropy on
+#          different data, scored only on the answer characters.  Every
+#          parameter still moves, so behaviour on the pre-training
+#          distribution drifts: the held-out corpus loss before vs after is
+#          the forgetting probe.  Mixing corpus windows into each batch
+#          (replay) is the simplest way to hold that loss in place.
+# Equations: L_SFT = -(1/|R|) sum_{t in R} log P(x_{t+1} | x_{<=t}),  R = answer positions
+#            accuracy = fraction of pairs whose greedy continuation starts with the answer
+# Units:   loss in nats/char (bits/char = nats / ln 2); learning rate dimensionless; time in s.
+
+run "../../lib/gpt.rlab"
+run "config.rlab"
+run "data/vocab.rlab"
+run "qa_pairs.rlab"
+
+# === 1. SFT knobs ===
+C_sft = struct();
+C_sft.n_steps = 300;   C_sft.eta = 1.0e-3;      # steps; constant LR, half the pre-training peak (3e-4 learns too slowly in 300 steps)
+C_sft.batch = 8;       C_sft.weight_decay = 0.0; # sequences per step (one parmap worker each); no decay
+C_sft.replay = true;   C_sft.replay_frac = 0.5;  # mix pre-training windows into every batch, this fraction
+C_sft.log_every = 25;  C_sft.probe_every = 50;   # loss log; greedy answers to a few questions
+C_sft.gen_max = 40;    C_sft.eval_windows = 16;  # characters per answer; held-out windows for the probe
+C_sft.held_in = [1, 3, 31];                      # dataset questions shown during training
+C_sft.held_out = "Who is the narrator of the stories?";   # paraphrase never trained on
+# A preset may override the two knobs that scale with the model: C.sft_steps, C.sft_eta.
+if isfield(C, "sft_steps")
+  C_sft.n_steps = C.sft_steps;
+end
+if isfield(C, "sft_eta")
+  C_sft.eta = C.sft_eta;
+end
+C_sft.ckpt_in = C.ckpt_dir + "/ckpt_latest.npz";
+C_sft.ckpt_out = C.ckpt_dir + "/ckpt_sft.npz";
+
+# === 2. Data, checkpoint, padded example tables ===
+ids_all = load(C.ids_csv);
+N_all = length(ids_all);
+n_val = floor(N_all * C.val_frac);
+ids_train = ids_all(1:(N_all - n_val));
+ids_val = ids_all((N_all - n_val + 1):N_all);
+
+theta = load(C_sft.ckpt_in, "theta");
+cfgv = load(C_sft.ckpt_in, "cfgv");
+step0 = load(C_sft.ckpt_in, "step");
+cfg = gpt_config(cfgv(1), cfgv(2), cfgv(3), cfgv(4), cfgv(5), cfgv(6));
+T = cfg.Tmax - 1;
+print("loaded", C_sft.ckpt_in, " (pre-training step", step0, ",", gpt_n_params(cfg), "params )");
+
+# Examples have different lengths; parmap workers slice row b back to qa_len(b).
+L_max = max(max(qa_len), T + 1);
+QW = zeros(n_pairs, L_max);  QM = zeros(n_pairs, L_max - 1);
+n_trunc = 0;
+for i = 1:n_pairs
+  [ids, mask] = qa_example(i, vocab_chars);
+  n_i = length(ids);
+  if n_i > cfg.Tmax
+    # The context is shorter than the example (small presets): keep the
+    # tail, which holds the answer, and drop the start of the question.
+    ids = ids((n_i - cfg.Tmax + 1):n_i);
+    mask = mask((n_i - cfg.Tmax + 1):(n_i - 1));
+    n_i = cfg.Tmax;
+    qa_len(i) = n_i;
+    n_trunc = n_trunc + 1;
+  end
+  QW(i, 1:n_i) = ids;
+  QM(i, 1:(n_i - 1)) = mask;
+end
+if n_trunc > 0
+  print("note:", n_trunc, "of", n_pairs, "examples are longer than the model's context (", cfg.Tmax, ") and were left-truncated to it");
+end
+nl_id = gpt_encode(sprintf("%c", 10), vocab_chars)(1);
+
+# === 3. Helpers ===
+# Mean held-out loss over n_w fixed, evenly spaced windows (as in train.rlab).
+function L = eval_loss(ids, n_w, T, P, cfg)
+  stride = floor((length(ids) - T - 1) / n_w);
+  L = 0.0;
+  for w = 1:n_w
+    s = (w - 1) * stride + 1;
+    L = L + gpt_loss(ids(s:(s + T)), P, cfg);
+  end
+  L = L / n_w;
+end
+
+function W = sample_windows(ids, B, T)
+  W = zeros(B, T + 1);
+  for b = 1:B
+    s = floor(rand() * (length(ids) - T - 1)) + 1;
+    W(b, :) = ids(s:(s + T));
+  end
+end
+
+# Flat gradient of padded row b: slice to its true length, then the library.
+function g = sft_grad(b, BW, BM, BL, P, cfg)
+  n = BL(b);
+  g = gpt_grad_flat(BW(b, 1:n), BM(b, 1:(n - 1)), P, cfg);
+end
+
+# Greedy continuation of a prompt, stopped at the first newline (dropped)
+# or after n_max characters.
+function s = greedy_answer(P, cfg, prompt_ids, n_max, nl_id, vocab_chars)
+  seq = prompt_ids;  n0 = length(seq);
+  k = 0;  last = 0;
+  while k < n_max && last != nl_id
+    last = argmax(gpt_next_dist(seq, P, cfg, 1.0));
+    seq = [seq, last];
+    k = k + 1;
+  end
+  n_keep = length(seq) - n0;
+  if last == nl_id
+    n_keep = n_keep - 1;
+  end
+  s = "";
+  for i = 1:n_keep
+    s = s + vocab_chars(seq(n0 + i));
+  end
+end
+
+# The question text inside a "Q: <q>\nA: " prompt.
+function q = qa_question(p)
+  q = p(4:(length(p) - 4));
+end
+
+function probe_answers(P, cfg, qa_prompts, qa_answers, held_in, held_out, n_max, nl_id, vocab_chars)
+  for k = 1:length(held_in)
+    i = held_in(k);
+    s = greedy_answer(P, cfg, gpt_encode(qa_prompts(i), vocab_chars), n_max, nl_id, vocab_chars);
+    print(sprintf("    %-48s -> %-30s (want: %s)", qa_question(qa_prompts(i)), s, qa_answers(i)));
+  end
+  s = greedy_answer(P, cfg, gpt_encode(qa_prompt(held_out), vocab_chars), n_max, nl_id, vocab_chars);
+  print(sprintf("    %-48s -> %-30s (held-out paraphrase)", held_out, s));
+end
+
+# === 4. Before SFT: forgetting baseline and the base model's answers ===
+P = gpt_unflatten(theta, cfg);
+L_before = eval_loss(ids_val, C_sft.eval_windows, T, P, cfg);
+print(sprintf("held-out corpus loss before SFT: %.4f nats (%.3f bits/char)", L_before, L_before / log(2)));
+print("greedy answers before SFT:");
+probe_answers(P, cfg, qa_prompts, qa_answers, C_sft.held_in, C_sft.held_out, C_sft.gen_max, nl_id, vocab_chars);
+
+# === 5. SFT loop: masked loss, fresh AdamW, optional replay ===
+seed(C.seed + 10);
+B = C_sft.batch;
+n_rep = 0;
+if C_sft.replay
+  n_rep = round(B * C_sft.replay_frac);
+end
+n_qa = B - n_rep;
+print("batch:", n_qa, "QA examples +", n_rep, "replay windows   steps:", C_sft.n_steps, "  eta:", C_sft.eta);
+m_adam = zeros(length(theta));  v_adam = zeros(length(theta));      # fresh optimiser state
+wd_mask = gpt_wd_mask(cfg);
+hist_sft = zeros(C_sft.n_steps);  hist_rep = zeros(C_sft.n_steps);
+ptr = 0;
+tic;
+for step = 1:C_sft.n_steps
+  P = gpt_unflatten(theta, cfg);
+  BW = zeros(B, L_max);  BM = zeros(B, L_max - 1);  BL = zeros(B);
+  for b = 1:n_qa                                   # round-robin through the pairs
+    i = mod(ptr, n_pairs) + 1;  ptr = ptr + 1;
+    BW(b, :) = QW(i, :);  BM(b, :) = QM(i, :);  BL(b) = qa_len(i);
+  end
+  if n_rep > 0
+    W = sample_windows(ids_train, n_rep, T);
+    for b = 1:n_rep
+      BW(n_qa + b, 1:(T + 1)) = W(b, :);  BM(n_qa + b, 1:T) = ones(T);  BL(n_qa + b) = T + 1;
+    end
+  end
+  # Each worker returns the mean loss over its own scored positions, so a
+  # 15-character answer and a 128-character window weigh the same.
+  Gm = parmap(@(b) sft_grad(b, BW, BM, BL, P, cfg), 1:B);
+  n_th = size(Gm)(2) - 1;
+  g = sum(Gm(:, 1:n_th), 1) / B;
+  hist_sft(step) = mean(Gm(1:n_qa, n_th + 1));
+  if n_rep > 0
+    hist_rep(step) = mean(Gm((n_qa + 1):B, n_th + 1));
+  end
+  [g, gn] = gpt_clip(g, C.clip_norm);
+  [theta, m_adam, v_adam] = gpt_adamw(theta, g, m_adam, v_adam, C_sft.eta, step, ...
+                                      C.beta1, C.beta2, C.eps_adam, C_sft.weight_decay, wd_mask);
+  if mod(step, C_sft.log_every) == 0
+    k0 = step - C_sft.log_every + 1;
+    print(sprintf("step %4d | SFT loss %.4f nats | replay loss %.4f | |g| %.3f | %5.0f s", ...
+                  step, mean(hist_sft(k0:step)), mean(hist_rep(k0:step)), gn, toc));
+  end
+  if mod(step, C_sft.probe_every) == 0
+    probe_answers(gpt_unflatten(theta, cfg), cfg, qa_prompts, qa_answers, C_sft.held_in, C_sft.held_out, ...
+                  C_sft.gen_max, nl_id, vocab_chars);
+  end
+end
+t_sft = toc;
+
+# === 6. After SFT: accuracy, forgetting probe, checkpoint, curves ===
+P = gpt_unflatten(theta, cfg);
+n_hit = 0;
+print("greedy answers after SFT (up to", C_sft.gen_max, "characters, stopped at newline):");
+for i = 1:n_pairs
+  a = qa_answers(i);
+  s = greedy_answer(P, cfg, gpt_encode(qa_prompts(i), vocab_chars), C_sft.gen_max, nl_id, vocab_chars);
+  tag = "MISS";
+  if length(s) >= length(a) && s(1:length(a)) == a
+    n_hit = n_hit + 1;
+    tag = " ok ";
+  end
+  print(sprintf("  %s  %-52s -> %s", tag, qa_question(qa_prompts(i)), s));
+end
+L_after = eval_loss(ids_val, C_sft.eval_windows, T, P, cfg);
+print("");
+print(sprintf("SFT accuracy: %d / %d = %.1f %%   (%d replay windows per batch, %d steps, %.0f s)", ...
+              n_hit, n_pairs, 100 * n_hit / n_pairs, n_rep, C_sft.n_steps, t_sft));
+print(sprintf("forgetting probe: held-out corpus loss %.4f -> %.4f nats  (%.3f -> %.3f bits/char)  delta %+.4f nats (%+.3f bits/char)", ...
+              L_before, L_after, L_before / log(2), L_after / log(2), L_after - L_before, (L_after - L_before) / log(2)));
+save(C_sft.ckpt_out, "theta", theta, "cfgv", cfgv, "step", step0 + C_sft.n_steps);
+
+figure();
+plot(1:C_sft.n_steps, hist_sft / log(2), "color", "blue", "label", "SFT loss (answer chars)")
+hold("on")
+if n_rep > 0
+  plot(1:C_sft.n_steps, hist_rep / log(2), "color", "red", "label", "replay loss (corpus windows)")
+end
+hline(L_before / log(2), "gray", "held-out corpus, before SFT")
+hold("off")
+title("Supervised fine-tuning (bits per character)")
+xlabel("SFT step"); ylabel("bits / char")
+legend("SFT", "replay", "held-out before")
+savefig("sft_curves.svg")
+print("Saved", C_sft.ckpt_out, "and sft_curves.svg");

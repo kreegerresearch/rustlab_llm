@@ -1,0 +1,97 @@
+rustlab 0.3.9 — interpreting /Users/mike/projects/2026/rustlab_llm-sherlock/tutorial/sherlock/benchmark.rlab (.rlab)
+benchmark of lib/gpt.rlab   logical CPUs: 14
+
+--- 2. model-size sweep: one window of T tokens, times are means over reps ---
+| d | L | H | d_ff | T | params | fwd ms | bwd ms | flat ms | serial tok/s | parmap(8) tok/s | GFLOP/s (6NT) |
+|---|---|---|------|---|--------|--------|--------|---------|--------------|-----------------|---------------|
+| 64 | 2 | 4 | 256 | 64 | 109440 | 5.0 | 9.9 | 1.38 | 3938 | 17840 | 2.83 |
+| 128 | 4 | 4 | 512 | 128 | 811008 | 51.4 | 103.7 | 10.42 | 774 | 4177 | 4.02 |
+| 192 | 6 | 6 | 768 | 128 | 2694528 | 150.8 | 301.7 | 39.68 | 260 | 1341 | 4.57 |
+| 256 | 8 | 8 | 1024 | 128 | 6349824 | 339.5 | 663.3 | 91.55 | 117 | 449 | 4.86 |
+
+--- 3. cost breakdown, default model (d=128 L=4 H=4 d_ff=512 T=128), means of 5 windows ---
+forward 49.9 ms   backward 103.9 ms   flatten 11.15 ms   -> 776 tok/s serial
+params 811008   6NT = 0.623 GFLOP   exact matmul FLOPs = 0.719 GFLOP
+achieved: 4.05 GFLOP/s (6NT / wall)   4.67 GFLOP/s (exact matmul FLOPs / wall)
+
+| forward part | ms | % of fwd |
+|--------------|----|----------|
+| unpack + cache alloc | 3.61 | 7.1 |
+| embedding gather | 0.08 | 0.2 |
+| cache writes | 2.58 | 5.1 |
+| LayerNorm fwd (gpt_ln_fwd) | 3.96 | 7.8 |
+| QKV matmul | 6.78 | 13.4 |
+| head slicing | 0.93 | 1.8 |
+| scores Q K' + mask | 3.18 | 6.3 |
+| softmax | 0.86 | 1.7 |
+| A*V + column write | 2.43 | 4.8 |
+| Wo matmul + residual | 2.47 | 4.9 |
+| W1 matmul + bias | 9.92 | 19.6 |
+| gelu | 2.03 | 4.0 |
+| W2 matmul + bias + residual | 9.87 | 19.5 |
+| LM head matmul | 0.58 | 1.2 |
+| loss (softmax + scalar loop) | 0.59 | 1.2 |
+| cache struct build | 0.77 | 1.5 |
+| sum of parts | 50.63 | (uninstrumented forward 49.93 ms) |
+
+| backward part | ms | % of bwd |
+|---------------|----|----------|
+| dlogits loop | 1.53 | 1.5 |
+| unpack + grad alloc | 7.47 | 7.3 |
+| LM head matmuls | 1.09 | 1.1 |
+| LayerNorm bwd (gpt_ln_bwd) | 4.81 | 4.7 |
+| cache slice reads | 4.68 | 4.6 |
+| LN re-affine (gpt_rows) | 0.83 | 0.8 |
+| FFN matmuls (W1, W2) | 35.71 | 34.8 |
+| gradient writes | 2.90 | 2.8 |
+| gelu grad | 12.50 | 12.2 |
+| Wo / Wqkv matmuls | 17.89 | 17.4 |
+| attention matmuls (dA dV dQ dK) | 9.54 | 9.3 |
+| softmax bwd (elementwise) | 2.27 | 2.2 |
+| embedding scatter-add | 1.18 | 1.2 |
+| gradient struct build | 0.27 | 0.3 |
+| sum of parts | 102.67 | (uninstrumented backward 103.95 ms) |
+
+matmul-bearing parts: 99.5 ms of 153.3 ms (65 %) -> 7.23 GFLOP/s inside those parts; everything else 53.9 ms
+
+--- primitives at the tutorial's shapes (mean of 20 calls) ---
+| primitive | shape | ms | GFLOP/s |
+|-----------|-------|----|---------|
+| layernorm builtin | 128 x 128 | 0.042 | |
+| gpt_ln_fwd (library) | 128 x 128 | 0.322 | |
+| softmax builtin | 128 x 128 | 0.057 | |
+| gelu builtin | 128 x 512 | 0.331 | |
+| matmul (128x128)(128x512) | | 2.058 | 8.15 |
+| matmul (512x512)(512x512) | | 33.308 | 8.06 |
+| attention core, one head | T=128 d_k=32 | 0.379 | 5.53 |
+| embedding gather E(ids,:) | 129 rows of 128 | 0.021 | |
+| embedding scatter-add loop | 129 rows of 128 | 1.171 | |
+| scalar loop iteration | | 0.00017 | (0.17 us) |
+
+--- 4. parmap scaling, default model (serial reference 774 tok/s, logical CPUs 14 ) ---
+| B | s per step | tok/s | speedup | efficiency |
+|---|-----------|-------|---------|------------|
+| 1 | 0.177 | 722 | 0.93 | 93 % |
+| 2 | 0.186 | 1379 | 1.78 | 89 % |
+| 4 | 0.212 | 2417 | 3.12 | 78 % |
+| 8 | 0.264 | 3879 | 5.01 | 63 % |
+| 14 | 0.419 | 4277 | 5.53 | 39 % |
+
+--- per-step overhead outside the windows, default model, B = 8 (mean of 20 calls) ---
+| step component | ms |
+|----------------|----|
+| gpt_unflatten (flat -> struct) | 22.49 |
+| batch reduction sum(Gm(:,1:n),1)/B | 30.91 |
+| gpt_clip | 4.86 |
+| gpt_adamw (flat vectors) | 31.32 |
+| total per step | 89.59 |
+
+--- 5. memory per configuration (MB = 1e6 bytes) ---
+| d | L | params | f64 weights MB | checkpoint MB (theta + m + v) | in-memory complex f64 MB | activation cache MB (T window) |
+|---|---|--------|----------------|-------------------------------|--------------------------|--------------------------------|
+| 64 | 2 | 109440 | 0.88 | 2.63 | 1.75 | 2.7 |
+| 128 | 4 | 811008 | 6.49 | 19.46 | 12.98 | 21.2 |
+| 192 | 6 | 2694528 | 21.56 | 64.67 | 43.11 | 47.7 |
+| 256 | 8 | 6349824 | 50.80 | 152.40 | 101.60 | 84.7 |
+
+Saved benchmark.svg

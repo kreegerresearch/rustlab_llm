@@ -1,0 +1,33 @@
+# Script:  generate.rlab
+# System:  Load the latest checkpoint written by train.rlab (or sft.rlab /
+#          distill.rlab via C.ckpt_dir) and continue a prompt under the
+#          sampling controls of Lesson 21.
+# Concept: Autoregressive generation is a closed loop: the sampled
+#          character is appended to the context and the model is run again.
+#          Temperature, top-k and greedy decoding are the knobs.
+# Units:   tau dimensionless; tokens are characters here.
+
+run "../../lib/gpt.rlab"
+run "config.rlab"
+run "data/vocab.rlab"
+
+ck = C.ckpt_dir + "/ckpt_latest.npz";
+theta = load(ck, "theta");
+cfgv = load(ck, "cfgv");
+step = load(ck, "step");
+cfg = gpt_config(cfgv(1), cfgv(2), cfgv(3), cfgv(4), cfgv(5), cfgv(6));
+P = gpt_unflatten(theta, cfg);
+print("loaded", ck, " (step", step, ",", gpt_n_params(cfg), "params )");
+
+prompt_ids = gpt_encode(C.prompt, vocab_chars);
+seed(C.seed + 2);
+
+print("");
+print("=== greedy ===");
+print(gpt_decode(gpt_generate(P, cfg, prompt_ids, C.gen_tokens, 0, 0), vocab_chars));
+print("");
+print("=== tau =", C.temperature, " top-k =", C.top_k, " ===");
+print(gpt_decode(gpt_generate(P, cfg, prompt_ids, C.gen_tokens, C.temperature, C.top_k), vocab_chars));
+print("");
+print("=== tau = 1.2, no truncation ===");
+print(gpt_decode(gpt_generate(P, cfg, prompt_ids, C.gen_tokens, 1.2, 0), vocab_chars));

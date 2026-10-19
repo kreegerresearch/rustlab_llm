@@ -1,0 +1,58 @@
+# Script:  ask.rlab
+# System:  Ask the fine-tuned Sherlock model a question from the command
+#          line: `make sherlock-ask Q="Who is the woman?"` writes
+#          question.rlab (C.question = "...") and runs this script, which
+#          formats the prompt exactly as sft.rlab trained it and decodes
+#          greedily until the end-of-answer newline.
+# Concept: Inference is the Lesson 21 closed loop with a stop condition;
+#          the Q:/A: template is the instruction format of Lesson 25.
+# Units:   characters.
+
+run "../../lib/gpt.rlab"
+run "config.rlab"
+run "data/vocab.rlab"
+run "question.rlab"
+
+NL = sprintf("%c", 10);
+ck_sft = C.ckpt_dir + "/ckpt_sft.npz";
+ck_base = C.ckpt_dir + "/ckpt_latest.npz";
+# Prefer the fine-tuned checkpoint; fall back to the pre-trained one.
+% (rustlab has no file-exists test; C.use_base_model = true forces the fallback.)
+use_base = false;
+if isfield(C, "use_base_model")
+  use_base = C.use_base_model;
+end
+if use_base
+  ck = ck_base;
+else
+  ck = ck_sft;
+end
+theta = load(ck, "theta");
+cfgv = load(ck, "cfgv");
+cfg = gpt_config(cfgv(1), cfgv(2), cfgv(3), cfgv(4), cfgv(5), cfgv(6));
+P = gpt_unflatten(theta, cfg);
+
+prompt = "Q: " + C.question + NL + "A: ";
+ids = gpt_encode(prompt, vocab_chars);
+nl_id = gpt_encode(NL, vocab_chars);
+nl_id = nl_id(1);
+
+# Greedy decode, stopping at the first newline or after max_answer chars.
+max_answer = 80;
+out = ids;
+n = 0;
+stop = false;
+while n < max_answer && stop == false
+  p = gpt_next_dist(out, P, cfg, 1.0);
+  nxt = argmax(p);
+  if nxt == nl_id
+    stop = true;
+  else
+    out = [out, nxt];
+    n = n + 1;
+  end
+end
+answer = gpt_decode(out((length(ids) + 1):length(out)), vocab_chars);
+print("model:", ck);
+print("Q:", C.question);
+print("A:", answer);

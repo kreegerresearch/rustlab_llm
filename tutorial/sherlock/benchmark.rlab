@@ -1,0 +1,412 @@
+# Script:  benchmark.rlab
+# System:  Performance study of lib/gpt.rlab on this machine: a model-size
+#          sweep (forward / backward / flatten time, tokens per second,
+#          serial and parmap), a cost breakdown of the default tutorial
+#          model, parmap scaling over the batch, and the memory footprint
+#          of each configuration.  No corpus is needed: token ids are random.
+# Concept: Where the time goes when a GPT is trained in dense f64 matrix
+#          algebra under an interpreter -- matmul FLOPs against everything
+#          else -- and how far data parallelism over the batch stretches it.
+# Equations: train FLOPs ~= 6 * params * T per window (matmul convention);
+#            achieved GFLOP/s = FLOPs / wall time;  speedup = (B T / t_B) / (T / t_1)
+# Units:   time in ms or s; throughput in tokens/s; GFLOP/s; MB = 1e6 bytes.
+
+run "../../lib/gpt.rlab"
+
+V = 77;                                  # the Sherlock vocabulary size
+seed(1);
+print("benchmark of lib/gpt.rlab   logical CPUs:", nproc());
+
+# === 1. Helpers ===
+# One window: forward, backward, flatten, each timed separately.
+function [t_f, t_b, t_fl] = time_one(ids, P, cfg)
+  T = length(ids) - 1;
+  mask = ones(T);
+  tic; [lo, L, cache] = gpt_forward(ids, mask, P, cfg); t_f = toc;
+  tic; G = gpt_backward(ids, gpt_dlogits(ids, mask, lo, cache.total), cache, P, cfg); t_b = toc;
+  tic; g = gpt_flatten(G, cfg); t_fl = toc;
+end
+
+# B random windows of T+1 ids, one per row.
+function W = random_windows(B, T, V)
+  W = zeros(B, T + 1);
+  for b = 1:B
+    W(b, :) = randi(V, T + 1);
+  end
+end
+
+# Matmul FLOPs of one forward + backward at the library's exact shapes
+# (weight matmuls x3 for forward, dX and dW; attention x3 as well).
+function f = matmul_flops(cfg, T)
+  d = cfg.d;  L = cfg.L;  dff = cfg.dff;  V = cfg.V;
+  f = 6 * T * (L * (4 * d * d + 2 * d * dff) + d * V) + 12 * L * T * T * d;
+end
+
+# === 2. Model-size sweep ===
+cfgs = [64, 2, 4, 256, 64; 128, 4, 4, 512, 128; 192, 6, 6, 768, 128; 256, 8, 8, 1024, 128];
+n_cfg = size(cfgs)(1);
+B_par = 8;
+sw_params = zeros(n_cfg);  sw_tps = zeros(n_cfg);  sw_par = zeros(n_cfg);
+sw_f = zeros(n_cfg);  sw_b = zeros(n_cfg);  sw_fl = zeros(n_cfg);
+print("");
+print("--- 2. model-size sweep: one window of T tokens, times are means over reps ---");
+print("| d | L | H | d_ff | T | params | fwd ms | bwd ms | flat ms | serial tok/s | parmap(8) tok/s | GFLOP/s (6NT) |");
+print("|---|---|---|------|---|--------|--------|--------|---------|--------------|-----------------|---------------|");
+go = true;
+for i = 1:n_cfg
+  if go
+    d = cfgs(i, 1);  Lyr = cfgs(i, 2);  H = cfgs(i, 3);  dff = cfgs(i, 4);  T = cfgs(i, 5);
+    cfg = gpt_config(V, d, Lyr, H, dff, T + 1);
+    P = gpt_init(cfg, 0.02);
+    ids = randi(V, T + 1);
+    [t_f, t_b, t_fl] = time_one(ids, P, cfg);          # first pass, also the 5 s guard
+    reps = 1;
+    par_tps = 0;
+    if t_f + t_b < 5
+      for r = 1:3
+        [a, b, c] = time_one(ids, P, cfg);
+        t_f = t_f + a;  t_b = t_b + b;  t_fl = t_fl + c;
+      end
+      reps = 4;
+      W = random_windows(B_par, T, V);
+      mask = ones(T);
+      tic;
+      Gm = parmap(@(b) gpt_grad_flat(W(b, :), mask, P, cfg), 1:B_par);
+      par_tps = B_par * T / toc;
+    else
+      go = false;                                       # > 5 s: report this one, skip larger
+    end
+    t_f = t_f / reps;  t_b = t_b / reps;  t_fl = t_fl / reps;
+    tps = T / (t_f + t_b + t_fl);
+    n_p = gpt_n_params(cfg);
+    gfs = 6 * n_p * T / (t_f + t_b) / 1e9;
+    print(sprintf("| %d | %d | %d | %d | %d | %d | %.1f | %.1f | %.2f | %.0f | %.0f | %.2f |", ...
+                  d, Lyr, H, dff, T, n_p, 1000 * t_f, 1000 * t_b, 1000 * t_fl, tps, par_tps, gfs));
+    sw_params(i) = n_p;  sw_tps(i) = tps;  sw_par(i) = par_tps;
+    sw_f(i) = t_f;  sw_b(i) = t_b;  sw_fl(i) = t_fl;
+  end
+end
+
+# === 3. Cost breakdown of the default model ===
+# A copy of gpt_forward / gpt_backward with tic/toc around each kind of
+# work.  Slot k of tm accumulates the seconds spent in that kind of work.
+function [L, cache, tm] = timed_forward(ids, mask, P, cfg)
+  d = cfg.d;  Lyr = cfg.L;  H = cfg.H;  dk = cfg.dk;  dff = cfg.dff;  V = cfg.V;
+  T = length(ids);
+  tm = zeros(16);
+  tic;
+  E = P.E;  PE = P.PE;
+  Wqkv = P.Wqkv;  Wo = P.Wo;  W1 = P.W1;  b1 = P.b1;  W2 = P.W2;  b2 = P.b2;
+  g1 = P.g1;  be1 = P.be1;  g2 = P.g2;  be2 = P.be2;
+  scale = 1.0 / sqrt(dk);
+  M = -1.0e9 * (1 - cumsum(eye(T), 1));
+  Hin_all = zeros(Lyr * T, d);  xn1_all = zeros(Lyr * T, d);  sig1_all = zeros(Lyr * T, 1);
+  QKV_all = zeros(Lyr * T, 3 * d);  A_all = zeros(Lyr * H * T, T);  cat_all = zeros(Lyr * T, d);
+  Hmid_all = zeros(Lyr * T, d);  xn2_all = zeros(Lyr * T, d);  sig2_all = zeros(Lyr * T, 1);
+  pre_all = zeros(Lyr * T, dff);  hid_all = zeros(Lyr * T, dff);
+  tm(1) = tm(1) + toc;                                   # 1 unpack + cache allocation
+  tic;  X = E(ids, :) + PE(1:T, :);  tm(2) = tm(2) + toc; # 2 embedding gather
+  for l = 1:Lyr
+    r = ((l - 1) * T + 1):(l * T);
+    w = ((l - 1) * d + 1):(l * d);
+    tic;  Hin_all(r, :) = X;  tm(3) = tm(3) + toc;      # 3 cache writes
+    tic;  [Xn1, xn1, sig1] = gpt_ln_fwd(X, g1(l, :), be1(l, :));  tm(4) = tm(4) + toc;  # 4 LayerNorm
+    tic;  xn1_all(r, :) = xn1;  sig1_all(r, 1) = sig1;  tm(3) = tm(3) + toc;
+    tic;  QKV = Xn1 * Wqkv(w, :);  tm(5) = tm(5) + toc; # 5 QKV matmul
+    tic;  QKV_all(r, :) = QKV;  cat_h = zeros(T, d);  tm(3) = tm(3) + toc;
+    for h = 1:H
+      c = ((h - 1) * dk + 1):(h * dk);
+      tic;  Q = QKV(:, c);  K = QKV(:, d + c);  Vh = QKV(:, 2 * d + c);  tm(6) = tm(6) + toc;  # 6 head slicing
+      tic;  S = Q * K' * scale + M;  tm(7) = tm(7) + toc;   # 7 scores QK'
+      tic;  A = softmax(S);  tm(8) = tm(8) + toc;           # 8 softmax
+      tic;  A_all((((l - 1) * H + (h - 1)) * T + 1):(((l - 1) * H + h) * T), :) = A;  tm(3) = tm(3) + toc;
+      tic;  cat_h(:, c) = A * Vh;  tm(9) = tm(9) + toc;     # 9 A*V + column write
+    end
+    tic;  cat_all(r, :) = cat_h;  tm(3) = tm(3) + toc;
+    tic;  Hmid = X + cat_h * Wo(w, :);  tm(10) = tm(10) + toc;  # 10 Wo matmul + residual
+    tic;  Hmid_all(r, :) = Hmid;  tm(3) = tm(3) + toc;
+    tic;  [Xn2, xn2, sig2] = gpt_ln_fwd(Hmid, g2(l, :), be2(l, :));  tm(4) = tm(4) + toc;
+    tic;  xn2_all(r, :) = xn2;  sig2_all(r, 1) = sig2;  tm(3) = tm(3) + toc;
+    tic;  pre = Xn2 * W1(w, :) + gpt_rows(b1(l, :), T);  tm(11) = tm(11) + toc;  # 11 W1 matmul + bias
+    tic;  hid = gelu(pre);  tm(12) = tm(12) + toc;                               # 12 gelu
+    tic;  pre_all(r, :) = pre;  hid_all(r, :) = hid;  tm(3) = tm(3) + toc;
+    wf = ((l - 1) * dff + 1):(l * dff);
+    tic;  X = Hmid + hid * W2(wf, :) + gpt_rows(b2(l, :), T);  tm(13) = tm(13) + toc;  # 13 W2 matmul + bias + residual
+  end
+  tic;  [Hf, xnf, sigf] = gpt_ln_fwd(X, P.gf, P.bf);  tm(4) = tm(4) + toc;
+  tic;  logits = Hf * P.W_U;  tm(14) = tm(14) + toc;    # 14 LM head matmul
+  tic;
+  L = 0.0;  total = 0.0;
+  Pm = softmax(logits(1:(T - 1), :));
+  for t = 1:(T - 1)
+    if mask(t) > 0
+      L = L - log(Pm(t, ids(t + 1)));
+      total = total + 1.0;
+    end
+  end
+  L = L / total;
+  tm(15) = tm(15) + toc;                                 # 15 loss: softmax + scalar loop
+  tic;
+  cache = struct("T", T, "Hin_all", Hin_all, "xn1_all", xn1_all, "sig1_all", sig1_all, ...
+                 "QKV_all", QKV_all, "A_all", A_all, "cat_all", cat_all, "Hmid_all", Hmid_all, ...
+                 "xn2_all", xn2_all, "sig2_all", sig2_all, "pre_all", pre_all, "hid_all", hid_all, ...
+                 "HL", X, "Hf", Hf, "xnf", xnf, "sigf", sigf, "logits", logits, "total", total);
+  tm(16) = tm(16) + toc;                                 # 16 cache struct build
+end
+
+function [G, tm] = timed_backward(ids, mask, cache, P, cfg)
+  d = cfg.d;  Lyr = cfg.L;  H = cfg.H;  dk = cfg.dk;  dff = cfg.dff;  V = cfg.V;
+  T = cache.T;
+  tm = zeros(14);
+  tic;  dlogits = gpt_dlogits(ids, mask, cache.logits, cache.total);  tm(1) = tm(1) + toc;  # 1 dlogits loop
+  tic;
+  Wqkv = P.Wqkv;  Wo = P.Wo;  W1 = P.W1;  W2 = P.W2;
+  g1 = P.g1;  g2 = P.g2;  gf = P.gf;  W_U = P.W_U;  be1 = P.be1;  be2 = P.be2;
+  Hin_all = cache.Hin_all;  xn1_all = cache.xn1_all;  sig1_all = cache.sig1_all;
+  QKV_all = cache.QKV_all;  A_all = cache.A_all;  cat_all = cache.cat_all;
+  Hmid_all = cache.Hmid_all;  xn2_all = cache.xn2_all;  sig2_all = cache.sig2_all;
+  pre_all = cache.pre_all;  hid_all = cache.hid_all;
+  scale = 1.0 / sqrt(dk);
+  dE = zeros(V, d);  dWqkv = zeros(Lyr * d, 3 * d);  dWo = zeros(Lyr * d, d);
+  dW1 = zeros(Lyr * d, dff);  db1 = zeros(Lyr, dff);  dW2 = zeros(Lyr * dff, d);  db2 = zeros(Lyr, d);
+  dg1 = zeros(Lyr, d);  dbe1 = zeros(Lyr, d);  dg2 = zeros(Lyr, d);  dbe2 = zeros(Lyr, d);
+  tm(2) = tm(2) + toc;                                   # 2 unpack + gradient allocation
+  tic;  dW_U = cache.Hf' * dlogits;  dHf = dlogits * W_U';  tm(3) = tm(3) + toc;  # 3 LM head matmuls
+  tic;  [dX, dgf, dbf] = gpt_ln_bwd(dHf, cache.xnf, cache.sigf, gf);  tm(4) = tm(4) + toc;  # 4 LayerNorm bwd
+  for l = Lyr:-1:1
+    r = ((l - 1) * T + 1):(l * T);
+    w = ((l - 1) * d + 1):(l * d);
+    wf = ((l - 1) * dff + 1):(l * dff);
+    tic;  hid = hid_all(r, :);  pre = pre_all(r, :);  xn2 = xn2_all(r, :);  sig2 = sig2_all(r, 1);  tm(5) = tm(5) + toc;  # 5 cache slice reads
+    tic;  Xn2 = xn2 .* gpt_rows(g2(l, :), T) + gpt_rows(be2(l, :), T);  tm(6) = tm(6) + toc;  # 6 LN re-affine
+    dHmid = dX;
+    tic;  t1 = hid' * dX;  dhid = dX * W2(wf, :)';  tm(7) = tm(7) + toc;      # 7 FFN matmuls
+    tic;  dW2(wf, :) = t1;  db2(l, :) = sum(dX, 1);  tm(8) = tm(8) + toc;    # 8 gradient writes
+    tic;  dpre = dhid .* gpt_gelu_grad(pre);  tm(9) = tm(9) + toc;           # 9 gelu grad
+    tic;  t2 = Xn2' * dpre;  dXn2 = dpre * W1(w, :)';  tm(7) = tm(7) + toc;
+    tic;  dW1(w, :) = t2;  db1(l, :) = sum(dpre, 1);  tm(8) = tm(8) + toc;
+    tic;  [dH2, dgam2, dbet2] = gpt_ln_bwd(dXn2, xn2, sig2, g2(l, :));  tm(4) = tm(4) + toc;
+    tic;  dg2(l, :) = dgam2;  dbe2(l, :) = dbet2;  dHmid = dHmid + dH2;  tm(8) = tm(8) + toc;
+    tic;  cat_h = cat_all(r, :);  QKV = QKV_all(r, :);  tm(5) = tm(5) + toc;
+    dHin = dHmid;
+    tic;  t3 = cat_h' * dHmid;  dcat = dHmid * Wo(w, :)';  tm(10) = tm(10) + toc;  # 10 Wo / QKV projection matmuls
+    tic;  dWo(w, :) = t3;  dQKV = zeros(T, 3 * d);  tm(8) = tm(8) + toc;
+    for h = 1:H
+      c = ((h - 1) * dk + 1):(h * dk);
+      tic;
+      Q = QKV(:, c);  K = QKV(:, d + c);  Vh = QKV(:, 2 * d + c);
+      A = A_all((((l - 1) * H + (h - 1)) * T + 1):(((l - 1) * H + h) * T), :);
+      dO = dcat(:, c);
+      tm(5) = tm(5) + toc;
+      tic;  dA = dO * Vh';  dV = A' * dO;  tm(11) = tm(11) + toc;             # 11 attention matmuls
+      tic;  dS = A .* (dA - gpt_cols(sum(A .* dA, 2), T));  tm(12) = tm(12) + toc;  # 12 softmax bwd (elementwise)
+      tic;  dQ = dS * K * scale;  dK = dS' * Q * scale;  tm(11) = tm(11) + toc;
+      tic;  dQKV(:, c) = dQ;  dQKV(:, d + c) = dK;  dQKV(:, 2 * d + c) = dV;  tm(8) = tm(8) + toc;
+    end
+    tic;  xn1 = xn1_all(r, :);  sig1 = sig1_all(r, 1);  tm(5) = tm(5) + toc;
+    tic;  Xn1 = xn1 .* gpt_rows(g1(l, :), T) + gpt_rows(be1(l, :), T);  tm(6) = tm(6) + toc;
+    tic;  t4 = Xn1' * dQKV;  dXn1 = dQKV * Wqkv(w, :)';  tm(10) = tm(10) + toc;
+    tic;  dWqkv(w, :) = t4;  tm(8) = tm(8) + toc;
+    tic;  [dH1, dgam1, dbet1] = gpt_ln_bwd(dXn1, xn1, sig1, g1(l, :));  tm(4) = tm(4) + toc;
+    tic;  dg1(l, :) = dgam1;  dbe1(l, :) = dbet1;  dX = dHin + dH1;  tm(8) = tm(8) + toc;
+  end
+  tic;
+  for t = 1:T
+    dE(ids(t), :) = dE(ids(t), :) + dX(t, :);
+  end
+  tm(13) = tm(13) + toc;                                 # 13 embedding scatter-add
+  tic;
+  G = struct("E", dE, "Wqkv", dWqkv, "Wo", dWo, "W1", dW1, "b1", db1, "W2", dW2, "b2", db2, ...
+             "g1", dg1, "be1", dbe1, "g2", dg2, "be2", dbe2, "gf", dgf, "bf", dbf, "W_U", dW_U);
+  tm(14) = tm(14) + toc;                                 # 14 gradient struct build
+end
+
+d0 = 128;  L0 = 4;  H0 = 4;  dff0 = 512;  T0 = 128;
+cfg0 = gpt_config(V, d0, L0, H0, dff0, T0 + 1);
+P0 = gpt_init(cfg0, 0.02);
+ids0 = randi(V, T0 + 1);
+mask0 = ones(T0);
+n_rep = 5;
+tmf = zeros(16);  tmb = zeros(14);
+for r = 1:n_rep
+  [L, cache, a] = timed_forward(ids0, mask0, P0, cfg0);
+  [G, b] = timed_backward(ids0, mask0, cache, P0, cfg0);
+  tmf = tmf + a;  tmb = tmb + b;
+end
+tmf = tmf / n_rep;  tmb = tmb / n_rep;
+# Uninstrumented reference for the same window (mean of n_rep).
+t_f0 = 0;  t_b0 = 0;  t_fl0 = 0;
+for r = 1:n_rep
+  [a, b, c] = time_one(ids0, P0, cfg0);
+  t_f0 = t_f0 + a;  t_b0 = t_b0 + b;  t_fl0 = t_fl0 + c;
+end
+t_f0 = t_f0 / n_rep;  t_b0 = t_b0 / n_rep;  t_fl0 = t_fl0 / n_rep;
+t_wall = t_f0 + t_b0;
+n_p0 = gpt_n_params(cfg0);
+fl_6nt = 6 * n_p0 * T0;
+fl_mm = matmul_flops(cfg0, T0 + 1);
+print("");
+print("--- 3. cost breakdown, default model (d=128 L=4 H=4 d_ff=512 T=128), means of", n_rep, "windows ---");
+print(sprintf("forward %.1f ms   backward %.1f ms   flatten %.2f ms   -> %.0f tok/s serial", ...
+              1000 * t_f0, 1000 * t_b0, 1000 * t_fl0, T0 / (t_f0 + t_b0 + t_fl0)));
+print(sprintf("params %d   6NT = %.3f GFLOP   exact matmul FLOPs = %.3f GFLOP", n_p0, fl_6nt / 1e9, fl_mm / 1e9));
+print(sprintf("achieved: %.2f GFLOP/s (6NT / wall)   %.2f GFLOP/s (exact matmul FLOPs / wall)", ...
+              fl_6nt / t_wall / 1e9, fl_mm / t_wall / 1e9));
+fnames = {"unpack + cache alloc", "embedding gather", "cache writes", "LayerNorm fwd (gpt_ln_fwd)", ...
+          "QKV matmul", "head slicing", "scores Q K' + mask", "softmax", "A*V + column write", ...
+          "Wo matmul + residual", "W1 matmul + bias", "gelu", "W2 matmul + bias + residual", ...
+          "LM head matmul", "loss (softmax + scalar loop)", "cache struct build"};
+bnames = {"dlogits loop", "unpack + grad alloc", "LM head matmuls", "LayerNorm bwd (gpt_ln_bwd)", ...
+          "cache slice reads", "LN re-affine (gpt_rows)", "FFN matmuls (W1, W2)", "gradient writes", ...
+          "gelu grad", "Wo / Wqkv matmuls", "attention matmuls (dA dV dQ dK)", "softmax bwd (elementwise)", ...
+          "embedding scatter-add", "gradient struct build"};
+print("");
+print("| forward part | ms | % of fwd |");
+print("|--------------|----|----------|");
+for k = 1:16
+  print(sprintf("| %s | %.2f | %.1f |", fnames(k), 1000 * tmf(k), 100 * tmf(k) / sum(tmf)));
+end
+print(sprintf("| sum of parts | %.2f | (uninstrumented forward %.2f ms) |", 1000 * sum(tmf), 1000 * t_f0));
+print("");
+print("| backward part | ms | % of bwd |");
+print("|---------------|----|----------|");
+for k = 1:14
+  print(sprintf("| %s | %.2f | %.1f |", bnames(k), 1000 * tmb(k), 100 * tmb(k) / sum(tmb)));
+end
+print(sprintf("| sum of parts | %.2f | (uninstrumented backward %.2f ms) |", 1000 * sum(tmb), 1000 * t_b0));
+mm_f = tmf(5) + tmf(7) + tmf(9) + tmf(10) + tmf(11) + tmf(13) + tmf(14);
+mm_b = tmb(3) + tmb(7) + tmb(10) + tmb(11);
+t_mm = mm_f + mm_b;
+print("");
+print(sprintf("matmul-bearing parts: %.1f ms of %.1f ms (%.0f %%) -> %.2f GFLOP/s inside those parts; everything else %.1f ms", ...
+              1000 * t_mm, 1000 * (sum(tmf) + sum(tmb)), 100 * t_mm / (sum(tmf) + sum(tmb)), fl_mm / t_mm / 1e9, ...
+              1000 * (sum(tmf) + sum(tmb) - t_mm)));
+
+# Builtins and primitives at the tutorial's shapes (per call, mean of n_call).
+n_call = 20;
+Xa = randn(T0, d0);  Xb = randn(T0, dff0);  Wa = randn(d0, dff0);  Wsq = randn(512, 512);
+Qh = randn(T0, 32);  Kh = randn(T0, 32);  Vh = randn(T0, 32);
+Mc = -1.0e9 * (1 - cumsum(eye(T0), 1));
+tic;  for k = 1:n_call;  Y = layernorm(Xa);  end;  t_ln = toc / n_call;
+tic;  for k = 1:n_call;  Y = gpt_ln_fwd(Xa, ones(d0), zeros(d0));  end;  t_ln2 = toc / n_call;
+tic;  for k = 1:n_call;  Y = softmax(Xa);  end;  t_sm = toc / n_call;
+tic;  for k = 1:n_call;  Y = gelu(Xb);  end;  t_ge = toc / n_call;
+tic;  for k = 1:n_call;  Y = Xa * Wa;  end;  t_m1 = toc / n_call;
+tic;  for k = 1:n_call;  Y = Wsq * Wsq;  end;  t_m2 = toc / n_call;
+tic;  for k = 1:n_call;  A = softmax(Qh * Kh' / sqrt(32) + Mc);  O = A * Vh;  end;  t_att = toc / n_call;
+Ea = randn(V, d0);
+tic;  for k = 1:n_call;  Y = Ea(ids0, :);  end;  t_gat = toc / n_call;
+dXa = randn(T0 + 1, d0);
+tic;
+for k = 1:n_call
+  dE = zeros(V, d0);
+  for t = 1:(T0 + 1)
+    dE(ids0(t), :) = dE(ids0(t), :) + dXa(t, :);
+  end
+end
+t_sc = toc / n_call;
+th = zeros(n_p0 + 1);
+tic;  for k = 1:n_call;  s = 0;  for t = 1:1000;  s = s + t;  end;  end;  t_loop = toc / n_call / 1000;
+print("");
+print("--- primitives at the tutorial's shapes (mean of", n_call, "calls) ---");
+print("| primitive | shape | ms | GFLOP/s |");
+print("|-----------|-------|----|---------|");
+print(sprintf("| layernorm builtin | 128 x 128 | %.3f | |", 1000 * t_ln));
+print(sprintf("| gpt_ln_fwd (library) | 128 x 128 | %.3f | |", 1000 * t_ln2));
+print(sprintf("| softmax builtin | 128 x 128 | %.3f | |", 1000 * t_sm));
+print(sprintf("| gelu builtin | 128 x 512 | %.3f | |", 1000 * t_ge));
+print(sprintf("| matmul (128x128)(128x512) | | %.3f | %.2f |", 1000 * t_m1, 2 * 128 * 128 * 512 / t_m1 / 1e9));
+print(sprintf("| matmul (512x512)(512x512) | | %.3f | %.2f |", 1000 * t_m2, 2 * 512^3 / t_m2 / 1e9));
+print(sprintf("| attention core, one head | T=128 d_k=32 | %.3f | %.2f |", 1000 * t_att, 4 * 128 * 128 * 32 / t_att / 1e9));
+print(sprintf("| embedding gather E(ids,:) | 129 rows of 128 | %.3f | |", 1000 * t_gat));
+print(sprintf("| embedding scatter-add loop | 129 rows of 128 | %.3f | |", 1000 * t_sc));
+print(sprintf("| scalar loop iteration | | %.5f | (%.2f us) |", 1000 * t_loop, 1e6 * t_loop));
+
+# === 4. parmap scaling over the batch (default model) ===
+Bs = [1, 2, 4, 8, 14];
+n_B = length(Bs);
+par_tps = zeros(n_B);
+t_serial = sw_f(2) + sw_b(2) + sw_fl(2);
+serial_tps = T0 / t_serial;
+print("");
+print("--- 4. parmap scaling, default model (serial reference", sprintf("%.0f", serial_tps), "tok/s, logical CPUs", nproc(), ") ---");
+print("| B | s per step | tok/s | speedup | efficiency |");
+print("|---|-----------|-------|---------|------------|");
+for i = 1:n_B
+  B = Bs(i);
+  W = random_windows(B, T0, V);
+  t_best = 0;
+  for r = 1:3
+    tic;
+    Gm = parmap(@(b) gpt_grad_flat(W(b, :), mask0, P0, cfg0), 1:B);
+    t_r = toc;
+    if r == 1 || t_r < t_best
+      t_best = t_r;
+    end
+  end
+  par_tps(i) = B * T0 / t_best;
+  print(sprintf("| %d | %.3f | %.0f | %.2f | %.0f %% |", B, t_best, par_tps(i), par_tps(i) / serial_tps, 100 * par_tps(i) / serial_tps / B));
+end
+
+# Per-step work outside the windows (train.rlab pays this once per step).
+theta = gpt_flatten(P0, cfg0);
+m_a = zeros(length(theta));  v_a = zeros(length(theta));
+wdm = gpt_wd_mask(cfg0);
+W8 = random_windows(8, T0, V);
+Gm = parmap(@(b) gpt_grad_flat(W8(b, :), mask0, P0, cfg0), 1:8);
+n_th = size(Gm)(2) - 1;
+tic;  for k = 1:n_call;  Pu = gpt_unflatten(theta, cfg0);  end;  t_unf = toc / n_call;
+tic;  for k = 1:n_call;  g = sum(Gm(:, 1:n_th), 1) / 8;  end;  t_red = toc / n_call;
+tic;  for k = 1:n_call;  [gc, gn] = gpt_clip(g, 1.0);  end;  t_clip = toc / n_call;
+tic;  for k = 1:n_call;  [th2, m2, v2] = gpt_adamw(theta, gc, m_a, v_a, 1e-3, k, 0.9, 0.95, 1e-8, 0.1, wdm);  end;  t_adam = toc / n_call;
+print("");
+print("--- per-step overhead outside the windows, default model, B = 8 (mean of", n_call, "calls) ---");
+print("| step component | ms |");
+print("|----------------|----|");
+print(sprintf("| gpt_unflatten (flat -> struct) | %.2f |", 1000 * t_unf));
+print(sprintf("| batch reduction sum(Gm(:,1:n),1)/B | %.2f |", 1000 * t_red));
+print(sprintf("| gpt_clip | %.2f |", 1000 * t_clip));
+print(sprintf("| gpt_adamw (flat vectors) | %.2f |", 1000 * t_adam));
+print(sprintf("| total per step | %.2f |", 1000 * (t_unf + t_red + t_clip + t_adam)));
+
+# === 5. Memory ===
+print("");
+print("--- 5. memory per configuration (MB = 1e6 bytes) ---");
+print("| d | L | params | f64 weights MB | checkpoint MB (theta + m + v) | in-memory complex f64 MB | activation cache MB (T window) |");
+print("|---|---|--------|----------------|-------------------------------|--------------------------|--------------------------------|");
+for i = 1:n_cfg
+  d = cfgs(i, 1);  Lyr = cfgs(i, 2);  H = cfgs(i, 3);  dff = cfgs(i, 4);  T = cfgs(i, 5);
+  cfg = gpt_config(V, d, Lyr, H, dff, T + 1);
+  n_p = gpt_n_params(cfg);
+  cache_b = Lyr * (T + 1) * (8 * d + 2 + 2 * dff + H * (T + 1)) * 16;
+  print(sprintf("| %d | %d | %d | %.2f | %.2f | %.2f | %.1f |", d, Lyr, n_p, 8 * n_p / 1e6, 24 * n_p / 1e6, 16 * n_p / 1e6, cache_b / 1e6));
+end
+
+# === 6. Figure: throughput against model size ===
+n_ok = 0;
+for i = 1:n_cfg
+  if sw_tps(i) > 0
+    n_ok = n_ok + 1;
+  end
+end
+xp = sw_params(1:n_ok);  ys = sw_tps(1:n_ok);
+figure();
+loglog(xp, ys, "color", "blue", "label", "serial (1 window)");
+n_par = 0;
+for i = 1:n_ok
+  if sw_par(i) > 0
+    n_par = n_par + 1;
+  end
+end
+if n_par > 0
+  hold("on");
+  loglog(sw_params(1:n_par), sw_par(1:n_par), "color", "red", "label", "parmap, B = 8");
+  hold("off");
+  legend("serial (1 window)", "parmap, B = 8");
+end
+title("lib/gpt.rlab training throughput vs model size");
+xlabel("trainable parameters");  ylabel("tokens / s (forward + backward)");
+grid("on");
+savefig("benchmark.svg");
+print("");
+print("Saved benchmark.svg");
