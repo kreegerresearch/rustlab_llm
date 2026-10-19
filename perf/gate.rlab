@@ -1,0 +1,55 @@
+# Script:  gate.rlab
+# System:  Correctness gate of the performance loop.  A rustlab change only
+#          counts as a speedup if this still passes: (1) the analytic
+#          gradient of lib/gpt.rlab matches a central difference, and (2) a
+#          fixed-seed, fully serial 25-step AdamW training run reproduces the
+#          reference loss trajectory recorded on the baseline rustlab.
+# Concept: Faster arithmetic (BLAS, threads, fused kernels) may reorder
+#          floating-point sums; it must not change results beyond rounding.
+#          perf/run.py compares the GATE lines with perf/reference/gate.json.
+# Units:   losses in nats; relative errors dimensionless.
+
+run "../lib/gpt.rlab"
+
+seed(7);
+cfg = gpt_config(20, 32, 2, 2, 64, 33);
+P = gpt_init(cfg, 0.1);
+theta = gpt_flatten(P, cfg);
+n = length(theta);
+mask = ones(32);
+
+# A learnable sequence: a period-5 pattern with 20 % random substitutions.
+base = mod(0:199, 5) + 1;
+noise = floor(rand(200) * 20) + 1;
+flip = rand(200) < 0.2;
+data = base .* (1 - flip) + noise .* flip;
+
+# (1) Gradient check on 16 coordinates spread over every parameter block.
+ids = data(1:33);
+[lo, L0, cache] = gpt_forward(ids, mask, P, cfg);
+G = gpt_flatten(gpt_backward(ids, gpt_dlogits(ids, mask, lo, cache.total), cache, P, cfg), cfg);
+worst = 0;
+h = 1e-5;
+for k = 1:16
+  i = floor((k - 0.5) * n / 16) + 1;
+  tp = theta;  tp(i) = tp(i) + h;
+  tm = theta;  tm(i) = tm(i) - h;
+  num = (gpt_loss(ids, gpt_unflatten(tp, cfg), cfg) - gpt_loss(ids, gpt_unflatten(tm, cfg), cfg)) / (2 * h);
+  rel = abs(num - G(i)) / (abs(num) + abs(G(i)) + 1e-12);
+  if rel > worst
+    worst = rel;
+  end
+end
+print(sprintf("GATE gradcheck %.6g", worst));
+
+# (2) Serial training trajectory: no parmap, fixed windows, fixed LR.
+m = zeros(n);  v = zeros(n);  wdm = gpt_wd_mask(cfg);
+for step = 1:25
+  s = mod((step - 1) * 7, 200 - 33) + 1;
+  gL = gpt_grad_flat(data(s:(s + 32)), mask, gpt_unflatten(theta, cfg), cfg);
+  g = gL(1:n);
+  [g, gn] = gpt_clip(g, 1.0);
+  [theta, m, v] = gpt_adamw(theta, g, m, v, 3e-3, step, 0.9, 0.95, 1e-8, 0.1, wdm);
+  print(sprintf("GATE loss_%02d %.17g", step, gL(n + 1)));
+end
+print(sprintf("GATE final_theta_norm %.17g", sqrt(sum(theta .^ 2))));

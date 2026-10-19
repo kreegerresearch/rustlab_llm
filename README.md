@@ -178,6 +178,16 @@ Expect word-shaped, Sherlock-flavoured text after the 20-minute default run (2.2
 
 ---
 
+
+## Making rustlab faster: the performance flywheel
+
+[`perf/`](perf/) measures the Sherlock training workload on the installed rustlab. It checks correctness with a gradient check and a fixed-seed training trajectory, and records each run. Each round of the loop hands rustlab at most four ranked requests with acceptance targets, in [`perf/iterations/`](perf/iterations/), then verifies what lands and measures again. The protocol both projects follow is [`docs/perf-flywheel.md`](docs/perf-flywheel.md).
+
+```sh
+make perf LABEL=iter01 NOTE="what changed in rustlab"   # measure, gate, record, compare
+make perf-gate                                          # correctness gate only
+```
+
 ## Repository Layout
 
 This repo follows the [Rustlab lesson-site pattern](../rustlab/docs/lesson-site-pattern.md) shared with [rustlab_em](../rustlab_em/) — sources flat in `notebooks/`, rendered output committed to a top-level `book/`.

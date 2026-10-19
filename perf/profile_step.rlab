@@ -1,0 +1,21 @@
+# Script:  profile_step.rlab
+# System:  The workload perf/run.py runs under `rustlab run --profile`: three
+#          serial training windows and one parmap step of the default model.
+#          Its profile table is stored with each iteration so the loop can see
+#          what rustlab's own profiler attributes (and, until nested calls
+#          are recorded, what it cannot).
+# Units:   ms (profile table, stderr).
+
+run "../lib/gpt.rlab"
+
+seed(3);
+cfg = gpt_config(77, 128, 4, 4, 512, 129);
+P = gpt_init(cfg, 0.02);
+theta = gpt_flatten(P, cfg);
+mask = ones(128);
+for k = 1:3
+  ids = floor(rand(129) * 77) + 1;
+  gL = gpt_grad_flat(ids, mask, gpt_unflatten(theta, cfg), cfg);
+end
+W = floor(rand(8, 129) * 77) + 1;
+Gs = parmap(@(b) gpt_grad_flat(W(b, :), mask, P, cfg), 1:8);

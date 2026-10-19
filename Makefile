@@ -19,7 +19,7 @@ Q ?= Who is the woman?
 .PHONY: help all notebooks notebooks-check html validate clean \
 	sherlock sherlock-quick sherlock-doctor sherlock-data sherlock-train sherlock-generate \
 	sherlock-sft sherlock-distill sherlock-ask sherlock-status sherlock-report sherlock-preset \
-	sherlock-bench sherlock-test sherlock-clean
+	sherlock-bench sherlock-test sherlock-clean perf perf-check perf-gate
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
@@ -119,6 +119,22 @@ sherlock-clean: ## Sherlock: delete checkpoints, figures, logs and report.md; re
 	rm -f $(SHERLOCK)/*.svg $(SHERLOCK)/*.png $(SHERLOCK)/*.html $(SHERLOCK)/*.gif $(SHERLOCK)/*.log $(SHERLOCK)/report.md
 	cp $(SHERLOCK)/presets/default.rlab $(SHERLOCK)/preset.rlab
 	@printf 'C.question = "Who is the woman?";\n' > $(SHERLOCK)/question.rlab
+
+# --- rustlab performance flywheel (perf/, see docs/perf-flywheel.md) ---------
+# RUSTLAB=/path/to/rustlab selects the binary under test (default: rustlab on PATH),
+# so rustlab can check a development build: RUSTLAB=$PWD/target/release/rustlab make -C ../rustlab_llm perf-check
+LABEL ?=
+NOTE ?=
+
+perf: ## Perf flywheel: measure, gate, record perf/history + perf/reports (make perf LABEL=iter01 NOTE="...")
+	@test -n "$(LABEL)" || { echo 'usage: make perf LABEL=iterNN NOTE="what changed in rustlab"'; exit 2; }
+	python3 perf/run.py --label "$(LABEL)" --note "$(NOTE)"
+
+perf-check: ## Perf flywheel: measure and compare against the last recorded run without recording
+	python3 perf/run.py --label check --dry-run
+
+perf-gate: ## Perf flywheel: correctness gate only (gradient check + fixed-seed training trajectory)
+	python3 perf/run.py --gate-only
 
 clean: ## Delete the interactive HTML build and .rlab script artefacts
 	rm -f $(BOOK)/*.html
