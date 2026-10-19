@@ -1,0 +1,209 @@
+# Script:  bench_suite.rlab
+# System:  The fixed workload set of the rustlab performance loop
+#          (perf/README.md).  Every line it prints that starts with PERF is
+#          parsed by perf/run.py into perf/history/; keys never change
+#          meaning between iterations, so runs are comparable across rustlab
+#          versions.  Three tiers: primitives at the tutorial's exact shapes,
+#          the model's own library functions, and a full training step.
+# Concept: Measure what the Sherlock training loop actually executes
+#          (lib/gpt.rlab at the default 811 k-parameter size), not a
+#          synthetic benchmark.  Median of R repeats, timed with tic/toc
+#          because --profile cannot see inside user functions (0.3.9).
+# Units:   ms per call (median); rates in GFLOP/s or tokens/s.
+
+run "../lib/gpt.rlab"
+
+# PERF <key> <ms> <rate> <rate-unit>; rate = work / time (0 when not meaningful).
+function perf_out(key, ts, work, unit)
+  t = median(ts);
+  r = 0;
+  if work > 0
+    r = work / t;
+  end
+  print(sprintf("PERF %s %.6f %.6g %s", key, 1000 * t, r, unit));
+end
+
+R = 7;                      # repeats per primitive
+seed(42);
+
+# === 1. Primitives at the default model's shapes (T = 129 rows, d = 128, d_ff = 512) ===
+X = randn(129, 128);  Wq = randn(128, 384);  W1 = randn(128, 512);  W2 = randn(512, 128);
+H = randn(129, 512);  Big = randn(512, 512);  WU = randn(128, 77);
+
+ts = zeros(R); for r = 1:R
+  tic; Y = X * Wq; ts(r) = toc;
+end
+perf_out("prim.matmul_129x128x384", ts, 2 * 129 * 128 * 384 / 1e9, "GFLOP/s");
+ts = zeros(R); for r = 1:R
+  tic; Y = X * W1; ts(r) = toc;
+end
+perf_out("prim.matmul_129x128x512", ts, 2 * 129 * 128 * 512 / 1e9, "GFLOP/s");
+ts = zeros(R); for r = 1:R
+  tic; Y = H * W2; ts(r) = toc;
+end
+perf_out("prim.matmul_129x512x128", ts, 2 * 129 * 512 * 128 / 1e9, "GFLOP/s");
+ts = zeros(R); for r = 1:R
+  tic; Y = H' * X; ts(r) = toc;
+end
+perf_out("prim.matmul_transA_512x129x128", ts, 2 * 512 * 129 * 128 / 1e9, "GFLOP/s");
+ts = zeros(R); for r = 1:R
+  tic; Y = X * WU; ts(r) = toc;
+end
+perf_out("prim.matmul_129x128x77", ts, 2 * 129 * 128 * 77 / 1e9, "GFLOP/s");
+ts = zeros(R); for r = 1:R
+  tic; Y = Big * Big; ts(r) = toc;
+end
+perf_out("prim.matmul_512x512x512", ts, 2 * 512 ^ 3 / 1e9, "GFLOP/s");
+Qh = randn(129, 32);  Kh = randn(129, 32);
+ts = zeros(R); for r = 1:R
+  tic; S = Qh * Kh'; ts(r) = toc;
+end
+perf_out("prim.attn_scores_129x32x129", ts, 2 * 129 * 32 * 129 / 1e9, "GFLOP/s");
+
+ts = zeros(R); for r = 1:R
+  tic; Y = H .* H + 0.5 * H; ts(r) = toc;
+end
+perf_out("prim.ewise_129x512", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; Y = tanh(H); ts(r) = toc;
+end
+perf_out("prim.tanh_129x512", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; Y = gelu(H); ts(r) = toc;
+end
+perf_out("prim.gelu_builtin_129x512", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; Y = gpt_gelu_grad(H); ts(r) = toc;
+end
+perf_out("prim.gelu_grad_lib_129x512", ts, 0, "-");
+S = randn(129, 129);
+ts = zeros(R); for r = 1:R
+  tic; Y = softmax(S); ts(r) = toc;
+end
+perf_out("prim.softmax_129x129", ts, 0, "-");
+g1 = ones(128);  b1 = zeros(128);
+ts = zeros(R); for r = 1:R
+  tic; [Y, xn, sg] = gpt_ln_fwd(X, g1, b1); ts(r) = toc;
+end
+perf_out("prim.layernorm_lib_129x128", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; Y = H'; ts(r) = toc;
+end
+perf_out("prim.transpose_129x512", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; Y = Wq(:, 33:64); ts(r) = toc;
+end
+perf_out("prim.slice_cols_128x32", ts, 0, "-");
+Stack = randn(4 * 128, 384);
+ts = zeros(R); for r = 1:R
+  tic; Y = Stack(129:256, :); ts(r) = toc;
+end
+perf_out("prim.slice_rows_128x384", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; Stack(129:256, :) = Wq; ts(r) = toc;
+end
+perf_out("prim.region_write_128x384", ts, 0, "-");
+v128 = randn(128);
+ts = zeros(R); for r = 1:R
+  tic; Y = gpt_rows(v128, 129); ts(r) = toc;
+end
+perf_out("prim.broadcast_rows_129x128", ts, 0, "-");
+E = randn(77, 128);  ids = floor(rand(129) * 77) + 1;  dE = zeros(77, 128);  dX = randn(129, 128);
+ts = zeros(R); for r = 1:R
+  tic;
+  for t = 1:129
+    dE(ids(t), :) = dE(ids(t), :) + dX(t, :);
+  end
+  ts(r) = toc;
+end
+perf_out("prim.scatter_add_loop_129", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; acc = 0; for k = 1:100000
+    acc = acc + k;
+  end
+  ts(r) = toc;
+end
+perf_out("prim.scalar_loop_1e5", ts, 1e5 / 1e6, "Miter/s");
+
+# === 2. Flat-vector work per optimiser step (811,008 parameters) ===
+cfg = gpt_config(77, 128, 4, 4, 512, 129);
+P = gpt_init(cfg, 0.02);
+theta = gpt_flatten(P, cfg);
+n = length(theta);
+g = 0.01 * randn(n);  m = zeros(n);  v = zeros(n);  wdm = gpt_wd_mask(cfg);
+print(sprintf("PERF model.params %d 0 count", n));
+ts = zeros(R); for r = 1:R
+  tic; Y = theta - 0.001 * g; ts(r) = toc;
+end
+perf_out("flat.axpy_811k", ts, n / 1e6, "Melem/s");
+ts = zeros(R); for r = 1:R
+  tic; s = sum(g .^ 2); ts(r) = toc;
+end
+perf_out("flat.sumsq_811k", ts, n / 1e6, "Melem/s");
+ts = zeros(R); for r = 1:R
+  tic; [g2, gn] = gpt_clip(g, 1.0); ts(r) = toc;
+end
+perf_out("flat.clip_811k", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; [t2, m2, v2] = gpt_adamw(theta, g, m, v, 1e-3, 10, 0.9, 0.95, 1e-8, 0.1, wdm); ts(r) = toc;
+end
+perf_out("flat.adamw_811k", ts, 0, "-");
+Gm = randn(8, n + 1);
+ts = zeros(R); for r = 1:R
+  tic; gs = sum(Gm(:, 1:n), 1) / 8; ts(r) = toc;
+end
+perf_out("flat.batch_reduce_8x811k", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; P2 = gpt_unflatten(theta, cfg); ts(r) = toc;
+end
+perf_out("flat.unflatten_811k", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; t3 = gpt_flatten(P, cfg); ts(r) = toc;
+end
+perf_out("flat.flatten_811k", ts, 0, "-");
+
+# === 3. Model functions at the default size (one 129-token window, 128 predictions) ===
+RM = 5;
+ids = floor(rand(129) * 77) + 1;
+mask = ones(128);
+ts = zeros(RM); for r = 1:RM
+  tic; [lo, L0, cache] = gpt_forward(ids, mask, P, cfg); ts(r) = toc;
+end
+perf_out("model.forward", ts, 128, "tok/s");
+dl = gpt_dlogits(ids, mask, lo, cache.total);
+ts = zeros(RM); for r = 1:RM
+  tic; G = gpt_backward(ids, dl, cache, P, cfg); ts(r) = toc;
+end
+perf_out("model.backward", ts, 128, "tok/s");
+ts = zeros(RM); for r = 1:RM
+  tic; gf = gpt_grad_flat(ids, mask, P, cfg); ts(r) = toc;
+end
+perf_out("model.grad_flat", ts, 128, "tok/s");
+ts = zeros(3); for r = 1:3
+  tic; sq = gpt_generate(P, cfg, ids(1:16), 20, 0, 0); ts(r) = toc;
+end
+perf_out("model.generate_20_greedy", ts, 20, "tok/s");
+
+# === 4. Data parallelism: parmap over B windows ===
+for B = [1, 8, 14]
+  W = floor(rand(B, 129) * 77) + 1;
+  ts = zeros(3); for r = 1:3
+    tic; Gp = parmap(@(b) gpt_grad_flat(W(b, :), mask, P, cfg), 1:B); ts(r) = toc;
+  end
+  perf_out(sprintf("par.grad_flat_B%d", B), ts, B * 128, "tok/s");
+end
+
+# === 5. One full training step, exactly as tutorial/sherlock/train.rlab does it (B = 8) ===
+B = 8;
+ts = zeros(3); for r = 1:3
+  tic;
+  Ps = gpt_unflatten(theta, cfg);
+  W = floor(rand(B, 129) * 77) + 1;
+  Gs = parmap(@(b) gpt_grad_flat(W(b, :), mask, Ps, cfg), 1:B);
+  nt = size(Gs)(2) - 1;
+  gg = sum(Gs(:, 1:nt), 1) / B;
+  [gg, gn] = gpt_clip(gg, 1.0);
+  [theta, m, v] = gpt_adamw(theta, gg, m, v, 1e-3, r, 0.9, 0.95, 1e-8, 0.1, wdm);
+  ts(r) = toc;
+end
+perf_out("e2e.train_step_B8", ts, B * 128, "tok/s");

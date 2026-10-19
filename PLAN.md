@@ -31,6 +31,7 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 | 14 | Information arc (01, 02, 04, 05, 19–21) | Complete |
 | 15 | New lessons 00 and 26, late lessons (22–25), consistency pass | Complete |
 | 16 | Standalone Sherlock tutorial (`tutorial/sherlock/`, `lib/gpt.rlab`) | Complete — one-command `make sherlock-quick` / `make sherlock`; default run, SFT, distillation and benchmark recorded; rustlab request list in `docs/sherlock-performance-and-rustlab-requests.md` |
+| 17 | Performance flywheel with rustlab (`perf/`, `docs/perf-flywheel.md`) | In progress — harness, gate and baseline recorded; iteration 01 requests handed to rustlab |
 
 **Lesson numbering (since 2026-09-27, Phase 11):** `22-full-backprop-through-the-block` (was the first half of 24), `23-putting-it-all-together` (was 22), `24-modern-architectural-variants` (was 23), `25-fine-tuning-sft-and-dpo` (was the second half of 24). The capstone now comes *after* the lesson that derives the backward pass it runs on. Older handoff notes below keep their original numbers where they narrate history.
 
@@ -410,6 +411,29 @@ These close the gaps surfaced by the nanoGPT / *Attention Is All You Need* cover
 - **rustlab facts that shaped the design** (also in AGENTS.md → Rustlab Recommendations where they are requests): no text-file reader and no char ↔ code conversion (hence the Python step); string literals have no escape sequences (newline = `sprintf("%c", 10)`, which `vocab.rlab` relies on for `"`, `\`, newline and tab); `parmap` lambdas must be pure and receive copies, so the only parallelism is one window per worker with the gradient rows summed afterwards; `A^k` is element-wise; no autodiff (every gradient in `lib/gpt.rlab` is hand-derived and checked). `lib/gpt.rlab` has no KV cache, so generation re-runs the full forward per character.
 - **Next steps, in rough order of value:** (1) merge-time check that `make sherlock-quick` still passes under the current rustlab; (2) more books — `prepare_corpus.py a.txt b.txt …`, the full canon ≈ 3.4 MB ≈ 3.2 M characters, ≈ 20 min per epoch at the default model; (3) a BPE tokeniser (Lesson 19) to cut sequence length 3–4× and let `T = 128` cover a paragraph; (4) a KV cache (Lesson 21) for generation; (5) replay during SFT to blunt forgetting, and DPO (Lesson 25) on preference pairs; (6) fixed-point inference of the distilled student (Lesson 26); (7) `tutorial/` scripts for a second corpus to show the pipeline is corpus-agnostic.
 - **Rules:** never edit `lib/gpt.rlab` without re-running `make sherlock-test`; changing `d_model` / `n_layer` / `n_head` / `d_ff` or the vocabulary invalidates `checkpoints/` (`train.rlab` trusts `config.rlab`; `generate.rlab` reads `cfgv` from the checkpoint); `tutorial/` scripts keep the script header and section conventions but may exceed 60 lines.
+
+## Phase 17 — Performance flywheel with rustlab (2026-10-18)
+
+**Goal:** Make rustlab fast enough to train the Sherlock GPT at roughly PyTorch-on-CPU speed: 17,000 tok/s for the default 811 k-parameter model against 2,246 at the rustlab 0.3.9 baseline. The method is an iterative loop between the two projects. This repo measures the real training workload, ranks the hotspots, and hands rustlab a short list of requests with acceptance targets. rustlab implements them and returns a binary. This repo verifies the gain against a correctness gate, adopts any new builtins in `lib/gpt.rlab`, and measures again. The protocol, roles and templates are in `docs/perf-flywheel.md`; the operating guide is `perf/README.md`.
+
+**Deliverables:**
+- [x] `perf/bench_suite.rlab` — 35 fixed workloads printed as `PERF` lines: primitives at the model's exact shapes, per-step flat-vector work on 811,008 parameters, `gpt_forward` / `gpt_backward` / `gpt_grad_flat` / generation, `parmap` at B = 1 / 8 / 14, and one full training step as `train.rlab` runs it. Median of repeated `tic`/`toc` timings, about 10 s.
+- [x] `perf/gate.rlab` — correctness gate: finite-difference gradient check (< 1e-6) and a fixed-seed, fully serial 25-step AdamW trajectory that must match `perf/reference/gate.json` to a relative 1e-6. Verified to fail on a deliberate 1 % error in the GELU derivative (gradient check 0.014, trajectory off from step 8).
+- [x] `perf/profile_step.rlab` — the workload run under `--profile`, stored with each turn.
+- [x] `perf/run.py` — runs all three, records `perf/history/NN-label.json` with the rustlab version, binary time and source revision, writes `perf/reports/NN-label.md` with speedups against the previous run and the baseline, the step breakdown and regressions over 10 %, and exits non-zero on a gate failure. `RUSTLAB=…` tests an uninstalled build; `--dry-run` and `--gate-only` modes.
+- [x] `make perf LABEL=… NOTE=…`, `make perf-check`, `make perf-gate`.
+- [x] Baseline recorded as run 00. Run-to-run noise measured: median 1.5 % per workload, nearly all within 10 %, `par.grad_flat_B14` about 20 %.
+- [x] `docs/perf-flywheel.md` — the cross-project protocol: why a flywheel, roles and boundaries, the nine-step turn, acceptance and correctness rules, request and response templates, current-state table.
+- [x] `perf/iterations/01-requests.md` — R1 real-valued matmul fast path, R2 a profiler that sees nested functions and operators, R3 `parmap` without per-task environment clones, R4 real fast paths for elementwise ops and reductions plus a GELU-derivative builtin; expected ≈ 7,500 tok/s if all land, success at ≥ 5,000.
+- [ ] Iteration 01 verified against a rustlab build that lands R1–R4; outcome table filled in; iteration 02 requests written from the new numbers.
+
+**Baseline** (rustlab 0.3.9, source `65d6507`, Apple M4 Max, 14 cores): training step B = 8 456 ms = 2,246 tok/s; `parmap` of 8 windows 322 ms (71 %), per-step flat-vector work 73 ms (16 %), other 60 ms (13 %); one serial window 152 ms, about 65 % of it matrix multiply at 8.6–8.9 GFLOP/s at every shape; `parmap` efficiency 47 %; the library's GELU derivative 2.73 ms against 0.33 ms for the builtin forward `gelu`.
+
+**Handoff notes:**
+- To run a turn: read `docs/perf-flywheel.md`, then `make perf LABEL=iterNN NOTE="<rustlab change>"` on a quiet machine, then fill in the outcome table of the open `perf/iterations/NN-requests.md` and write the next one. Update the "Current state" table in `docs/perf-flywheel.md`.
+- `perf/history/` and `perf/reports/` are append-only. `perf/reference/gate.json` changes only when the gate itself changes deliberately, and the iteration file must say why.
+- Bench keys never change meaning; add new keys for new workloads.
+- When R4's GELU-derivative builtin lands, change `gpt_gelu_grad` in `lib/gpt.rlab` to call it and record run `01b`.
 
 ---
 
