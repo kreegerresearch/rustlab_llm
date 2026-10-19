@@ -503,7 +503,7 @@ print("max |attn_out(8,:) - taps * V(1:8,:)| =", max(abs(attn_final(8, :) - taps
 ```text
 taps at the odd positions (the c, s, o, the m): 0.30437623338571773 0.09544201725566862 0.18701674985444552 0.4099164748366176
 row entropy = 1.8582075883327531 bits  -> effective taps 2^H = 3.625569396063929   (uniform: 3 bits, 8 taps)
-max |attn_out(8,:) - taps * V(1:8,:)| = 0.00000000000000005551115123125783
+max |attn_out(8,:) - taps * V(1:8,:)| = 0
 ```
 
 ![plot 4](plots/23-putting-it-all-together/plot-4-dcbe9872.svg)
@@ -513,7 +513,7 @@ max |attn_out(8,:) - taps * V(1:8,:)| = 0.00000000000000005551115123125783
 > [!TIP]
 > The left stem is the filter the model learned for this query: nearly all of its weight on the odd positions — the content tokens `"the c"`, `"s"`, `"o"`, `"the m"` — and almost none on the `"at "` tokens between them. The right stem is the filter Lesson 07 used for every query.
 
-The row has $1.86$ bits of entropy, an effective length of $3.6$ taps out of 8, against 3 bits (8 taps) for the uniform average; and the impulse-response identity holds to $6e-17$. A different query gets a different tap vector — that is what "time-varying" means here, and it is the whole difference between Lesson 07 and Lesson 08.
+The row has $1.86$ bits of entropy, an effective length of $3.6$ taps out of 8, against 3 bits (8 taps) for the uniform average; and the impulse-response identity holds to $0e+00$. A different query gets a different tap vector — that is what "time-varying" means here, and it is the whole difference between Lesson 07 and Lesson 08.
 
 ### Systems
 
