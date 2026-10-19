@@ -30,6 +30,9 @@ C_kd.alpha = 0.5;    # weight of the soft (teacher) term; 0 = hard targets only
 C_kd.log_every = 50;  C_kd.eval_every = 100;  C_kd.eval_windows = 16;
 C_kd.init_std = C.init_std;  C_kd.clip_norm = C.clip_norm;
 C_kd.beta1 = C.beta1;  C_kd.beta2 = C.beta2;  C_kd.eps_adam = C.eps_adam;  C_kd.weight_decay = C.weight_decay;
+if isfield(C, "kd_steps")      # a preset may override the step count
+  C_kd.n_steps = C.kd_steps;
+end
 C_kd.ckpt_in = C.ckpt_dir + "/ckpt_latest.npz";
 C_kd.ckpt_out = C.ckpt_dir + "/ckpt_student.npz";
 

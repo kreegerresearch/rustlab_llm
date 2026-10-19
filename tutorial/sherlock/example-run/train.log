@@ -1,0 +1,85 @@
+rustlab 0.3.9 — interpreting /Users/mike/projects/2026/rustlab_llm-sherlock/tutorial/sherlock/train.rlab (.rlab)
+corpus: 562269 chars   vocab: 77    train: 534156   val: 28113
+model: d = 128  L = 4  H = 4  d_ff = 512  T = 128   params = 811008
+tokens per step: 1024    steps: 3000    total tokens: 3072000   ( 5.7511288836968975 epochs )
+step    50 | loss 3.6777 nats (5.306 bits/char) | |g| 0.333 | eta 6.67e-04 |   2740 tok/s |     19 s
+step   100 | loss 3.1019 nats (4.475 bits/char) | |g| 0.384 | eta 1.33e-03 |   2680 tok/s |     38 s
+step   150 | loss 2.9358 nats (4.235 bits/char) | |g| 0.477 | eta 2.00e-03 |   2629 tok/s |     57 s
+step   200 | loss 2.6373 nats (3.805 bits/char) | |g| 0.919 | eta 2.00e-03 |   2652 tok/s |     77 s
+step   250 | loss 2.5607 nats (3.694 bits/char) | |g| 0.586 | eta 1.99e-03 |   2658 tok/s |     96 s
+         held-out loss 2.5215 nats (3.638 bits/char)
+step   300 | loss 2.5289 nats (3.648 bits/char) | |g| 0.602 | eta 1.99e-03 |   2582 tok/s |    116 s
+step   350 | loss 2.4889 nats (3.591 bits/char) | |g| 0.908 | eta 1.98e-03 |   2727 tok/s |    134 s
+step   400 | loss 2.4170 nats (3.487 bits/char) | |g| 0.841 | eta 1.97e-03 |   2694 tok/s |    153 s
+step   450 | loss 2.3498 nats (3.390 bits/char) | |g| 0.571 | eta 1.95e-03 |   2700 tok/s |    172 s
+step   500 | loss 2.3215 nats (3.349 bits/char) | |g| 0.715 | eta 1.93e-03 |   2696 tok/s |    191 s
+         held-out loss 2.2640 nats (3.266 bits/char)
+step   550 | loss 2.2746 nats (3.282 bits/char) | |g| 1.102 | eta 1.91e-03 |   2614 tok/s |    211 s
+step   600 | loss 2.2567 nats (3.256 bits/char) | |g| 0.756 | eta 1.89e-03 |   2740 tok/s |    230 s
+step   650 | loss 2.2166 nats (3.198 bits/char) | |g| 0.880 | eta 1.87e-03 |   2685 tok/s |    249 s
+step   700 | loss 2.1786 nats (3.143 bits/char) | |g| 0.883 | eta 1.84e-03 |   2718 tok/s |    268 s
+step   750 | loss 2.1499 nats (3.102 bits/char) | |g| 0.703 | eta 1.81e-03 |   2693 tok/s |    287 s
+         held-out loss 2.1173 nats (3.055 bits/char)
+step   800 | loss 2.1478 nats (3.099 bits/char) | |g| 0.911 | eta 1.78e-03 |   2626 tok/s |    306 s
+step   850 | loss 2.0959 nats (3.024 bits/char) | |g| 1.006 | eta 1.75e-03 |   2742 tok/s |    325 s
+step   900 | loss 2.0795 nats (3.000 bits/char) | |g| 0.990 | eta 1.71e-03 |   2735 tok/s |    343 s
+step   950 | loss 2.0523 nats (2.961 bits/char) | |g| 0.857 | eta 1.67e-03 |   2690 tok/s |    363 s
+step  1000 | loss 2.0110 nats (2.901 bits/char) | |g| 0.728 | eta 1.63e-03 |   2701 tok/s |    381 s
+         held-out loss 1.9832 nats (2.861 bits/char)
+step  1050 | loss 1.9915 nats (2.873 bits/char) | |g| 1.030 | eta 1.59e-03 |   2613 tok/s |    401 s
+step  1100 | loss 1.9875 nats (2.867 bits/char) | |g| 0.883 | eta 1.55e-03 |   2589 tok/s |    421 s
+step  1150 | loss 1.9530 nats (2.818 bits/char) | |g| 0.955 | eta 1.51e-03 |   2361 tok/s |    443 s
+step  1200 | loss 1.9404 nats (2.799 bits/char) | |g| 0.856 | eta 1.46e-03 |   2881 tok/s |    460 s
+step  1250 | loss 1.9106 nats (2.756 bits/char) | |g| 0.817 | eta 1.42e-03 |   2884 tok/s |    478 s
+         held-out loss 1.8966 nats (2.736 bits/char)
+step  1300 | loss 1.9120 nats (2.758 bits/char) | |g| 0.894 | eta 1.37e-03 |   2765 tok/s |    497 s
+step  1350 | loss 1.8561 nats (2.678 bits/char) | |g| 0.902 | eta 1.32e-03 |   2895 tok/s |    514 s
+step  1400 | loss 1.8463 nats (2.664 bits/char) | |g| 0.980 | eta 1.27e-03 |   2772 tok/s |    533 s
+step  1450 | loss 1.8451 nats (2.662 bits/char) | |g| 0.980 | eta 1.22e-03 |   2864 tok/s |    551 s
+step  1500 | loss 1.8216 nats (2.628 bits/char) | |g| 0.804 | eta 1.17e-03 |   2833 tok/s |    569 s
+         held-out loss 1.7955 nats (2.590 bits/char)
+step  1550 | loss 1.7957 nats (2.591 bits/char) | |g| 1.051 | eta 1.12e-03 |   2757 tok/s |    587 s
+step  1600 | loss 1.7793 nats (2.567 bits/char) | |g| 0.900 | eta 1.08e-03 |   2889 tok/s |    605 s
+step  1650 | loss 1.7871 nats (2.578 bits/char) | |g| 1.077 | eta 1.03e-03 |   2880 tok/s |    623 s
+step  1700 | loss 1.7547 nats (2.532 bits/char) | |g| 0.959 | eta 9.76e-04 |   2305 tok/s |    645 s
+step  1750 | loss 1.7541 nats (2.531 bits/char) | |g| 1.001 | eta 9.27e-04 |   2295 tok/s |    667 s
+         held-out loss 1.7384 nats (2.508 bits/char)
+step  1800 | loss 1.7281 nats (2.493 bits/char) | |g| 0.925 | eta 8.79e-04 |   2207 tok/s |    690 s
+step  1850 | loss 1.7204 nats (2.482 bits/char) | |g| 0.837 | eta 8.31e-04 |   2354 tok/s |    712 s
+step  1900 | loss 1.7009 nats (2.454 bits/char) | |g| 1.014 | eta 7.84e-04 |   2337 tok/s |    734 s
+step  1950 | loss 1.6982 nats (2.450 bits/char) | |g| 0.858 | eta 7.38e-04 |   2341 tok/s |    756 s
+step  2000 | loss 1.6815 nats (2.426 bits/char) | |g| 1.038 | eta 6.94e-04 |   2587 tok/s |    776 s
+         held-out loss 1.6601 nats (2.395 bits/char)
+step  2050 | loss 1.6731 nats (2.414 bits/char) | |g| 1.124 | eta 6.50e-04 |   2729 tok/s |    795 s
+step  2100 | loss 1.6710 nats (2.411 bits/char) | |g| 1.043 | eta 6.08e-04 |   2895 tok/s |    812 s
+step  2150 | loss 1.6248 nats (2.344 bits/char) | |g| 0.946 | eta 5.67e-04 |   2440 tok/s |    833 s
+step  2200 | loss 1.6454 nats (2.374 bits/char) | |g| 1.007 | eta 5.28e-04 |   2309 tok/s |    855 s
+step  2250 | loss 1.6506 nats (2.381 bits/char) | |g| 0.920 | eta 4.90e-04 |   2285 tok/s |    878 s
+         held-out loss 1.6058 nats (2.317 bits/char)
+step  2300 | loss 1.6284 nats (2.349 bits/char) | |g| 1.079 | eta 4.55e-04 |   2172 tok/s |    901 s
+step  2350 | loss 1.6036 nats (2.313 bits/char) | |g| 0.954 | eta 4.21e-04 |   2286 tok/s |    924 s
+step  2400 | loss 1.6158 nats (2.331 bits/char) | |g| 1.049 | eta 3.90e-04 |   2784 tok/s |    942 s
+step  2450 | loss 1.5961 nats (2.303 bits/char) | |g| 1.029 | eta 3.60e-04 |   2180 tok/s |    966 s
+step  2500 | loss 1.6017 nats (2.311 bits/char) | |g| 1.026 | eta 3.33e-04 |   2171 tok/s |    989 s
+         held-out loss 1.5709 nats (2.266 bits/char)
+step  2550 | loss 1.5860 nats (2.288 bits/char) | |g| 1.222 | eta 3.08e-04 |   2078 tok/s |   1014 s
+step  2600 | loss 1.5781 nats (2.277 bits/char) | |g| 1.145 | eta 2.86e-04 |   2190 tok/s |   1037 s
+step  2650 | loss 1.5631 nats (2.255 bits/char) | |g| 1.185 | eta 2.66e-04 |   2248 tok/s |   1060 s
+step  2700 | loss 1.5633 nats (2.255 bits/char) | |g| 0.997 | eta 2.49e-04 |   2293 tok/s |   1082 s
+step  2750 | loss 1.5681 nats (2.262 bits/char) | |g| 0.956 | eta 2.34e-04 |   2310 tok/s |   1105 s
+         held-out loss 1.5528 nats (2.240 bits/char)
+step  2800 | loss 1.5734 nats (2.270 bits/char) | |g| 0.926 | eta 2.22e-04 |   2309 tok/s |   1127 s
+step  2850 | loss 1.5552 nats (2.244 bits/char) | |g| 0.948 | eta 2.12e-04 |   2368 tok/s |   1148 s
+step  2900 | loss 1.5523 nats (2.239 bits/char) | |g| 1.026 | eta 2.05e-04 |   2326 tok/s |   1170 s
+step  2950 | loss 1.5424 nats (2.225 bits/char) | |g| 1.055 | eta 2.01e-04 |   2354 tok/s |   1192 s
+step  3000 | loss 1.5490 nats (2.235 bits/char) | |g| 1.138 | eta 2.00e-04 |   2272 tok/s |   1215 s
+         held-out loss 1.5269 nats (2.203 bits/char)
+done: 3000 steps, 3072000 tokens, 1216 s, 2527 tok/s average
+
+=== sample (tau = 0.8 , top-k = 20 ) ===
+Sherlock Holmes ears dushed present coult and
+the stirned his bullogrusly benitoransed that with see you hains
+were wear strared with hile bout as and whitteen with his lone of my dan
+whitat ha wa ha deveate, and loy boven eveed in the cesinible befort,
+whithists. Came wa gity tow a bovert the todrnised. Thell. Awa
+Saved train_curves.svg and checkpoints/ckpt_latest.npz

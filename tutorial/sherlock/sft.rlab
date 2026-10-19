@@ -28,6 +28,13 @@ C_sft.log_every = 25;  C_sft.probe_every = 50;   # loss log; greedy answers to a
 C_sft.gen_max = 40;    C_sft.eval_windows = 16;  # characters per answer; held-out windows for the probe
 C_sft.held_in = [1, 3, 31];                      # dataset questions shown during training
 C_sft.held_out = "Who is the narrator of the stories?";   # paraphrase never trained on
+# A preset may override the two knobs that scale with the model: C.sft_steps, C.sft_eta.
+if isfield(C, "sft_steps")
+  C_sft.n_steps = C.sft_steps;
+end
+if isfield(C, "sft_eta")
+  C_sft.eta = C.sft_eta;
+end
 C_sft.ckpt_in = C.ckpt_dir + "/ckpt_latest.npz";
 C_sft.ckpt_out = C.ckpt_dir + "/ckpt_sft.npz";
 
@@ -48,10 +55,24 @@ print("loaded", C_sft.ckpt_in, " (pre-training step", step0, ",", gpt_n_params(c
 # Examples have different lengths; parmap workers slice row b back to qa_len(b).
 L_max = max(max(qa_len), T + 1);
 QW = zeros(n_pairs, L_max);  QM = zeros(n_pairs, L_max - 1);
+n_trunc = 0;
 for i = 1:n_pairs
   [ids, mask] = qa_example(i, vocab_chars);
-  QW(i, 1:length(ids)) = ids;
-  QM(i, 1:(length(ids) - 1)) = mask;
+  n_i = length(ids);
+  if n_i > cfg.Tmax
+    # The context is shorter than the example (small presets): keep the
+    # tail, which holds the answer, and drop the start of the question.
+    ids = ids((n_i - cfg.Tmax + 1):n_i);
+    mask = mask((n_i - cfg.Tmax + 1):(n_i - 1));
+    n_i = cfg.Tmax;
+    qa_len(i) = n_i;
+    n_trunc = n_trunc + 1;
+  end
+  QW(i, 1:n_i) = ids;
+  QM(i, 1:(n_i - 1)) = mask;
+end
+if n_trunc > 0
+  print("note:", n_trunc, "of", n_pairs, "examples are longer than the model's context (", cfg.Tmax, ") and were left-truncated to it");
 end
 nl_id = gpt_encode(sprintf("%c", 10), vocab_chars)(1);
 

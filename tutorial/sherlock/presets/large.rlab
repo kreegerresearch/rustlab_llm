@@ -1,4 +1,4 @@
-# Preset: large — an overnight run.  ~3.9 M parameters; at today's
+# Preset: large — an overnight run.  About 2.7 M parameters; at today's
 # throughput (see docs/sherlock-performance-and-rustlab-requests.md)
 # expect several hours.  Lower n_steps for a shorter run.
 C.d_model    = 192;

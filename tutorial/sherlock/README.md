@@ -20,7 +20,7 @@ Four stages, one script each, all driven by the values in `config.rlab`:
 | 0 | `prepare_corpus.py` | Text → integer ids + vocabulary (one-time, Python) | `data/ids.csv`, `data/vocab.rlab` |
 | 1 | `train.rlab` | Pre-train the GPT: AdamW, warmup + cosine, global-norm clipping, held-out evaluation, checkpoints | `checkpoints/ckpt_latest.npz`, `train_curves.svg` |
 | 2 | `generate.rlab` | Continue a prompt under greedy, temperature and top-k decoding | printed text |
-| 3 | `sft.rlab` | Supervised fine-tuning on 45 hand-written Q/A pairs (`qa_pairs.rlab`) with prompt masking, replay of corpus windows, and a forgetting probe | `checkpoints/ckpt_sft.npz`, `sft_curves.svg` |
+| 3 | `sft.rlab` | Supervised fine-tuning on 46 hand-written Q/A pairs (`qa_pairs.rlab`) with prompt masking, replay of corpus windows, and a forgetting probe | `checkpoints/ckpt_sft.npz`, `sft_curves.svg` |
 | 4 | `distill.rlab` | Train a 2-layer, $d = 64$ student on the teacher's softened logits, against a matched hard-target control | `checkpoints/ckpt_student.npz`, `distill_curves.svg` |
 | — | `ask.rlab` | Ask the fine-tuned model one question from the command line, formatted exactly as SFT trained it, decoded greedily to the newline | a printed answer |
 | — | `benchmark.rlab` | Model-size sweep, cost breakdown, `parmap` scaling and memory footprint of `lib/gpt.rlab` (random ids; no corpus needed) | `benchmark.svg` and the numbers behind [`docs/sherlock-performance-and-rustlab-requests.md`](../../docs/sherlock-performance-and-rustlab-requests.md) |
@@ -69,32 +69,58 @@ intermediate.
 
 ## Quick start
 
-From the repository root:
+From the repository root, one command runs everything:
 
 ```sh
+make sherlock-quick      # 3-5 minutes: a small model through every stage, then report.md
+make sherlock            # the default model: about 30 minutes for all stages
+```
+
+Either one checks the toolchain (`sherlock-doctor`), prepares the data,
+pre-trains, samples, fine-tunes, distils, and writes
+`tutorial/sherlock/report.md` from the stage logs and figures. Afterwards:
+
+```sh
+make sherlock-ask Q="Who is the woman?"   # put a question to the fine-tuned model
+make sherlock-status                      # progress report of a running or finished run
+```
+
+The stages are also separate targets, in this order:
+
+```sh
+make sherlock-doctor     # rustlab >= 0.3.9, python3, corpus, prepared data, preset, cores
 make sherlock-data       # Stage 0: about a second. Writes data/ids.csv and data/vocab.rlab
 make sherlock-train      # Stage 1: about 20 minutes at the defaults (3,000 steps, 3.1 M tokens)
 make sherlock-generate   # Stage 2: three samples from checkpoints/ckpt_latest.npz
 make sherlock-sft        # Stage 3: fine-tune on the Q/A pairs and probe forgetting
-make sherlock-ask Q="Who is the woman?"   # ask the fine-tuned model (after Stage 3)
-make sherlock-distill    # Stage 4: distil the trained model into a 2-layer student
-make sherlock-bench      # throughput at several model sizes
+make sherlock-distill    # Stage 4: distil the trained model into a half-width, half-depth student
+make sherlock-report     # assemble report.md from whichever stages have run
+make sherlock-bench      # throughput at several model sizes (optional, a few minutes)
 ```
 
-In a hurry? `make sherlock-quick` selects the 2–3 minute preset
-(`presets/quick.rlab`) for every stage, and
-`make sherlock-preset PRESET=default` switches back — see *Presets*
-below.
+`make sherlock-quick` selects the 2–3 minute preset (`presets/quick.rlab`,
+which trains into `checkpoints-quick/` so it never overwrites a long run)
+and then runs `make sherlock`; `make sherlock-preset PRESET=default`
+switches back — see *Presets* below.
 
-Each target is `cd tutorial/sherlock && rustlab run <script> --plot none`
+Each stage target is
+`cd tutorial/sherlock && rustlab run <script> --plot none 2>&1 | tee <stage>.log`
 (the data target runs `python3 prepare_corpus.py data/adventures.txt`).
 `--plot none` only suppresses the interactive plot window; `savefig`
-still writes the figures. Two housekeeping targets: `make sherlock-test`
-runs the library self-test (`test_gpt_lib.rlab`: flatten / unflatten
-round trip, finite-difference gradient check on every parameter block,
-and a timing probe at the default size), and `make sherlock-clean`
-deletes checkpoints, figures and logs (it keeps `data/ids.csv`; delete
-that by hand if you want a full reset).
+still writes the figures. The `<stage>.log` files are what
+`make sherlock-status` and `make sherlock-report` read, so a run can be
+inspected or written up long after the terminal has scrolled away. Two
+housekeeping targets: `make sherlock-test` runs the library self-test
+(`test_gpt_lib.rlab`: flatten / unflatten round trip, finite-difference
+gradient check on every parameter block, and a timing probe at the
+default size), and `make sherlock-clean` deletes checkpoints, figures,
+logs and `report.md` and resets the preset and the question (it keeps
+`data/ids.csv`; delete that by hand if you want a full reset).
+
+A complete default run is committed under `example-run/` (`train.log`,
+`generate.log`, `sft.log`, `distill.log`, `ask.log`, the figures and the
+assembled `report.md`), so you can read what to expect before spending
+the twenty minutes.
 
 Stage 0 prints the three numbers you will measure everything against:
 
@@ -117,10 +143,18 @@ Stage 1 then prints its header and starts logging:
 ```
 corpus: 562269 chars   vocab: 77    train: 534156   val: 28113
 model: d = 128  L = 4  H = 4  d_ff = 512  T = 128   params = 811008
-tokens per step: 1024    steps: 3000    total tokens: 3072000   ( 5.75 epochs )
-step    50 | loss 3.6777 nats (5.306 bits/char) | |g| 0.333 | eta 6.67e-04 |   2740 tok/s |     19 s
-step   100 | loss 3.1019 nats (4.475 bits/char) | |g| 0.384 | eta 1.33e-03 |   2680 tok/s |     38 s
+tokens per step: 1024   steps: 3000   total tokens: 3072000  (5.75 epochs)
+progress is printed every 50 steps as [percent done  ETA min:sec]; held-out loss every 250 steps; checkpoints every 500 steps.
+[  2%  ETA  18:41]  step    50 | loss 3.6777 nats (5.306 bits/char) | |g| 0.333 | lr 6.67e-04 |  2740 tok/s |    19 s
+[  3%  ETA  18:22]  step   100 | loss 3.1019 nats (4.475 bits/char) | |g| 0.384 | lr 1.33e-03 |  2680 tok/s |    38 s
 ```
+
+(The loss, gradient-norm and throughput values are from the measured
+run in `example-run/train.log`; the percent-done and ETA columns were
+added to the log line after that run, so there they appear without the
+prefix.) The ETA is elapsed time divided by the fraction of steps done,
+so it settles after the first few log lines and drifts up slightly when
+the evaluation and checkpoint writes land.
 
 Notice step 100: 4.475 bits/char is the order-0 entropy to three
 figures. One hundred steps in, the model has learned the character
@@ -204,6 +238,10 @@ which copies the file to `preset.rlab`; `train`, `generate`, `sft`,
 changes the model dimensions, so the checkpoint rules under *Resuming*
 and *Troubleshooting* apply; `make sherlock-clean` resets the preset to
 `default`.
+
+The `quick` preset also sets `C.ckpt_dir = "checkpoints-quick"`, so a quick demo and a long default run keep separate checkpoints and separate SFT / student models; the figures, logs and `report.md` are shared, so `make sherlock-report` describes whichever ran last. Three optional fields let a preset scale the later stages too: `C.sft_steps` and `C.sft_eta` override `C_sft.n_steps` / `C_sft.eta` in `sft.rlab`, and `C.kd_steps` overrides `C_kd.n_steps` in `distill.rlab` (`quick` sets `sft_steps = 800`, because a 101 k-parameter model needs more passes to memorise the pairs).
+
+What the quick preset delivers, measured: pre-training 400 steps in 18 s (11,600 tok/s) to 3.40 held-out bits/char — a little better than a bigram model — then SFT in 37 s to 29 / 46 exact answers ("Where does Holmes live?" → "221B Baker Street", but "Who is the woman?" → "I Irthe Adler") with +0.11 bits/char forgetting, and distillation into a 17.6 k-parameter student (3.53 vs 3.59 bits/char hard-target). It exercises every stage in a few minutes; the default preset is where the text starts to look like English and the answers come out clean.
 
 ## Resuming
 
@@ -346,7 +384,7 @@ have no escapes).
 
 ## Stage 3 — supervised fine-tuning (`sft.rlab`)
 
-The Lesson 25 recipe on a real model. `qa_pairs.rlab` holds 45
+The Lesson 25 recipe on a real model. `qa_pairs.rlab` holds 46
 hand-written question/answer pairs whose answers are stated literally in
 the stories ("Where does Holmes live?" → "221B Baker Street"; "What is
 the name of the mastiff at the Copper Beeches?" → "Carlo"). Each pair is
@@ -381,28 +419,48 @@ no weight decay, batch 8. Its knobs are the `C_sft` struct at the top of the fil
 | `ckpt_in`, `ckpt_out` | Input and output checkpoints | `checkpoints/ckpt_latest.npz`, `checkpoints/ckpt_sft.npz` |
 
 Every 25 steps it prints the masked SFT loss and the replay loss; at the
-end it greedy-decodes all 45 questions, counts a hit when the output
+end it greedy-decodes all 46 questions, counts a hit when the output
 *starts with* the reference answer, and prints
 
 ```
-SFT accuracy: N / 45 = … %   (4 replay windows per batch, 300 steps, … s)
+SFT accuracy: N / 46 = … %   (4 replay windows per batch, 300 steps, … s)
 forgetting probe: held-out corpus loss a -> b nats  (… -> … bits/char)  delta …
 ```
 
 before saving `checkpoints/ckpt_sft.npz` and `sft_curves.svg` (SFT loss
 and replay loss in bits/char against the pre-SFT held-out line).
 
+Measured on the recorded default run (`example-run/sft.log`, 113 s):
+
+```
+SFT accuracy: 43 / 46 = 93.5 %   (4 replay windows per batch, 300 steps, 113 s)
+forgetting probe: held-out corpus loss 1.5269 -> 1.6950 nats  (2.203 -> 2.445 bits/char)  delta +0.1681 nats (+0.243 bits/char)
+```
+
+and afterwards (`example-run/ask.log`): "Who is the woman?" → "Irene
+Adler", "Where does Holmes live?" → "221B Baker Street", "Who narrates
+the stories?" → "Dr. Watson", "What is the speckled band?" → "A swamp
+adder"; but "What does Holmes play?" → "The polloker Street" and "Who is
+Holmes' brother?" (not in the pairs) → "Mrs. A swamp adder". The same
+recipe without replay, at a learning rate of 3e-4, reached 11 / 46 and
+lost 1.9 bits/char on the book — textbook catastrophic forgetting.
+
 What it demonstrates:
 
+- **Context shorter than an example.** The longest pair is 82
+  characters. With a preset whose context `T + 1` is shorter than that
+  (`quick`: 65), `sft.rlab` keeps the *tail* of the example — the answer
+  and the end of the question — and prints how many pairs it truncated.
+  Generation already crops the prompt to the last `T + 1` characters.
 - **Prompt masking** is just the `mask` argument every forward call in
   `lib/gpt.rlab` already takes — all ones during pre-training, zero on
   the prompt here. Each worker returns the mean loss over its *own*
   scored positions, so a 15-character answer and a 128-character replay
   window weigh the same in the gradient.
-- **Memorisation, not understanding.** With 45 examples and 300 steps
+- **Memorisation, not understanding.** With 46 examples and 300 steps
   (each pair is seen about 27 times) the accuracy on the training
   questions should climb toward 100 %, while the paraphrase stays wrong
-  or drifts: forty-five strings cannot teach a mapping from questions to
+  or drifts: forty-six strings cannot teach a mapping from questions to
   facts.
 - **Catastrophic forgetting and its cheapest fix.** The delta in the
   forgetting probe is what SFT costs the pre-training distribution. Set
@@ -468,6 +526,11 @@ then saves `checkpoints/ckpt_student.npz` (loadable by `generate.rlab`,
 since it carries its own `cfgv`) and `distill_curves.svg` — train and
 held-out curves of both students with the teacher's held-out loss as a
 horizontal line.
+
+Measured on the recorded default run (`example-run/distill.log`, 82 s +
+42 s for the control): teacher 2.203, distilled student 3.420,
+hard-target student 3.439 bits/char — a gain of 0.020 bits/char, and a
+1.2 bits/char gap to the 7.4× larger teacher.
 
 What to expect: a positive distillation gain of a few hundredths of a
 bit — the student learns faster from a soft target because every
@@ -564,6 +627,7 @@ performance document linked above.
 | `parmap` result is wrong, or an edit inside the training loop "does nothing" | The lambda passed to `parmap` must be pure: it receives copies of `W`, `mask`, `P`, `cfg` and returns one row; writes to outer variables and RNG calls inside it do not propagate back | Keep all state changes outside the `parmap` call; draw random numbers before it (`sample_windows` does) |
 | tok/s is much lower than ≈ 2,500 | Fewer cores than `batch`, another heavy process, or a laptop on battery | Lower `batch` to the physical core count; check Activity Monitor |
 | Generated text contains characters you did not expect, or your prompt was shortened | `gpt_encode` skips characters outside the 77-symbol vocabulary | Use plain ASCII quotes and dashes in `C.prompt` |
+| `error: line 124: runtime error: No such file or directory` in `train.rlab` | `save` does not create directories and `ckpt_dir` does not exist (a hand-edited preset) | `mkdir -p tutorial/sherlock/<ckpt_dir>`; the `make` targets create `checkpoints/` and `checkpoints-quick/` themselves |
 | `ask.rlab` cannot load `checkpoints/ckpt_sft.npz` | Stage 3 has not been run | `make sherlock-sft`, or set `C.use_base_model = true` in `preset.rlab` to query the pre-trained model |
 | `make sherlock-ask` fails while reading `question.rlab` | The question contains a double quote; rustlab string literals have no escapes | Rephrase without `"` (an apostrophe is fine) |
 | `savefig` writes nothing | Running with `--plot none` is fine; a missing figure means the run died before section 5 of `train.rlab` | Look for the error above the last `step` line |
@@ -578,20 +642,25 @@ tutorial/sherlock/
   train.rlab           Stage 1: pre-training
   generate.rlab        Stage 2: sampling from checkpoints/ckpt_latest.npz
   sft.rlab             Stage 3: supervised fine-tuning with prompt masking, replay, forgetting probe (knobs: C_sft)
-  qa_pairs.rlab        the 45 Q/A pairs Stage 3 trains on: qa_prompt(), qa_table(), qa_example()
+  qa_pairs.rlab        the 46 Q/A pairs Stage 3 trains on: qa_prompt(), qa_table(), qa_example()
   ask.rlab             ask the fine-tuned model one question (make sherlock-ask Q="...")
   question.rlab        C.question = "..."; written by make sherlock-ask, read by ask.rlab
   preset.rlab          the selected preset; run last by config.rlab (make sherlock-preset PRESET=...)
   presets/             default.rlab (empty), quick.rlab (2-3 min demo), large.rlab (overnight)
-  distill.rlab         Stage 4: teacher -> 2-layer student on softened logits, vs a hard-target control (knobs: C_kd)
+  distill.rlab         Stage 4: teacher -> half-width, half-depth student on softened logits, vs a hard-target control (knobs: C_kd)
   benchmark.rlab       throughput at several sizes (feeds the performance document)
   test_gpt_lib.rlab    self-test for lib/gpt.rlab: round trip, gradient check, timing
+  report.py            make sherlock-report: assembles report.md from the stage logs and figures
+  report.md            the assembled report of the last run (generated, gitignored)
+  <stage>.log          train / generate / sft / distill / ask / benchmark output, written by the make targets (gitignored)
+  example-run/         a complete default run, committed: the logs, the figures and its report.md
   data/
     adventures.txt     Project Gutenberg #1661, public domain (committed, 607 KB)
     ids.csv            one 1-based character id per line (generated, gitignored)
     vocab.rlab         vocab_chars, vocab_size, corpus_chars (generated, gitignored)
   checkpoints/         ckpt_latest.npz (theta + Adam state), ckpt_NNNNNN.npz, ckpt_sft.npz, ckpt_student.npz,
                        train_history.npz (gitignored)
+  checkpoints-quick/   the same for the quick preset (gitignored)
   train_curves.svg     loss and gradient-norm curves from the last run (gitignored)
   sft_curves.svg       Stage 3 curves (gitignored)
   distill_curves.svg   Stage 4 curves (gitignored)

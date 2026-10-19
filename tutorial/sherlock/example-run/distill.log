@@ -1,0 +1,49 @@
+rustlab 0.3.9 — interpreting /Users/mike/projects/2026/rustlab_llm-sherlock/tutorial/sherlock/distill.rlab (.rlab)
+teacher: 811008 params (pre-training step 3000 )   student: 109440 params   ratio 7.410526315789474
+kd_dlogits check at (5,7): analytic 7.827876e-04  numeric 7.827875e-04  rel err 1.25e-08
+teacher held-out loss: 1.5269 nats (2.203 bits/char)
+--- distilled student: alpha = 0.5  T = 2  ---
+KD   step   50 | hard CE 3.7642 nats (5.431 bits/char) | KD loss 4.4064 | |g| 0.583 | eta 1.67e-03 |     7 s
+KD   step  100 | hard CE 3.1313 nats (4.518 bits/char) | KD loss 3.1458 | |g| 0.282 | eta 1.98e-03 |    14 s
+KD            held-out 3.1046 nats (4.479 bits/char)
+KD   step  150 | hard CE 3.0330 nats (4.376 bits/char) | KD loss 2.9954 | |g| 0.302 | eta 1.88e-03 |    21 s
+KD   step  200 | hard CE 2.7153 nats (3.917 bits/char) | KD loss 2.4546 | |g| 0.535 | eta 1.72e-03 |    27 s
+KD            held-out 2.5770 nats (3.718 bits/char)
+KD   step  250 | hard CE 2.5789 nats (3.721 bits/char) | KD loss 2.2252 | |g| 0.446 | eta 1.50e-03 |    34 s
+KD   step  300 | hard CE 2.5495 nats (3.678 bits/char) | KD loss 2.1697 | |g| 1.095 | eta 1.26e-03 |    41 s
+KD            held-out 2.4976 nats (3.603 bits/char)
+KD   step  350 | hard CE 2.5158 nats (3.630 bits/char) | KD loss 2.1133 | |g| 1.539 | eta 9.96e-04 |    48 s
+KD   step  400 | hard CE 2.4796 nats (3.577 bits/char) | KD loss 2.0754 | |g| 0.515 | eta 7.44e-04 |    55 s
+KD            held-out 2.4436 nats (3.525 bits/char)
+KD   step  450 | hard CE 2.4495 nats (3.534 bits/char) | KD loss 2.0277 | |g| 0.706 | eta 5.21e-04 |    62 s
+KD   step  500 | hard CE 2.4444 nats (3.527 bits/char) | KD loss 1.9993 | |g| 0.966 | eta 3.48e-04 |    68 s
+KD            held-out 2.4065 nats (3.472 bits/char)
+KD   step  550 | hard CE 2.4284 nats (3.503 bits/char) | KD loss 1.9700 | |g| 0.893 | eta 2.38e-04 |    75 s
+KD   step  600 | hard CE 2.3972 nats (3.458 bits/char) | KD loss 1.9391 | |g| 0.868 | eta 2.00e-04 |    82 s
+KD            held-out 2.3703 nats (3.420 bits/char)
+--- hard-target student: alpha = 0 (same init, same windows) ---
+hard step   50 | hard CE 3.7583 nats (5.422 bits/char) | KD loss 0.0000 | |g| 0.389 | eta 1.67e-03 |     3 s
+hard step  100 | hard CE 3.1098 nats (4.486 bits/char) | KD loss 0.0000 | |g| 0.334 | eta 1.98e-03 |     7 s
+hard          held-out 3.0785 nats (4.441 bits/char)
+hard step  150 | hard CE 3.0273 nats (4.367 bits/char) | KD loss 0.0000 | |g| 0.321 | eta 1.88e-03 |    10 s
+hard step  200 | hard CE 2.7048 nats (3.902 bits/char) | KD loss 0.0000 | |g| 0.574 | eta 1.72e-03 |    14 s
+hard          held-out 2.5855 nats (3.730 bits/char)
+hard step  250 | hard CE 2.5793 nats (3.721 bits/char) | KD loss 0.0000 | |g| 0.451 | eta 1.50e-03 |    18 s
+hard step  300 | hard CE 2.5502 nats (3.679 bits/char) | KD loss 0.0000 | |g| 0.660 | eta 1.26e-03 |    21 s
+hard          held-out 2.5082 nats (3.619 bits/char)
+hard step  350 | hard CE 2.5212 nats (3.637 bits/char) | KD loss 0.0000 | |g| 0.542 | eta 9.96e-04 |    25 s
+hard step  400 | hard CE 2.4878 nats (3.589 bits/char) | KD loss 0.0000 | |g| 0.547 | eta 7.44e-04 |    28 s
+hard          held-out 2.4512 nats (3.536 bits/char)
+hard step  450 | hard CE 2.4608 nats (3.550 bits/char) | KD loss 0.0000 | |g| 0.538 | eta 5.21e-04 |    32 s
+hard step  500 | hard CE 2.4523 nats (3.538 bits/char) | KD loss 0.0000 | |g| 0.801 | eta 3.48e-04 |    35 s
+hard          held-out 2.4123 nats (3.480 bits/char)
+hard step  550 | hard CE 2.4411 nats (3.522 bits/char) | KD loss 0.0000 | |g| 0.598 | eta 2.38e-04 |    39 s
+hard step  600 | hard CE 2.4148 nats (3.484 bits/char) | KD loss 0.0000 | |g| 0.517 | eta 2.00e-04 |    42 s
+hard          held-out 2.3840 nats (3.439 bits/char)
+
+model                     params  nats/char  bits/char
+teacher                   811008     1.5269      2.203
+distilled student         109440     2.3703      3.420
+hard-target student       109440     2.3840      3.439
+distillation gain: +0.0136 nats (+0.020 bits/char) vs hard targets; gap to teacher 1.217 bits/char   (82 s + 42 s)
+Saved checkpoints/ckpt_student.npz and distill_curves.svg

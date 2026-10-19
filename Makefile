@@ -77,6 +77,7 @@ sherlock-data: ## Sherlock step 0: python3 prepare_corpus.py -> data/ids.csv + d
 	cd $(SHERLOCK) && python3 prepare_corpus.py data/adventures.txt
 
 sherlock-train: ## Sherlock step 1: pre-train the character GPT (config.rlab + preset; ~20 min at the defaults) -> train.log
+	@mkdir -p $(SHERLOCK)/checkpoints $(SHERLOCK)/checkpoints-quick
 	$(call sherlock_stage,train)
 
 sherlock-generate: ## Sherlock step 2: three samples from the latest checkpoint (greedy / tau+top-k / tau 1.2) -> generate.log

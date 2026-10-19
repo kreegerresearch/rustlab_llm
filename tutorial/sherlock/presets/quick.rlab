@@ -16,3 +16,4 @@ C.eval_every = 100;
 C.ckpt_every = 200;
 C.gen_tokens = 200;
 C.ckpt_dir   = "checkpoints-quick";   # never overwrites a long run's checkpoints
+C.sft_steps  = 800;                  # the small model needs more SFT steps to memorise the pairs
