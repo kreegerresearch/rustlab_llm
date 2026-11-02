@@ -295,7 +295,7 @@ tic;  for k = 1:n_call;  Y = Xa * Wa;  end;  t_m1 = toc / n_call;
 tic;  for k = 1:n_call;  Y = Wsq * Wsq;  end;  t_m2 = toc / n_call;
 tic;  for k = 1:n_call;  A = softmax(Qh * Kh' / sqrt(32) + Mc);  O = A * Vh;  end;  t_att = toc / n_call;
 Ea = randn(V, d0);
-tic;  for k = 1:n_call;  Y = Ea(ids0, :);  end;  t_gat = toc / n_call;
+tic;  for k = 1:n_call;  Y = Ea(ids0(:), :);  end;  t_gat = toc / n_call;
 dXa = randn(T0 + 1, d0);
 tic;
 for k = 1:n_call
