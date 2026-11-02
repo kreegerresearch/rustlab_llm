@@ -33,6 +33,8 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 | 16 | Standalone Sherlock tutorial (`tutorial/sherlock/`, `lib/gpt.rlab`) | Complete — one-command `make sherlock-quick` / `make sherlock`; default run, SFT, distillation and benchmark recorded; rustlab request list in `docs/sherlock-performance-and-rustlab-requests.md` |
 | 17 | Performance flywheel with rustlab (`perf/`, `docs/perf-flywheel.md`) | In progress — harness, gate and baseline recorded; iteration 01 requests handed to rustlab |
 
+**rustlab 0.3.43 compatibility (2026-11-02).** Every lesson script runs on rustlab 0.3.43. `zeros(n)` / `ones(n)` / `rand(n)` / `randn(n)` / `randi(imax, n)` are n×n now; sequences are `zeros(1, n)` and the other row forms. Matrix magnitudes that the lessons compare with $\sqrt{Td}$ use `norm(M, "fro")`, because bare `norm(M)` is the matrix 2-norm. A 1×n matrix is not a subscript (`v(:)` is). Notebook `run "../lib/..."` still needs `make notebooks`'s `--jail-root .`. The first 300 steps of the default Sherlock train reproduce the published curve (step 50 → 5.306 bits/char, step 100 → 4.475). `lib/gpt.rlab`'s gradient check passes.
+
 **Lesson numbering (since 2026-09-27, Phase 11):** `22-full-backprop-through-the-block` (was the first half of 24), `23-putting-it-all-together` (was 22), `24-modern-architectural-variants` (was 23), `25-fine-tuning-sft-and-dpo` (was the second half of 24). The capstone now comes *after* the lesson that derives the backward pass it runs on. Older handoff notes below keep their original numbers where they narrate history.
 
 ---

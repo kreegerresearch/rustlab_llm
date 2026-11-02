@@ -24,7 +24,7 @@ N_char = length(seq);
 # === BPE primitives (same as bpe_train.rlab) ===
 function out = apply_merge(seq, a, b, new_id)
   L = length(seq);
-  buf = zeros(L);
+  buf = zeros(1, L);
   k = 1;
   i = 1;
   while i <= L
@@ -57,7 +57,7 @@ end
 
 # === Full merge schedule: record N_k for k = 0..10 ===
 K = 10;
-N_k = zeros(K + 1);
+N_k = zeros(1, K + 1);
 N_k(1) = N_char;
 cur_seq = seq;
 cur_vocab = vocab_size;
@@ -73,7 +73,7 @@ end
 print("Sequence length N_k for k = 0..10 merges:", N_k);
 
 # === Baselines: ASCII, fixed width, order-0 bound, Huffman ===
-c_char = zeros(vocab_size);
+c_char = zeros(1, vocab_size);
 for i = 1:vocab_size
   c_char(i) = sum(seq == i);
 end
@@ -105,7 +105,7 @@ print("minimum", bits_min, "bits at k* =", k_star, "merges (|V| =", vocab_size +
 
 # === Order-0 entropies over characters vs over tokens (five merges) ===
 N_tok = length(seq_5);
-p_tok = zeros(vocab_size + 5);
+p_tok = zeros(1, vocab_size + 5);
 for i = 1:(vocab_size + 5)
   p_tok(i) = sum(seq_5 == i) / N_tok;
 end

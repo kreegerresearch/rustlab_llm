@@ -216,11 +216,11 @@ The FFN hidden temporarily widens to $(T, d_{\text{ff}}) = (4, 32)$, then contra
 ### Example — Magnitude tracking through the block
 
 ```rustlab
-print("|H_in|  =", norm(H_in));
-print("|H_mid| =", norm(H_mid));
-print("|H_out| =", norm(H_out));
-print("|MHA contribution|  / |H_in|  =", norm(A_out) / norm(H_in));
-print("|FFN contribution|  / |H_mid| =", norm(F_out) / norm(H_mid));
+print("|H_in|  =", norm(H_in, "fro"));
+print("|H_mid| =", norm(H_mid, "fro"));
+print("|H_out| =", norm(H_out, "fro"));
+print("|MHA contribution|  / |H_in|  =", norm(A_out, "fro") / norm(H_in, "fro"));
+print("|FFN contribution|  / |H_mid| =", norm(F_out, "fro") / norm(H_mid, "fro"));
 ```
 
 <!-- rustlab:output-start -->
@@ -234,7 +234,7 @@ print("|FFN contribution|  / |H_mid| =", norm(F_out) / norm(H_mid));
 
 <!-- rustlab:output-end -->
 
-At *this* lesson's initialisation the sublayer contributions are **not** small perturbations. The MHA branch is about the same size as the residual stream it feeds into ($\|\mathrm{MHA}\| / \|\mathbf{H}_{\text{in}}\| \approx 0.99$); the FFN branch is a bit smaller ($\approx 0.52$, because its two He-scaled projections contract the variance). Adding a branch of comparable magnitude to the stream grows the norm roughly like the square root of the number of accumulated terms: $\|\mathbf{H}_{\text{in}}\| = 6.07$ becomes $\|\mathbf{H}_{\text{mid}}\| = 9.20$ after the first residual and $\|\mathbf{H}_{\text{out}}\| = 10.54$ after the second. Production GPTs keep these ratios well below 1 on purpose — they shrink each residual-branch *output* projection at initialisation (nanoGPT divides its variance by $2N$, i.e. scales the weights by $1/\sqrt{2N}$; see [Lesson 14](14-full-gpt-architecture.md)'s initialization sidebar) precisely so a deep stack's residual stream stays bounded. The [Systems lens](#systems) below runs that experiment on an 8-block stack. Training then scales each contribution up where it helps and down where it doesn't.
+`norm(H, "fro")` is the Frobenius norm, the root-sum-square of every entry. An unqualified `norm(H)` is the matrix 2-norm (the largest singular value), a different number; the $\sqrt{Td}$ scale in [Lesson 14](14-full-gpt-architecture.md) is the Frobenius one. At *this* lesson's initialisation the sublayer contributions are **not** small perturbations. The MHA branch is about the same size as the residual stream it feeds into ($\|\mathrm{MHA}\| / \|\mathbf{H}_{\text{in}}\| \approx 0.99$); the FFN branch is a bit smaller ($\approx 0.52$, because its two He-scaled projections contract the variance). Adding a branch of comparable magnitude to the stream grows the norm roughly like the square root of the number of accumulated terms: $\|\mathbf{H}_{\text{in}}\| = 6.07$ becomes $\|\mathbf{H}_{\text{mid}}\| = 9.20$ after the first residual and $\|\mathbf{H}_{\text{out}}\| = 10.54$ after the second. Production GPTs keep these ratios well below 1 on purpose — they shrink each residual-branch *output* projection at initialisation (nanoGPT divides its variance by $2N$, i.e. scales the weights by $1/\sqrt{2N}$; see [Lesson 14](14-full-gpt-architecture.md)'s initialization sidebar) precisely so a deep stack's residual stream stays bounded. The [Systems lens](#systems) below runs that experiment on an 8-block stack. Training then scales each contribution up where it helps and down where it doesn't.
 
 ### Example — Visualise the residual stream at each stage
 
@@ -331,8 +331,8 @@ W_ff2_2 = randn(d_ff,    d_model) * sqrt(2.0 / d_ff);
 % library function, which is the same code as the explicit version above.
 H_out2 = mha_block_forward(H_out, W_Q2, W_K2, W_V2, W_O2, W_ff1_2, W_ff2_2, H_heads, M_mask);
 
-print("After block 1 |H| =", norm(H_out));
-print("After block 2 |H| =", norm(H_out2));
+print("After block 1 |H| =", norm(H_out, "fro"));
+print("After block 2 |H| =", norm(H_out2, "fro"));
 print("After block 2 shape:", size(H_out2));
 ```
 
@@ -455,7 +455,7 @@ subplot(1, 2, 1)
 semilogy(0:8, n_u, "color", "red", "label", "branch scale 1")
 hold("on")
 semilogy(0:8, n_s, "color", "blue", "label", "branch scale 1/sqrt(2N)")
-hline(norm(H_in), "gray", "|H_0|")
+hline(norm(H_in, "fro"), "gray", "|H_0|")
 hold("off")
 title("|H_l| along an 8-block stack")
 xlabel("block l")
@@ -473,12 +473,12 @@ ylabel("sigma_max")
 
 <!-- rustlab:output-start -->
 ```text
-N = 2  |H_N|/|H_0|: unscaled 2.110514497741098  scaled 1.2876085953458334   max sigma_max(J): unscaled 2.1436353496367158  scaled 1.6271641931427017
-N = 4  |H_N|/|H_0|: unscaled 3.4271154139164315  scaled 1.3965030076089215   max sigma_max(J): unscaled 2.1436353496367158  scaled 1.4986869084529262
-N = 8  |H_N|/|H_0|: unscaled 4.259092877559233  scaled 1.2613544565561314   max sigma_max(J): unscaled 2.1436353496367158  scaled 1.3894371112628576
+N = 2  |H_N|/|H_0|: unscaled 2.110514497741098  scaled 1.2876085953458334   max sigma_max(J): unscaled 2.143635349659995  scaled 1.627164193151551
+N = 4  |H_N|/|H_0|: unscaled 3.4271154139164315  scaled 1.3965030076089215   max sigma_max(J): unscaled 2.143635349659995  scaled 1.4986869084789367
+N = 8  |H_N|/|H_0|: unscaled 4.259092877559234  scaled 1.2613544565561312   max sigma_max(J): unscaled 2.143635349659995  scaled 1.3894371112839674
 ```
 
-![plot 3](plots/13-transformer-block/plot-3-506537b9.svg)
+![plot 3](plots/13-transformer-block/plot-3-b6e3575d.svg)
 
 <!-- rustlab:output-end -->
 
@@ -512,11 +512,13 @@ ylabel("bits")
 <!-- rustlab:output-start -->
 ```text
 log2 t bound (bits):         [1×4]  0.000000  1.000000  1.584963  2.000000
-row entropy, head 1 (bits):  [1×4]  0.000000  0.328409  1.110058  1.712712
-row entropy, head 2 (bits):  [1×4]  0.000000  0.910635  1.531749  1.519905
+row entropy, head 1 (bits):  Matrix(1x4)
+  [0.000000, 0.328409, 1.110058, 1.712712]
+row entropy, head 2 (bits):  Matrix(1x4)
+  [0.000000, 0.910635, 1.531749, 1.519905]
 ```
 
-![plot 4](plots/13-transformer-block/plot-4-a12b59e9.svg)
+![plot 4](plots/13-transformer-block/plot-4-83b4575b.svg)
 
 <!-- rustlab:output-end -->
 
@@ -591,11 +593,11 @@ Run all with `make lesson-13` (or `rustlab run lessons/13-transformer-block/<nam
 | `size(F_pre)` (FFN hidden) | `[4, 32]` |
 | `size(F_out)` | `[4, 8]` |
 | `size(H_out)` | `[4, 8]` (= input shape — block is shape-preserving) |
-| `norm(H_in)` / `norm(H_mid)` / `norm(H_out)` | `6.07` / `9.20` / `10.54` |
-| `norm(A_out) / norm(H_in)` | `0.987` |
-| `norm(F_out) / norm(H_mid)` | `0.521` |
+| `norm(H_in, "fro")` / `norm(H_mid, "fro")` / `norm(H_out, "fro")` | `6.07` / `9.20` / `10.54` |
+| `norm(A_out, "fro") / norm(H_in, "fro")` | `0.987` |
+| `norm(F_out, "fro") / norm(H_mid, "fro")` | `0.521` |
 | `sum(abs(dA), 2)'` / `sum(abs(dF), 2)'` (responses to a bump at token 3) | `[0, 0, 0.775, 0.352]` / `[0, 0, 1.759, 0]`; all 8 channels of row 3 non-zero in `dF` |
-| `norm(H_out2)` (after block 2) | `14.85` |
+| `norm(H_out2, "fro")` (after block 2) | `14.85` |
 | `n_attn` ($d_{\text{model}} = 8$) | `256` |
 | `n_ffn` | `512` |
 | `n_ffn / n_attn` | `2` |

@@ -371,7 +371,7 @@ xlabel("key position i")
 ```
 
 <!-- rustlab:output-start -->
-![plot 4](plots/09-multi-head-attention/plot-4-67b05ef2.svg)
+![plot 4](plots/09-multi-head-attention/plot-4-bc1286d4.svg)
 
 <!-- rustlab:output-end -->
 
@@ -392,7 +392,7 @@ print("score FLOPs, one wide head vs H narrow heads:", flops_wide, flops_narrow)
 
 <!-- rustlab:output-start -->
 ```text
-rank(Q_h K_h') for heads 1..4: 1 2 2 0
+rank(Q_h K_h') for heads 1..4: 3 5 5 0
 score FLOPs, one wide head vs H narrow heads: 1073741824 1073741824
 ```
 

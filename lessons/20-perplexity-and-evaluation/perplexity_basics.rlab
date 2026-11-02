@@ -60,7 +60,7 @@ end
 %   (K-1)/(1-p)     - the model's PPL on data whose truth is a tail class
 K = 4;
 ps = linspace(1.0 / K, 0.999, 50);
-ppl_dist = zeros(50);  ppl_hit = zeros(50);  ppl_miss = zeros(50);
+ppl_dist = zeros(1, 50);  ppl_hit = zeros(1, 50);  ppl_miss = zeros(1, 50);
 for k = 1:50
   p = ps(k);  rest = (1 - p) / (K - 1);
   ppl_dist(k) = entropy_to_ppl([p, rest, rest, rest]);

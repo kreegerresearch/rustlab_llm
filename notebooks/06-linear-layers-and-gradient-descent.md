@@ -140,9 +140,9 @@ n_steps = 200;
 w = 0.0;
 b = 0.0;
 
-w_path    = zeros(n_steps + 1);
-b_path    = zeros(n_steps + 1);
-loss_path = zeros(n_steps + 1);
+w_path    = zeros(1, n_steps + 1);
+b_path    = zeros(1, n_steps + 1);
+loss_path = zeros(1, n_steps + 1);
 
 w_path(1)    = w;
 b_path(1)    = b;
@@ -282,7 +282,7 @@ P = C ./ n_row;                               % Lesson 05's count estimator
 W_bi = zeros(vocab_size, vocab_size);         % all logits equal: uniform rows
 lr_bi = 2.0;
 n_bi = 300;
-loss_bi = zeros(n_bi);
+loss_bi = zeros(1, n_bi);
 for k = 1:n_bi
   P_hat = softmax(W_bi);                      % row-wise softmax: one-hot . W for every row at once
   G = (n_row .* P_hat - C) / N_big;           % (n_i / N) (p_hat_i - P_i), row by row
@@ -365,7 +365,7 @@ The three regimes, run for 25 steps each. Because the loss is a sum of squared m
 ```rustlab
 function [loss_hist, c_fast] = gd_run(x, y, eta, n_steps, v_fast)
   w = 0.0; b = 0.0; npts = length(x);
-  loss_hist = zeros(n_steps + 1); c_fast = zeros(n_steps + 1);
+  loss_hist = zeros(1, n_steps + 1); c_fast = zeros(1, n_steps + 1);
   loss_hist(1) = mean((w * x + b - y) .^ 2);
   c_fast(1) = v_fast(1) * (w - 2.0) + v_fast(2) * b;
   for k = 1:n_steps

@@ -104,8 +104,8 @@ end
 T_run = T_max;
 naive_out  = zeros(T_run, d_head);
 cached_out = zeros(T_run, d_head);
-naive_flops_step = zeros(T_run);
-cached_flops_step = zeros(T_run);
+naive_flops_step = zeros(1, T_run);
+cached_flops_step = zeros(1, T_run);
 K_cache = zeros(0, d_head);
 V_cache = zeros(0, d_head);
 

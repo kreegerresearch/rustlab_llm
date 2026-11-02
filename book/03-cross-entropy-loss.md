@@ -86,7 +86,7 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/03-cross-entropy-loss/plot-1-62fc03f6.svg)
+![plot 1](plots/03-cross-entropy-loss/plot-1-cec03185.svg)
 
 <!-- rustlab:output-end -->
 
@@ -139,7 +139,7 @@ The loss is also **convex in $\mathbf{z}$**: $-z_c$ is linear, and $\mathrm{LSE}
 z3 = [1.0, 2.0, 0.0];             % logits: the distractor (class 2) currently wins
 c3 = 1;                           % correct class
 p3 = softmax(z3);
-y3 = zeros(3); y3(c3) = 1.0;
+y3 = zeros(1, 3); y3(c3) = 1.0;
 g3 = p3 - y3;                     % dL/dz
 L3 = -z3(c3) + log(sum(exp(z3))); % the LSE form of the loss
 print("p_hat      =", p3);
@@ -151,8 +151,9 @@ print("L via LSE  =", L3, "   -log p_c =", -log(p3(c3)));
 <!-- rustlab:output-start -->
 ```text
 p_hat      = [1×3]  0.244728  0.665241  0.090031
-dL/dz      = [1×3]  -0.755272  0.665241  0.090031
-sum(dL/dz) = -0.00000000000000008326672684688674    max|dL/dz| = 0.7552715289452023
+dL/dz      = Matrix(1x3)
+  [-0.755272, 0.665241, 0.090031]
+sum(dL/dz) = -0.00000000000000011102230246251565    max|dL/dz| = 0.7552715289452023
 L via LSE  = 1.4076059644443801    -log p_c = 1.4076059644443804
 ```
 
@@ -203,7 +204,7 @@ ylabel("z2 (distractor)")
 ```
 
 <!-- rustlab:output-start -->
-![plot 2](plots/03-cross-entropy-loss/plot-2-d269f4b8.svg)
+![plot 2](plots/03-cross-entropy-loss/plot-2-202febca.svg)
 
 <!-- rustlab:output-end -->
 
@@ -282,7 +283,7 @@ hold("off")
 margin -6: loss = 6.00247568513773 nats   dL/dz_c = -0.9975273768433652
 ```
 
-![plot 3](plots/03-cross-entropy-loss/plot-3-94e9c545.svg)
+![plot 3](plots/03-cross-entropy-loss/plot-3-29eda25f.svg)
 
 <!-- rustlab:output-end -->
 

@@ -109,7 +109,7 @@ function r = bpe_step(seq, vocab_size)
   best_b = floor((idx - 1) / V) + 1;
   best_c = counts(best_a, best_b);
   new_id = V + 1;
-  new_seq = zeros(L);
+  new_seq = zeros(1, L);
   k = 1; i = 1;
   while i <= L
     if i < L && seq(i) == best_a && seq(i + 1) == best_b
@@ -127,8 +127,8 @@ end
 % --- Merge table + decoder for token ids -> text ---
 function [left_parent, right_parent] = compute_merge_table(char_seq, n_base, n_merges)
   total = n_base + n_merges;
-  left_parent = zeros(total);
-  right_parent = zeros(total);
+  left_parent = zeros(1, total);
+  right_parent = zeros(1, total);
   cur_seq = char_seq;
   cur_vocab = n_base;
   for m = 1:n_merges
@@ -166,7 +166,7 @@ function L = mean_loss(start_idx, n_pairs, ids, P)
   T_full = start_idx + n_pairs;
   ids_slice = ids(1:T_full);
   T_slice = length(ids_slice);
-  mask = zeros(T_slice - 1);
+  mask = zeros(1, T_slice - 1);
   for t = start_idx:(T_slice - 1)
     mask(t) = 1;
   end
@@ -175,7 +175,7 @@ end
 
 % --- Autoregressive generation under each strategy (Lesson 21) ---
 function seq = greedy_gen(x0, n_new, P)
-  seq = zeros(n_new + 1);
+  seq = zeros(1, n_new + 1);
   seq(1) = x0;
   for t = 1:n_new
     p = next_token_dist(seq(1:t), P);
@@ -184,36 +184,36 @@ function seq = greedy_gen(x0, n_new, P)
 end
 
 function seq = temp_gen(x0, n_new, T_temp, P)
-  seq = zeros(n_new + 1);
+  seq = zeros(1, n_new + 1);
   seq(1) = x0;
   for t = 1:n_new
     prefix = seq(1:t);
     T_pref = length(prefix);
-    [logits, lo, cache] = transformer_forward(prefix, zeros(T_pref - 1), P);
+    [logits, lo, cache] = transformer_forward(prefix, zeros(1, T_pref - 1), P);
     p = softmax(logits(T_pref, :) / T_temp);
     seq(t + 1) = sample_categorical(p);
   end
 end
 
 function seq = topk_gen(x0, n_new, K_top, T_temp, P)
-  seq = zeros(n_new + 1);
+  seq = zeros(1, n_new + 1);
   seq(1) = x0;
   for t = 1:n_new
     prefix = seq(1:t);
     T_pref = length(prefix);
-    [logits, lo, cache] = transformer_forward(prefix, zeros(T_pref - 1), P);
+    [logits, lo, cache] = transformer_forward(prefix, zeros(1, T_pref - 1), P);
     p = softmax(logits(T_pref, :) / T_temp);
     seq(t + 1) = sample_categorical(topk_mass(p, K_top));
   end
 end
 
 function seq = topp_gen(x0, n_new, P_top, T_temp, P)
-  seq = zeros(n_new + 1);
+  seq = zeros(1, n_new + 1);
   seq(1) = x0;
   for t = 1:n_new
     prefix = seq(1:t);
     T_pref = length(prefix);
-    [logits, lo, cache] = transformer_forward(prefix, zeros(T_pref - 1), P);
+    [logits, lo, cache] = transformer_forward(prefix, zeros(1, T_pref - 1), P);
     p = softmax(logits(T_pref, :) / T_temp);
     seq(t + 1) = sample_categorical(topp_mass(p, P_top));
   end
@@ -258,7 +258,7 @@ n_base_chars = 10;
 phrase = "the cat sat on the mat ";
 n_reps = 4;
 L_total = length(phrase) * n_reps;
-char_seq = zeros(L_total);
+char_seq = zeros(1, L_total);
 k = 1;
 for r = 1:n_reps
   for i = 1:length(phrase)
@@ -331,14 +331,14 @@ T_max = T + 16;     % PE table large enough for any generation prefix
 
 E = randn(vocab, d_model) * 0.3;
 PE = sinusoidal_pe(T_max, d_model);
-gamma1 = ones(d_model);   beta1 = zeros(d_model);
-gamma2 = ones(d_model);   beta2 = zeros(d_model);
+gamma1 = ones(1, d_model);   beta1 = zeros(1, d_model);
+gamma2 = ones(1, d_model);   beta2 = zeros(1, d_model);
 Wq = randn(d_model, d_model) * 0.3;
 Wk = randn(d_model, d_model) * 0.3;
 Wv = randn(d_model, d_model) * 0.3;
 Wo = randn(d_model, d_model) * 0.3;
-W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
-W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(1, d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(1, d_model);
 W_U = randn(d_model, vocab) * 0.3;
 P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
@@ -348,15 +348,15 @@ print("vocab:", vocab, "  d_model:", d_model, "  d_ff:", d_ff, "  params:", n_pa
 n_pairs = T - 1;
 n_params_16 = vocab * 16 + 4 * 16 + 4 * 16 * 16 + 2 * 16 * 32 + 32 + 16 + 16 * vocab;
 print("prediction pairs:", n_pairs, "  tokens per parameter:", n_pairs / n_params, "  (params at d = 16:", n_params_16, ")");
-mask_train = ones(T - 1);
+mask_train = ones(1, T - 1);
 n_train = 600;  T_w = 60;  eta_max = 0.05;  eta_min = 0.005;
 bet1 = 0.9;  bet2 = 0.999;  eps_a = 1e-8;
 [M, V] = adamw_init(P);
 
-loss_curve = zeros(n_train + 1);
-ppl_curve  = zeros(n_train + 1);
-gnorm      = zeros(n_train + 1);
-lr_curve   = zeros(n_train + 1);
+loss_curve = zeros(1, n_train + 1);
+ppl_curve  = zeros(1, n_train + 1);
+gnorm      = zeros(1, n_train + 1);
+lr_curve   = zeros(1, n_train + 1);
 loss_curve(1) = mean_loss(1, n_pairs, tokens, P);
 ppl_curve(1) = exp(loss_curve(1));
 P_ck0 = P;
@@ -450,7 +450,7 @@ function H_mean = attn_frame(P_ck, label, tokens, mask_train)
   H_mean = mean(row_entropies_bits(ca.A));    % how spread out the rows are, in bits
 end
 figure();
-H_ck = zeros(4);
+H_ck = zeros(1, 4);
 H_ck(1) = attn_frame(P_ck0, "step 0: '" + s_ck0 + "'", tokens, mask_train);
 H_ck(2) = attn_frame(P_ck1, "step 100: '" + s_ck1 + "'", tokens, mask_train);
 H_ck(3) = attn_frame(P_ck2, "step 300: '" + s_ck2 + "'", tokens, mask_train);
@@ -530,7 +530,7 @@ function L_final = train_variant(P_start, ids, mask, n_steps, attn_on, T_w, eta_
 end
 
 P_nope = P_ck0;  P_nope.PE = zeros(T_max, d_model);
-ppl_abl = zeros(4);
+ppl_abl = zeros(1, 4);
 ppl_abl(1) = exp(train_variant(P_ck0, tokens, mask_train, n_train, 1, T_w, eta_max, eta_min));
 ppl_abl(2) = exp(train_variant(P_ck0, tokens, mask_train, n_train, 0, T_w, eta_max, eta_min));
 ppl_abl(3) = exp(train_variant(P_nope, tokens, mask_train, n_train, 1, T_w, eta_max, eta_min));
@@ -581,7 +581,7 @@ stem(1:t_q, taps)
 title("Attention row t = 8: FIR taps over the prefix")
 xlabel("key position i"); ylabel("A(8, i)")
 subplot(1, 2, 2)
-stem(1:t_q, ones(t_q) / t_q)
+stem(1:t_q, ones(1, t_q) / t_q)
 title("Lesson 07 uniform average: 1/t taps")
 xlabel("key position i"); ylabel("W_avg(8, i)")
 H_row = entropy_bits(taps);

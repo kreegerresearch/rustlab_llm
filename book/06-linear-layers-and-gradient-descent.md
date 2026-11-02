@@ -98,8 +98,8 @@ H =
 Matrix(2x2)
   [15.000000, 5.000000]
   [5.000000, 2.000000]
-eigenvalues: fast = 16.700609733428365   slow = 0.2993902665716366    kappa = 55.7820730936566
-fast eigenvector = [1×2]  0.946738  0.322006    slow eigenvector = [1×2]  -0.322006  0.946738
+eigenvalues: fast = 16.70060973342836   slow = 0.2993902665716397    kappa = 55.782073093656
+fast eigenvector = [1×2]  -0.946738  -0.322006    slow eigenvector = [1×2]  0.322006  -0.946738
 ```
 
 <!-- rustlab:output-end -->
@@ -170,9 +170,9 @@ n_steps = 200;
 w = 0.0;
 b = 0.0;
 
-w_path    = zeros(n_steps + 1);
-b_path    = zeros(n_steps + 1);
-loss_path = zeros(n_steps + 1);
+w_path    = zeros(1, n_steps + 1);
+b_path    = zeros(1, n_steps + 1);
+loss_path = zeros(1, n_steps + 1);
 
 w_path(1)    = w;
 b_path(1)    = b;
@@ -213,7 +213,7 @@ print("actual error   (w - 2, b)        =", [w - 2.0, b]);
 
 <!-- rustlab:output-start -->
 ```text
-slow-mode pole = 0.9850304866714181    rho^200 = 0.04897048688929904
+slow-mode pole = 0.985030486671418    rho^200 = 0.048970486889297934
 predicted error (slow mode only) = [1×2]  -0.010155  0.029858
 actual error   (w - 2, b)        = [1×2]  -0.010155  0.029858
 ```
@@ -242,7 +242,7 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-![plot 2](plots/06-linear-layers-and-gradient-descent/plot-2-c3cb20bd.svg)
+![plot 2](plots/06-linear-layers-and-gradient-descent/plot-2-87583256.svg)
 
 <!-- rustlab:output-end -->
 
@@ -276,7 +276,7 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/06-linear-layers-and-gradient-descent/plot-3-b7415d93.svg)
+![plot 3](plots/06-linear-layers-and-gradient-descent/plot-3-f6e11d3d.svg)
 
 <!-- rustlab:output-end -->
 
@@ -338,7 +338,7 @@ P = C ./ n_row;                               % Lesson 05's count estimator
 W_bi = zeros(vocab_size, vocab_size);         % all logits equal: uniform rows
 lr_bi = 2.0;
 n_bi = 300;
-loss_bi = zeros(n_bi);
+loss_bi = zeros(1, n_bi);
 for k = 1:n_bi
   P_hat = softmax(W_bi);                      % row-wise softmax: one-hot . W for every row at once
   G = (n_row .* P_hat - C) / N_big;           % (n_i / N) (p_hat_i - P_i), row by row
@@ -411,11 +411,11 @@ print("(I - eta H)^200 e0 =", [e_k(1), e_k(2)], "   GD's actual error =", [w - 2
 
 <!-- rustlab:output-start -->
 ```text
-stability limit 2/lambda_max = 0.11975610662865495    best fixed step = 0.11764705882352941   (pole magnitude 0.9647776156974546 )
-eta = 0.05    poles = [1×2]  0.164970  0.985030    tau_slow = 66.30118204786606 steps
-eta = 0.1    poles = [1×2]  -0.670061  0.970061    tau_slow = 32.8986864766667 steps
-eta = 0.12    poles = [1×2]  -1.004073  0.964073    tau_slow = 27.33130061650427 steps
-eta = 0.2    poles = [1×2]  -2.340122  0.940122    tau_slow = 16.195464586885233 steps
+stability limit 2/lambda_max = 0.11975610662865498    best fixed step = 0.11764705882352941   (pole magnitude 0.9647776156974541 )
+eta = 0.05    poles = [1×2]  0.164970  0.985030    tau_slow = 66.30118204786557 steps
+eta = 0.1    poles = [1×2]  -0.670061  0.970061    tau_slow = 32.89868647666632 steps
+eta = 0.12    poles = [1×2]  -1.004073  0.964073    tau_slow = 27.331300616503928 steps
+eta = 0.2    poles = [1×2]  -2.340122  0.940122    tau_slow = 16.19546458688505 steps
 (I - eta H)^200 e0 = [1×2]  -0.010155  0.029858    GD's actual error = [1×2]  -0.010155  0.029858
 ```
 
@@ -444,7 +444,7 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-![plot 4](plots/06-linear-layers-and-gradient-descent/plot-4-75be8bde.svg)
+![plot 4](plots/06-linear-layers-and-gradient-descent/plot-4-23f36e33.svg)
 
 <!-- rustlab:output-end -->
 
@@ -456,7 +456,7 @@ The three regimes, run for 25 steps each. Because the loss is a sum of squared m
 ```rustlab
 function [loss_hist, c_fast] = gd_run(x, y, eta, n_steps, v_fast)
   w = 0.0; b = 0.0; npts = length(x);
-  loss_hist = zeros(n_steps + 1); c_fast = zeros(n_steps + 1);
+  loss_hist = zeros(1, n_steps + 1); c_fast = zeros(1, n_steps + 1);
   loss_hist(1) = mean((w * x + b - y) .^ 2);
   c_fast(1) = v_fast(1) * (w - 2.0) + v_fast(2) * b;
   for k = 1:n_steps
@@ -489,12 +489,12 @@ end
 
 <!-- rustlab:output-start -->
 ```text
-eta = 0.05   loss after 25 steps = 0.029206519013275662   fast-mode error, steps 0-3 = [1×4]  -1.893475  -0.312366  -0.051531  -0.008501
-eta = 0.1   loss after 25 steps = 0.013581563460824012   fast-mode error, steps 0-3 = [1×4]  -1.893475  1.268744  -0.850136  0.569643
-eta = 0.2   loss after 25 steps = 86725340321479300000   fast-mode error, steps 0-3 = [1×4]  -1.893475  4.430963  -10.368993  24.264708
+eta = 0.05   loss after 25 steps = 0.029206519013275662   fast-mode error, steps 0-3 = [1×4]  1.893475  0.312366  0.051531  0.008501
+eta = 0.1   loss after 25 steps = 0.013581563460824014   fast-mode error, steps 0-3 = [1×4]  1.893475  -1.268744  0.850136  -0.569643
+eta = 0.2   loss after 25 steps = 86725340321479460000   fast-mode error, steps 0-3 = [1×4]  1.893475  -4.430963  10.368993  -24.264708
 ```
 
-![plot 5](plots/06-linear-layers-and-gradient-descent/plot-5-70050402.svg)
+![plot 5](plots/06-linear-layers-and-gradient-descent/plot-5-ec99595c.svg)
 
 <!-- rustlab:output-end -->
 
@@ -567,13 +567,14 @@ hold("off")
 
 <!-- rustlab:output-start -->
 ```text
-row entropies (bits): [1×3]  0.000000  1.000000  0.000000    pi = Matrix(1x3)
+row entropies (bits): Matrix(1x3)
+  [0.000000, 1.000000, 0.000000]    pi = Matrix(1x3)
   [0.250000, 0.500000, 0.250000]
 conditional-entropy floor = 0.5 bits = 0.34657359027997264 nats
 linear layer after 300 steps: 0.5048516431306489 bits   gap = 0.004851643130648897 bits
 ```
 
-![plot 7](plots/06-linear-layers-and-gradient-descent/plot-7-e59c4fa6.svg)
+![plot 7](plots/06-linear-layers-and-gradient-descent/plot-7-bdb869d6.svg)
 
 <!-- rustlab:output-end -->
 

@@ -26,13 +26,13 @@ function e = warmup_cosine(t, T_w, T_d, eta_p, eta_f)
   end
 end
 function [L, etas, snr] = run_sgd(eta_of_t, n, sigma, init)
-  theta = init;  L = zeros(n + 1);  etas = zeros(n);  snr = zeros(n);
+  theta = init;  L = zeros(1, n + 1);  etas = zeros(1, n);  snr = zeros(1, n);
   L(1) = sloss(theta);
   for t = 1:n
     etas(t) = eta_of_t(t);
     g_true = sgrad(theta);
     snr(t) = sum(g_true .^ 2) / (2 * sigma ^ 2);
-    theta = theta - etas(t) * (g_true + sigma * randn(2));
+    theta = theta - etas(t) * (g_true + sigma * randn(1, 2));
     L(t + 1) = sloss(theta);
   end
 end
@@ -42,7 +42,7 @@ sigma = 0.3;  init = [-3.0, 2.0];  lam_fast = 10.0;  lam_slow = 1.0;
 # === Steady-state excess loss vs constant eta ===
 seed(171);
 etas_sw = logspace(-2, log10(0.19), 6);
-meas = zeros(6);  pred = zeros(6);
+meas = zeros(1, 6);  pred = zeros(1, 6);
 for i = 1:6
   e = etas_sw(i);
   [Lc, ec, sc] = run_sgd(@(t) e, 4000, sigma, init);

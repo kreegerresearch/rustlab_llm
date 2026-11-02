@@ -150,7 +150,7 @@ function r = rel_err(a, b)
 end
 
 eps_list = [1e-2, 1e-4, 1e-5, 1e-7, 1e-9];
-rel_list = zeros(length(eps_list));
+rel_list = zeros(1, length(eps_list));
 for i = 1:length(eps_list)
   e = eps_list(i);
   W1p = W1; W1p(2, 1) = W1(2, 1) + e;
@@ -188,7 +188,7 @@ seed(16);
 d_in  = 5;
 d_out = 3;
 W = randn(d_in, d_out) * 0.5;
-b = randn(d_out) * 0.5;
+b = randn(1, d_out) * 0.5;
 x = [0.1, -0.3, 0.2, 0.4, -0.1];
 
 y = x * W + b;
@@ -235,7 +235,7 @@ p = softmax(z);
 L_ce = -log(p(y_true));
 
 % Analytical gradient
-e_y = zeros(4); e_y(y_true) = 1.0;
+e_y = zeros(1, 4); e_y(y_true) = 1.0;
 dL_dz_analytic = p - e_y;
 
 % Finite-difference check on z(3)
@@ -535,7 +535,7 @@ The costate at the input, $\boldsymbol{\lambda}_0$, is $\bar{\mathbf{x}}$; the r
 **Exact.** Depth is a cascade of per-stage gains, and the residual's identity branch is a unity feed-forward path around each stage. The per-layer gain ratios $\lVert \mathbf{g}_{k} \rVert / \lVert \mathbf{g}_{k+1} \rVert$ from the stack experiment average to the design values:
 
 ```rustlab
-gain_est = zeros(4);
+gain_est = zeros(1, 4);
 for r = 1:4
   ratios = G_norms(r, 1:(N - 1)) ./ G_norms(r, 2:N);
   gain_est(r) = exp(mean(log(ratios)));    % geometric mean of the per-stage gains
@@ -568,10 +568,10 @@ flowchart LR
 z_s = [2.0, 1.0, 0.5, -0.5];
 p_s = softmax(z_s);
 K_s = length(z_s);
-E_score  = zeros(K_s);
-E_score2 = zeros(K_s);
+E_score  = zeros(1, K_s);
+E_score2 = zeros(1, K_s);
 for c = 1:K_s
-  e_c = zeros(K_s); e_c(c) = 1.0;
+  e_c = zeros(1, K_s); e_c(c) = 1.0;
   score = p_s - e_c;                          % dL/dz when the target is c
   E_score  = E_score  + p_s(c) * score;       % E_y~p [p - y]
   E_score2 = E_score2 + p_s(c) * score .^ 2;  % E_y~p [(p - y)^2]: diagonal of the Fisher

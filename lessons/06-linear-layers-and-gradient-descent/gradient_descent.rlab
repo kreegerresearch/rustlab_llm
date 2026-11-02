@@ -21,7 +21,7 @@ v_fast = V(:, i_fast);   v_slow = V(:, i_slow);
 lr = 0.05;
 n_steps = 200;
 w = 0.0;  b = 0.0;
-w_path = zeros(n_steps + 1);  b_path = zeros(n_steps + 1);  loss_path = zeros(n_steps + 1);
+w_path = zeros(1, n_steps + 1);  b_path = zeros(1, n_steps + 1);  loss_path = zeros(1, n_steps + 1);
 w_path(1) = w;  b_path(1) = b;  loss_path(1) = mean((w * x + b - y) .^ 2);
 for step = 1:n_steps
   residual = w * x + b - y;

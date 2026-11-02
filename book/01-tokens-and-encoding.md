@@ -62,7 +62,7 @@ vocab_size = length(chars);
 T = length(corpus);
 
 % encode: ids(t) = position of corpus(t) in the vocabulary
-ids = zeros(T);
+ids = zeros(1, T);
 for t = 1:T
   j = 1;
   while j < vocab_size && corpus(t) != chars(j)
@@ -70,6 +70,7 @@ for t = 1:T
   end
   ids(t) = j;
 end
+ids = ids(:);   % zeros(1, T) is a 1×T matrix; a subscript has to be a vector
 
 % decode: concatenate the vocabulary entry for each id
 decoded = "";
@@ -112,7 +113,7 @@ This is a discrete probability distribution — a PMF — over the vocabulary: e
 The counts come from the encoded ids, not from a hand-typed table:
 
 ```rustlab
-counts = zeros(vocab_size);
+counts = zeros(1, vocab_size);
 for t = 1:T
   counts(ids(t)) = counts(ids(t)) + 1;
 end
@@ -130,12 +131,14 @@ ylim([0, 0.3])
 
 <!-- rustlab:output-start -->
 ```text
-Character counts (␣, b, e, n, o, r, t): [1×7]  5.000000  2.000000  2.000000  1.000000  4.000000  1.000000  3.000000
-Relative frequencies: [1×7]  0.277778  0.111111  0.111111  0.055556  0.222222  0.055556  0.166667
+Character counts (␣, b, e, n, o, r, t): Matrix(1x7)
+  [5.000000, 2.000000, 2.000000, 1.000000, 4.000000, 1.000000, 3.000000]
+Relative frequencies: Matrix(1x7)
+  [0.277778, 0.111111, 0.111111, 0.055556, 0.222222, 0.055556, 0.166667]
 Sum of frequencies (should be 1.0): 1
 ```
 
-![plot 1](plots/01-tokens-and-encoding/plot-1-055a933d.svg)
+![plot 1](plots/01-tokens-and-encoding/plot-1-1210355d.svg)
 
 <!-- rustlab:output-end -->
 
@@ -265,8 +268,8 @@ print("gap          =", H_max - H_f, "bits/symbol");
 <!-- rustlab:output-start -->
 ```text
 log2|V|      = 2.807354922057604 bits/symbol
-H(f) unigram = 2.594117891631186 bits/symbol
-gap          = 0.21323703042641817 bits/symbol
+H(f) unigram = 2.5941178916311856 bits/symbol
+gap          = 0.21323703042641862 bits/symbol
 ```
 
 <!-- rustlab:output-end -->
@@ -300,7 +303,7 @@ ylim([0, 3])
 H(X_{t+1} | X_t) bigram preview = 1.0802663515647224 bits/symbol
 ```
 
-![plot 4](plots/01-tokens-and-encoding/plot-4-c379df38.svg)
+![plot 4](plots/01-tokens-and-encoding/plot-4-f9a7e6b4.svg)
 
 <!-- rustlab:output-end -->
 
@@ -325,7 +328,7 @@ print("words:  6 symbols x", H_words, "bits =", bits_words, "bits/message");
 <!-- rustlab:output-start -->
 ```text
 one-hot redundancy 1 - log2|V|/|V| = 0.5989492968489136
-chars: 18 symbols x 2.594117891631186 bits = 46.69412204936135 bits/message
+chars: 18 symbols x 2.5941178916311856 bits = 46.69412204936134 bits/message
 words:  6 symbols x 1.9182958340544896 bits = 11.509775004326936 bits/message
 ```
 

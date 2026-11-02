@@ -118,7 +118,7 @@ tau=0.5 (cold)   : [1×4]  0.839025  0.113550  0.041773  0.005653
 tau=1.0 (neutral): [1×4]  0.597695  0.219880  0.133364  0.049062
 tau=2.0 (warm)   : [1×4]  0.422761  0.256418  0.199698  0.121123
 tau=5.0 (hot)    : [1×4]  0.315848  0.258594  0.233986  0.191572
-sum at tau=0.5: 1.0000000000000002
+sum at tau=0.5: 1
 ```
 
 <!-- rustlab:output-end -->
@@ -150,7 +150,7 @@ ylim([0, 1])
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/02-probability-and-softmax/plot-1-5b3bc522.svg)
+![plot 1](plots/02-probability-and-softmax/plot-1-47bf500a.svg)
 
 <!-- rustlab:output-end -->
 
@@ -175,7 +175,7 @@ saveanim("softmax_temperature.gif", 8)
 ```
 
 <!-- rustlab:output-start -->
-![animation 2](plots/02-probability-and-softmax/anim-2-ef9cecbb.gif)
+![animation 2](plots/02-probability-and-softmax/anim-2-d0d497af.gif)
 
 <!-- rustlab:output-end -->
 
@@ -212,7 +212,7 @@ print("H(tau=0.5) =", H05, " H(tau=1) =", H10, " H(tau=2) =", H20, " H(tau=5) ="
 
 <!-- rustlab:output-start -->
 ```text
-H(tau=0.5) = 0.8024252882978413  H(tau=1) = 1.525296073088579  H(tau=2) = 1.8615588961498242  H(tau=5) = 1.9767728958188087 bits
+H(tau=0.5) = 0.8024252882978413  H(tau=1) = 1.5252960730885792  H(tau=2) = 1.8615588961498242  H(tau=5) = 1.9767728958188089 bits
 ```
 
 <!-- rustlab:output-end -->
@@ -222,7 +222,7 @@ Entropy climbs with temperature: $H(\tau{=}0.5) = 0.802$, $H(\tau{=}1) = 1.525$,
 ### Example — Sanity checks: uniform vs. near-deterministic
 
 ```rustlab
-p_uniform = ones(vocab_size) / vocab_size;
+p_uniform = ones(1, vocab_size) / vocab_size;
 H_uniform = -sum(p_uniform .* log2(p_uniform));
 
 p_det = [0.999, 0.0003, 0.0003, 0.0004];
@@ -232,7 +232,7 @@ print("H(uniform) =", H_uniform, "bits   H(near-deterministic) =", H_det, "bits"
 
 <!-- rustlab:output-start -->
 ```text
-H(uniform) = 2 bits   H(near-deterministic) = 0.012978708331915804 bits
+H(uniform) = 2 bits   H(near-deterministic) = 0.012978708331915806 bits
 ```
 
 <!-- rustlab:output-end -->
@@ -274,7 +274,7 @@ tau = 1 : softmax(z/tau)(1) = 0.7310585786300049   sigma(LLR/tau) = 0.7310585786
 tau = 2 : softmax(z/tau)(1) = 0.6224593312018546   sigma(LLR/tau) = 0.6224593312018546
 ```
 
-![plot 3](plots/02-probability-and-softmax/plot-3-aff002ae.svg)
+![plot 3](plots/02-probability-and-softmax/plot-3-c2f9018b.svg)
 
 <!-- rustlab:output-end -->
 
@@ -296,7 +296,7 @@ print("H(p) =", entropy_bits(p), "  H(p + 0.03 v) =", entropy_bits(q_plus), "  H
 
 <!-- rustlab:output-start -->
 ```text
-constraint check: sum(v) = 0   sum(v .* z) = 0   E_q[z] = 1.4574202929204703  = mu = 1.4574202929204705
+constraint check: sum(v) = 0   sum(v .* z) = 0   E_q[z] = 1.4574202929204705  = mu = 1.4574202929204705
 H(p) = 1.525296073088579   H(p + 0.03 v) = 1.5047064047570426   H(p - 0.03 v) = 1.499543090911674 bits
 ```
 
@@ -308,7 +308,7 @@ Both perturbed distributions lose entropy — $1.5047$ and $1.4995$ bits against
 
 ```rustlab
 taus = logspace(log10(0.05), log10(50), 60);
-H_tau = zeros(length(taus));
+H_tau = zeros(1, length(taus));
 for k = 1:length(taus)
   H_tau(k) = entropy_bits(softmax(z / taus(k)));
 end
@@ -330,7 +330,7 @@ ylabel("H  [bits]")
 H at tau = 0.05: 0.00000006245012320586353  bits;  at tau = 50: 1.9997655839197161  bits
 ```
 
-![plot 4](plots/02-probability-and-softmax/plot-4-c54e639a.svg)
+![plot 4](plots/02-probability-and-softmax/plot-4-437c933c.svg)
 
 <!-- rustlab:output-end -->
 

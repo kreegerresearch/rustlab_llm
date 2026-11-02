@@ -134,33 +134,34 @@ for ell = 1:N_blocks
 end
 
 % Run H through the N blocks, recording the residual-stream norm after each.
-norms_l = zeros(N_blocks + 1);
-norms_l(1) = norm(H);
+norms_l = zeros(1, N_blocks + 1);
+norms_l(1) = norm(H, "fro");
 for ell = 1:N_blocks
   r  = ((ell - 1) * d_model + 1):(ell * d_model);
   rf = ((ell - 1) * d_ff + 1):(ell * d_ff);
   H = mha_block_forward(H, W_Q_all(r, :), W_K_all(r, :), W_V_all(r, :), W_O_all(r, :), ...
                         W_ff1_all(r, :), W_ff2_all(rf, :), H_heads, M_mask);
-  norms_l(ell + 1) = norm(H);
+  norms_l(ell + 1) = norm(H, "fro");
 end
 
 print("H^{(N)} shape after", N_blocks, "blocks:", size(H));
-print("|H^{(N)}|:", norm(H));
+print("|H^{(N)}|:", norm(H, "fro"));
 print("|H^{(l)}| for l = 0..N:", norms_l);
-print("sqrt(T * d_model), the norm of an (8 × 64) matrix of unit-variance entries:", sqrt(T * d_model));
+print("sqrt(T * d_model), the Frobenius norm of an (8 × 64) matrix of unit-variance entries:", sqrt(T * d_model));
 ```
 
 <!-- rustlab:output-start -->
 ```text
 H^{(N)} shape after 4 blocks: [1×2]  8.000000  64.000000
 |H^{(N)}|: 70.10999244799362
-|H^{(l)}| for l = 0..N: [1×5]  16.167976  39.454181  51.481187  62.771013  70.109992
-sqrt(T * d_model), the norm of an (8 × 64) matrix of unit-variance entries: 22.627416997969522
+|H^{(l)}| for l = 0..N: Matrix(1x5)
+  [16.167976, 39.454181, 51.481187, 62.771013, 70.109992]
+sqrt(T * d_model), the Frobenius norm of an (8 × 64) matrix of unit-variance entries: 22.627416997969522
 ```
 
 <!-- rustlab:output-end -->
 
-The shape stays $(T, d_{\text{model}}) = (8, 64)$ across all $N$ blocks — that is the entire reason the architecture is stackable. The *scale* does not stay put: $\|\mathbf{H}^{(N)}\| = 70.1$ for an $8 \times 64$ matrix, whereas unit-variance entries would give $\sqrt{512} = 22.6$. The stream grew from $\|\mathbf{H}^{(0)}\| = 16.2$ to $39.5 \to 51.5 \to 62.8 \to 70.1$ — about $4.3\times$ over four blocks, [Lesson 13](13-transformer-block.md)'s accumulation story continued. That growth is exactly why $\mathrm{LN}_f$ exists: without it the logit scale, and therefore the effective softmax temperature ([Lesson 02](02-probability-and-softmax.md)), would depend on depth and on initialisation.
+The shape stays $(T, d_{\text{model}}) = (8, 64)$ across all $N$ blocks — that is the entire reason the architecture is stackable. The magnitudes below are Frobenius (`norm(H, "fro")`), the root-sum-square of every entry, which is what $\sqrt{Td_{\text{model}}}$ estimates for unit-variance entries. An unqualified `norm(H)` is the matrix 2-norm. The *scale* does not stay put: $\|\mathbf{H}^{(N)}\| = 70.1$ for an $8 \times 64$ matrix, whereas unit-variance entries would give $\sqrt{512} = 22.6$. The stream grew from $\|\mathbf{H}^{(0)}\| = 16.2$ to $39.5 \to 51.5 \to 62.8 \to 70.1$ — about $4.3\times$ over four blocks, [Lesson 13](13-transformer-block.md)'s accumulation story continued. That growth is exactly why $\mathrm{LN}_f$ exists: without it the logit scale, and therefore the effective softmax temperature ([Lesson 02](02-probability-and-softmax.md)), would depend on depth and on initialisation.
 
 ### Example — Final LayerNorm and LM head
 
@@ -183,7 +184,7 @@ print("argmax next token:", argmax(probs_last));
 <!-- rustlab:output-start -->
 ```text
 logits shape: [1×2]  8.000000  50.000000
-sum(probs_last): 0.9999999999999999
+sum(probs_last): 1.0000000000000002
 argmax next token: 17
 ```
 
@@ -204,7 +205,7 @@ ylabel("position t")
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/14-full-gpt-architecture/plot-1-bc01386b.svg)
+![plot 1](plots/14-full-gpt-architecture/plot-1-e607a584.svg)
 
 <!-- rustlab:output-end -->
 
@@ -235,10 +236,10 @@ ylabel("position t")
 ```text
 wrapper reproduces the step-by-step logits: max |diff| = 0
 max |dZ| over positions 1..7: 0
-max |dZ| at position 8:       0.5198977558530139
+max |dZ| at position 8:       0.5198977558530128
 ```
 
-![plot 2](plots/14-full-gpt-architecture/plot-2-51c19ff0.svg)
+![plot 2](plots/14-full-gpt-architecture/plot-2-b838885b.svg)
 
 <!-- rustlab:output-end -->
 
@@ -324,7 +325,7 @@ ylabel("parameters")
 blocks share of the toy model: 0.9682242990654205
 ```
 
-![plot 3](plots/14-full-gpt-architecture/plot-3-e0eacf22.svg)
+![plot 3](plots/14-full-gpt-architecture/plot-3-8e3809c8.svg)
 
 <!-- rustlab:output-end -->
 
@@ -381,7 +382,7 @@ ylabel("parameters")
 GPT-2 small: embedding share = 0.3102609533099152   blocks share = 0.6834050486779477
 ```
 
-![plot 4](plots/14-full-gpt-architecture/plot-4-b626e1fd.svg)
+![plot 4](plots/14-full-gpt-architecture/plot-4-fe58106e.svg)
 
 <!-- rustlab:output-end -->
 
@@ -453,9 +454,9 @@ print("after Gibbs normalisation: sum =", sum(p_tied), "  max =", max(p_tied));
 
 <!-- rustlab:output-start -->
 ```text
-tied head at position T: best-matching token 26   score 1.9129375403189588   = <h_f(T), e_v*> = 1.9129375403189584
+tied head at position T: best-matching token 26   score 1.9129375403189592   = <h_f(T), e_v*> = 1.9129375403189592
 max |Z_tied(T, v) - <h_f(T), e_v>| over all v: 0
-after Gibbs normalisation: sum = 0.9999999999999998   max = 0.09321944761590627
+after Gibbs normalisation: sum = 0.9999999999999996   max = 0.09321944761590628
 ```
 
 <!-- rustlab:output-end -->
@@ -482,10 +483,10 @@ ylabel("|H^{(l)}|")
 
 <!-- rustlab:output-start -->
 ```text
-|H^{(N)}| / |H^{(0)}|: as initialised 4.336349298961599   with 1/sqrt(2N) branch scaling 1.8153253945797936
+|H^{(N)}| / |H^{(0)}|: as initialised 4.336349298961599   with 1/sqrt(2N) branch scaling 1.8153253945797934
 ```
 
-![plot 5](plots/14-full-gpt-architecture/plot-5-50761619.svg)
+![plot 5](plots/14-full-gpt-architecture/plot-5-46e8db7b.svg)
 
 <!-- rustlab:output-end -->
 

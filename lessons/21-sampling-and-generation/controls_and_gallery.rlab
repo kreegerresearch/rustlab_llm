@@ -23,7 +23,7 @@ run "../../lib/sampling.rlab"
 seed(18);
 vocab = 3;  d_emb = 4;
 function tokens = build_seq(n)
-  tokens = zeros(n);
+  tokens = zeros(1, n);
   pat = [1, 2, 3, 2];
   for i = 1:n
     tokens(i) = pat(mod(i - 1, 4) + 1);
@@ -62,7 +62,7 @@ end
 # === 4. The unified generation loop ===
 # strategy is one of: "greedy", "temperature", "topK", "topP".
 function seq = generate(x0, n_new, E, W, strategy, tau, K_top, P_top, penalty, window)
-  seq = zeros(n_new + 1);
+  seq = zeros(1, n_new + 1);
   seq(1) = x0;
   vocab = size(W)(2);
   for t = 1:n_new

@@ -72,7 +72,7 @@ T_decay  = T_total;
 eta_max  = 6e-4;
 eta_min  = 6e-5;
 
-eta_sched = zeros(T_total + 1);
+eta_sched = zeros(1, T_total + 1);
 for t = 0:T_total
   if t < T_warmup
     eta_sched(t + 1) = eta_max * (t / T_warmup);
@@ -127,13 +127,13 @@ end
 % One noisy-SGD run under the schedule eta_of_t(t).  Returns the loss curve,
 % the eta_t actually used, and the per-step SNR  ||grad L||^2 / (2 sigma^2).
 function [L, etas, snr] = run_sgd(eta_of_t, n, sigma, init)
-  theta = init;  L = zeros(n + 1);  etas = zeros(n);  snr = zeros(n);
+  theta = init;  L = zeros(1, n + 1);  etas = zeros(1, n);  snr = zeros(1, n);
   L(1) = surrogate_loss(theta);
   for t = 1:n
     etas(t) = eta_of_t(t);
     g_true = surrogate_grad(theta);
     snr(t) = sum(g_true .^ 2) / (2 * sigma ^ 2);
-    theta = theta - etas(t) * (g_true + sigma * randn(2));
+    theta = theta - etas(t) * (g_true + sigma * randn(1, 2));
     L(t + 1) = surrogate_loss(theta);
   end
 end
@@ -261,7 +261,7 @@ The noise floor is **proportional to $\eta$** (until $\eta\lambda$ approaches 2,
 ```rustlab
 seed(171);
 etas_sw = logspace(-2, log10(0.19), 6);
-meas = zeros(6);  pred = zeros(6);
+meas = zeros(1, 6);  pred = zeros(1, 6);
 for i = 1:6
   e = etas_sw(i);
   [Lc, ec, sc] = run_sgd(@(t) e, 4000, sigma, init);

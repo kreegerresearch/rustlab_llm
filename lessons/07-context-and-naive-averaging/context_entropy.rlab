@@ -13,7 +13,7 @@ run "../../lib/info.rlab"
 
 # Entropy (bits) of the empirical distribution of a vector of integer labels.
 function H = empirical_entropy_bits(labels)
-  counts = zeros(max(labels));
+  counts = zeros(1, max(labels));
   for m = 1:length(labels)
     counts(labels(m)) = counts(labels(m)) + 1;
   end

@@ -53,7 +53,7 @@ function [E, W] = train_bigram_lm(train_ids, vocab, d_emb, n_steps, eta_max, eta
       curr = train_ids(1 + k);  nxt = train_ids(2 + k);
       h = E(curr, :);
       p = softmax(h * W);
-      e_y = zeros(vocab);  e_y(nxt) = 1.0;
+      e_y = zeros(1, vocab);  e_y(nxt) = 1.0;
       dlogits = p - e_y;
       dW = dW + h' * dlogits;
       dh = dlogits * W';

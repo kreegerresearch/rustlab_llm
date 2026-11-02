@@ -71,7 +71,7 @@ print("Initial seq length:", length(seq), "  vocab size:", vocab_size);
 % --- Rewrite: replace every adjacent (a, b) by new_id, scanning left to right ---
 function out = apply_merge(seq, a, b, new_id)
   L = length(seq);
-  buf = zeros(L);                       % preallocate, trim at the end
+  buf = zeros(1, L);                       % preallocate, trim at the end
   k = 1;  i = 1;
   while i <= L
     if i < L && seq(i) == a && seq(i + 1) == b
@@ -112,11 +112,11 @@ function s = tok_str(id, left, right, names)
 end
 
 K = 10;                                   % enough merges to collapse the corpus to one token
-N_k     = zeros(K + 1);  N_k(1) = length(seq);
-left    = zeros(vocab_size + K);          % parents of each id (0 = base character)
-right   = zeros(vocab_size + K);
-tok_len = ones(vocab_size + K);           % characters per token id
-m_count = zeros(K);
+N_k     = zeros(1, K + 1);  N_k(1) = length(seq);
+left    = zeros(1, vocab_size + K);          % parents of each id (0 = base character)
+right   = zeros(1, vocab_size + K);
+tok_len = ones(1, vocab_size + K);           % characters per token id
+m_count = zeros(1, K);
 cur_seq = seq;  cur_vocab = vocab_size;
 for k = 1:K
   step = bpe_step(cur_seq, cur_vocab);
@@ -178,7 +178,7 @@ Once `merge_list` is fixed, encoding *any* string is deterministic: apply the me
 % Characters per token of every token in the encoded corpus (five merges)
 lens_corpus = tok_len(seq_5);
 N_tok = length(seq_5);
-cpt_hist = zeros(4);
+cpt_hist = zeros(1, 4);
 for L = 1:4
   cpt_hist(L) = sum(lens_corpus == L);
 end
@@ -197,7 +197,7 @@ mid = (vocab_size + 1):(vocab_size + 5);
 ma  = left(mid);
 mb  = right(mid);
 words = {"abracadabra", "abra", "cad", "bra", "ac", "d"};
-tpw = zeros(6);
+tpw = zeros(1, 6);
 tpw(1) = length(encode([1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1], ma, mb, mid));
 tpw(2) = length(encode([1, 2, 5, 1], ma, mb, mid));
 tpw(3) = length(encode([3, 1, 4], ma, mb, mid));
@@ -253,7 +253,7 @@ run "../lib/info.rlab"
 
 ```rustlab
 N_char = length(seq);
-c_char = zeros(vocab_size);
+c_char = zeros(1, vocab_size);
 for i = 1:vocab_size
   c_char(i) = sum(seq == i);
 end
@@ -307,7 +307,7 @@ $$N_{\text{tok}} \cdot \mathcal{L}_{\text{tok}} \;=\; N_{\text{char}} \cdot \tex
 and **bits per character** is the tokeniser-invariant quantity — the reason [[20-perplexity-and-evaluation]] normalises per-token losses to BPC before comparing models. The identity is about *one* model; two order-0 estimators over two alphabets are two different models, and the computation shows how different:
 
 ```rustlab
-p_tok = zeros(vocab_size + 5);
+p_tok = zeros(1, vocab_size + 5);
 for i = 1:(vocab_size + 5)
   p_tok(i) = sum(seq_5 == i) / N_tok;
 end

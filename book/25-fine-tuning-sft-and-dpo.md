@@ -32,14 +32,14 @@ Both fine-tuning demos start from the same place: a single-block transformer pre
 function P = init_params(vocab, d_model, d_ff, T_max)
   E = randn(vocab, d_model) * 0.3;
   PE = sinusoidal_pe(T_max, d_model);
-  gamma1 = ones(d_model);   beta1 = zeros(d_model);
-  gamma2 = ones(d_model);   beta2 = zeros(d_model);
+  gamma1 = ones(1, d_model);   beta1 = zeros(1, d_model);
+  gamma2 = ones(1, d_model);   beta2 = zeros(1, d_model);
   Wq = randn(d_model, d_model) * 0.3;
   Wk = randn(d_model, d_model) * 0.3;
   Wv = randn(d_model, d_model) * 0.3;
   Wo = randn(d_model, d_model) * 0.3;
-  W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
-  W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+  W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(1, d_ff);
+  W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(1, d_model);
   W_U = randn(d_model, vocab) * 0.3;
   P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
              "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
@@ -60,11 +60,11 @@ vocab = 3;             % a=1, b=2, sep=3
 d_model = 4;  d_ff = 8;  T_max = 16;
 pat = [1, 2, 2];
 T_pre = 12;
-ids_pre = zeros(T_pre);
+ids_pre = zeros(1, T_pre);
 for i = 1:T_pre
   ids_pre(i) = pat(mod(i - 1, 3) + 1);
 end
-mask_pre = ones(T_pre - 1);
+mask_pre = ones(1, T_pre - 1);
 ```
 
 ## Supervised Fine-Tuning (SFT)
@@ -105,7 +105,7 @@ n_sft_seq = size(sft_data)(1);
 
 n_sft = 200;
 eta_sft = 0.001;           % lower than pre-training — standard practice
-sft_loss_curve = zeros(n_sft + 1);
+sft_loss_curve = zeros(1, n_sft + 1);
 [lo, L_sft0, cache] = transformer_forward(sft_data(1, :), sft_mask, P);
 sft_loss_curve(1) = L_sft0;
 [M, V] = adamw_init(P);    % fresh optimiser state for the fine-tuning phase
@@ -133,12 +133,12 @@ P_sft = P;                 % the fine-tuned policy, kept for the Information len
 
 <!-- rustlab:output-start -->
 ```text
-Pre-SFT abb-corpus L: 0.000020026465395637668
-Final SFT L: 0.01807754856437737
+Pre-SFT abb-corpus L: 0.000020026465396727813
+Final SFT L: 0.01807754856739409
   prompt = [1×3]  1.000000  2.000000  3.000000  -> P(. | prompt) = [1×3]  0.996978  0.003017  0.000006  argmax = 1
   prompt = [1×3]  2.000000  2.000000  3.000000  -> P(. | prompt) = [1×3]  0.996971  0.003024  0.000006  argmax = 1
   prompt = [1×3]  2.000000  1.000000  3.000000  -> P(. | prompt) = [1×3]  0.999490  0.000460  0.000051  argmax = 1
-abb-corpus L: pre-SFT = 0.000020026465395637668   post-SFT = 2.8374723631557957   delta = 2.8374523366904
+abb-corpus L: pre-SFT = 0.000020026465396727813   post-SFT = 2.8374723631710257   delta = 2.837452336705629
 ```
 
 <!-- rustlab:output-end -->
@@ -166,7 +166,7 @@ function G = grad_at(ids, mask, P)
 end
 
 g_abb = flat_grad(grad_at(ids_pre, mask_pre, P_pre_sft));
-g_sft = zeros(length(g_abb));
+g_sft = zeros(1, length(g_abb));
 for s = 1:n_sft_seq
   g_sft = g_sft + flat_grad(grad_at(sft_data(s, :), sft_mask, P_pre_sft)) / n_sft_seq;
 end
@@ -179,7 +179,7 @@ print("cos(grad_abb, grad_SFT) =", cos_all, "    cos(grad_abb, sign(grad_SFT)) [
 sz = [numel(P.E), 4 * d_model, numel(P.Wq), numel(P.Wk), numel(P.Wv), numel(P.Wo), numel(P.W1), d_ff, numel(P.W2), d_model, numel(P.W_U)];
 hi = cumsum(sz);  lo_i = hi - sz + 1;
 mat_idx = [1, 3, 4, 5, 6, 7, 9, 11];
-cos_blk = zeros(8);
+cos_blk = zeros(1, 8);
 for i = 1:8
   cos_blk(i) = cos_angle(g_abb(lo_i(mat_idx(i)):hi(mat_idx(i))), g_sft(lo_i(mat_idx(i)):hi(mat_idx(i))));
 end
@@ -188,9 +188,10 @@ print("per block [E, Wq, Wk, Wv, Wo, W1, W2, W_U]:", cos_blk);
 
 <!-- rustlab:output-start -->
 ```text
-parameters: 180    |grad_abb| = 0.0002471573388364403    |grad_SFT| = 65.31234338552362
-cos(grad_abb, grad_SFT) = -0.13691347798606623     cos(grad_abb, sign(grad_SFT)) [first AdamW step] = -0.15099583395729266
-per block [E, Wq, Wk, Wv, Wo, W1, W2, W_U]: [1×8]  0.450362  -0.521261  -0.686479  -0.233080  -0.515673  -0.094494  -0.149262  -0.363562
+parameters: 180    |grad_abb| = 0.0002471573388528113    |grad_SFT| = 65.31234338440193
+cos(grad_abb, grad_SFT) = -0.13691347797119904     cos(grad_abb, sign(grad_SFT)) [first AdamW step] = -0.15099583395216076
+per block [E, Wq, Wk, Wv, Wo, W1, W2, W_U]: Matrix(1x8)
+  [0.450362, -0.521261, -0.686479, -0.233080, -0.515673, -0.094494, -0.149262, -0.363562]
 ```
 
 <!-- rustlab:output-end -->
@@ -231,8 +232,8 @@ print("rank-1 LoRA on W_U:", d_model + vocab, "params   mean SFT L =", L_sft_lor
 
 <!-- rustlab:output-start -->
 ```text
-full SFT:           180 params   mean SFT L = 0.04702859471942593    abb-corpus L = 2.8374723631557957
-rank-1 LoRA on W_U: 7 params   mean SFT L = 0.011355710411406887    abb-corpus L = 2.7627089811282346
+full SFT:           180 params   mean SFT L = 0.04702859473078726    abb-corpus L = 2.8374723631710257
+rank-1 LoRA on W_U: 7 params   mean SFT L = 0.011355710415315605    abb-corpus L = 2.762708980969384
 ```
 
 <!-- rustlab:output-end -->
@@ -250,7 +251,7 @@ ylabel("L (nats / response-token)")
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/25-fine-tuning-sft-and-dpo/plot-1-8e4bb9f8.svg)
+![plot 1](plots/25-fine-tuning-sft-and-dpo/plot-1-1dc741f7.svg)
 
 <!-- rustlab:output-end -->
 
@@ -362,10 +363,10 @@ end
 <!-- rustlab:output-start -->
 ```text
 Initial DPO L: 0.6931471805599453   (ln 2 = 0.6931471805599453 )   abb-corpus L: 0.000000007095549161999251
-Final DPO L: 0.000000007179710962662864    final abb-corpus L: 0.00008068526975126658
-  prompt 1 :  lp(chosen) = -19.209017482661952   lp(rejected) = -48.61663160628629   margin = 29.407614123624338
-  prompt 2 :  lp(chosen) = -16.361831397058182   lp(rejected) = -48.61526363941557   margin = 32.25343224235739
-  prompt 3 :  lp(chosen) = -0.271393783970224   lp(rejected) = -47.49437850432325   margin = 47.222984720353026
+Final DPO L: 0.000000007179710962662864    final abb-corpus L: 0.00008068526972865894
+  prompt 1 :  lp(chosen) = -19.209017483009617   lp(rejected) = -48.6166316061638   margin = 29.407614123154183
+  prompt 2 :  lp(chosen) = -16.36183139543921   lp(rejected) = -48.61526363929336   margin = 32.25343224385415
+  prompt 3 :  lp(chosen) = -0.27139378404359327   lp(rejected) = -47.49437850426905   margin = 47.222984720225455
 ```
 
 <!-- rustlab:output-end -->
@@ -403,7 +404,7 @@ xlabel("step"); ylabel("beta (1 - sigma)")
 gain at step 0: 0.25    at step 10: 0.00000016009303127617613    at step 200: 0.0000000035898554684443695
 ```
 
-![plot 2](plots/25-fine-tuning-sft-and-dpo/plot-2-8a032da5.svg)
+![plot 2](plots/25-fine-tuning-sft-and-dpo/plot-2-8478c3fc.svg)
 
 <!-- rustlab:output-end -->
 
@@ -427,7 +428,7 @@ ylabel("L (nats / pair)")
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/25-fine-tuning-sft-and-dpo/plot-3-e4048f4b.svg)
+![plot 3](plots/25-fine-tuning-sft-and-dpo/plot-3-71d621ee.svg)
 
 <!-- rustlab:output-end -->
 
@@ -478,9 +479,9 @@ end
 <!-- rustlab:output-start -->
 ```text
 pi_ref(. | a b sep) = [1×3]  0.999992  0.000008  0.000000
-beta = 0.05 :  pi* = [1×3]  0.000262  0.999738  0.000000   max |pi* - softmax| = 0.00000000000000011102230246251565   recovered r - const = [1×3]  0.000000  1.000000  0.000000
+beta = 0.05 :  pi* = [1×3]  0.000262  0.999738  0.000000   max |pi* - softmax| = 0.000000000000000000000000000013016204936146695   recovered r - const = [1×3]  0.000000  1.000000  0.000000
 beta = 0.1 :  pi* = [1×3]  0.852266  0.147734  0.000000   max |pi* - softmax| = 0.00000000000000011102230246251565   recovered r - const = [1×3]  0.000000  1.000000  -0.000000
-beta = 0.5 :  pi* = [1×3]  0.999942  0.000058  0.000000   max |pi* - softmax| = 0.00000000000000033306690738754696   recovered r - const = [1×3]  0.000000  1.000000  0.000000
+beta = 0.5 :  pi* = [1×3]  0.999942  0.000058  0.000000   max |pi* - softmax| = 0.0000000000000000000000000016155871338926322   recovered r - const = [1×3]  0.000000  1.000000  0.000000
 ```
 
 <!-- rustlab:output-end -->
@@ -495,7 +496,7 @@ At $\beta = 0.05$ one nat of reward is worth $e^{20}$ and the tilt hands `b` the
 
 ```rustlab
 function D = mean_kl_bits(ids, P_a, P_b)
-  T = length(ids);  zm = zeros(T - 1);
+  T = length(ids);  zm = zeros(1, T - 1);
   [la, L1, c1] = transformer_forward(ids, zm, P_a);
   [lb, L2, c2] = transformer_forward(ids, zm, P_b);
   D = 0.0;
@@ -515,8 +516,8 @@ print("mean KL(pi_ref || pi_theta) per position on the preference prompts after 
 
 <!-- rustlab:output-start -->
 ```text
-mean KL(old || new) per position on the abb corpus:  SFT 4.093312563406274 bits (= 2.837268062475661 nats)   DPO 0.00011633906169243902 bits
-mean KL(pi_ref || pi_theta) per position on the preference prompts after DPO: 0.8732909157601907 bits
+mean KL(old || new) per position on the abb corpus:  SFT 4.093312563428224 bits (= 2.837268062490876 nats)   DPO 0.00011633906165982258 bits
+mean KL(pi_ref || pi_theta) per position on the preference prompts after DPO: 0.8732909156581732 bits
 ```
 
 <!-- rustlab:output-end -->

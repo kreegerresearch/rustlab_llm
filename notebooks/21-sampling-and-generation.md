@@ -51,7 +51,7 @@ vocab = 3;
 d_emb = 4;
 
 pat = [1, 2, 3, 2];
-corpus = zeros(60);
+corpus = zeros(1, 60);
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
 end
@@ -67,7 +67,7 @@ After training, the bigram structure is exact: `P(b|a) ≈ P(b|c) ≈ 1` and `P(
 
 ```rustlab
 function seq = greedy_generate(x0, n_new, E, W)
-  seq = zeros(n_new + 1);
+  seq = zeros(1, n_new + 1);
   seq(1) = x0;
   for t = 1:n_new
     p = softmax(E(seq(t), :) * W);
@@ -206,7 +206,7 @@ A useful summary number is the **entropy** of each transformed distribution: hig
 
 ```rustlab
 function q = greedy_dist(z)
-  q = zeros(length(z));
+  q = zeros(1, length(z));
   q(argmax(z)) = 1.0;
 end
 print("H greedy   :", entropy_nats(greedy_dist(logits)), "nats  ", entropy_bits(greedy_dist(logits)), "bits");
@@ -248,7 +248,7 @@ Run the trained Lesson 18 model under three temperatures and observe what change
 % sample_categorical(p) is the inverse-CDF draw from lib/sampling.rlab: walk
 % the cumulative distribution until it crosses r ~ U[0, 1).
 function seq = temperature_generate(x0, n_new, E, W, tau)
-  seq = zeros(n_new + 1);
+  seq = zeros(1, n_new + 1);
   seq(1) = x0;
   for t = 1:n_new
     p = softmax(E(seq(t), :) * W / tau);
@@ -355,7 +355,7 @@ tokens = [1, 4, 2, 5, 3, 6, 2, 1];               % pretend the sampler already c
 X = E_tok(tokens, :) + E_pos;                     % T x d_head: token + position (Lesson 10)
 
 K_cache = zeros(0, d_head);  V_cache = zeros(0, d_head);
-max_diff = 0.0;  naive_flops = zeros(T);  cached_flops = zeros(T);
+max_diff = 0.0;  naive_flops = zeros(1, T);  cached_flops = zeros(1, T);
 for t = 1:T
   % naive: recompute Q, K, V for the whole prefix, mask, take the last row
   Xt = X(1:t, :);
@@ -438,7 +438,7 @@ The penalty over a 4-token window breaks the tie at `b` whenever the window hold
 ```rustlab
 n_tau = 60;
 taus_s = logspace(-1.5, 2, n_tau);
-H_10 = zeros(n_tau);  H_b = zeros(n_tau);
+H_10 = zeros(1, n_tau);  H_b = zeros(1, n_tau);
 for k = 1:n_tau
   H_10(k) = entropy_bits(softmax(logits / taus_s(k)));
   H_b(k)  = entropy_bits(softmax(logits_b / taus_s(k)));
@@ -487,7 +487,7 @@ function nxt = argmax_step(x, E, W)
   nxt = argmax(softmax(E(x, :) * W));
 end
 for s = 1:3
-  orbit = zeros(9);  orbit(1) = s;
+  orbit = zeros(1, 9);  orbit(1) = s;
   for t = 1:8
     orbit(t + 1) = argmax_step(orbit(t), E, W);
   end
