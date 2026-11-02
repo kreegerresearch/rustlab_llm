@@ -21,7 +21,7 @@ run "../../lib/info.rlab"
 # === 1. Train the model ===
 seed(18);
 pat = [1, 2, 3, 2];
-corpus = zeros(60);
+corpus = zeros(1, 60);
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
 end
@@ -31,7 +31,7 @@ p_b = softmax(logits_b);
 
 # === 2. Entropy of P(. | b) under each control ===
 function q = greedy_dist(z)
-  q = zeros(length(z));
+  q = zeros(1, length(z));
   q(argmax(z)) = 1.0;
 end
 function z_out = apply_repetition_penalty(z, recent, penalty)

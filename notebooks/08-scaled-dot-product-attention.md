@@ -87,7 +87,7 @@ n_samples = 5000;
 dks = [4, 64, 512];
 for kk = 1:3
   dk_v = dks(kk);
-  dots_v = zeros(n_samples);
+  dots_v = zeros(1, n_samples);
   for s = 1:n_samples
     q_v = randn(1, dk_v);
     k_v = randn(1, dk_v);
@@ -156,7 +156,7 @@ print(A);
 ```
 
 ```rustlab
-row_sums = zeros(T);
+row_sums = zeros(1, T);
 for t = 1:T
   row_sums(t) = sum(A(t, :));
 end

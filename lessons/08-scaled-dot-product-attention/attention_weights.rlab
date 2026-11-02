@@ -64,7 +64,7 @@ print("A(4,1) =", A(4, 1), " (token 1 retrieved from three positions back; unifo
 print("A(5,:) =", A(5, :), " (half-and-half query ties t1, t2, t4)");
 
 # === Verify row sums ===
-row_sums = zeros(T);
+row_sums = zeros(1, T);
 for t = 1:T
   row_sums(t) = sum(A(t, :));
 end

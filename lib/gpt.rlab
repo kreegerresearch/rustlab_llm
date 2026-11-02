@@ -55,7 +55,7 @@ function P = gpt_init(cfg, std)
              "b2", zeros(L, d), ...
              "g1", ones(L, d), "be1", zeros(L, d), ...
              "g2", ones(L, d), "be2", zeros(L, d), ...
-             "gf", ones(d), "bf", zeros(d), ...
+             "gf", ones(1, d), "bf", zeros(1, d), ...
              "W_U", randn(d, V) * std);
 end
 
@@ -117,23 +117,23 @@ end
 # and LayerNorm gains/biases — same order as gpt_flatten.
 function m = gpt_wd_mask(cfg)
   V = cfg.V;  d = cfg.d;  L = cfg.L;  dff = cfg.dff;
-  m = [ones(V * d), ones(L * d * 3 * d), ones(L * d * d), ones(L * d * dff), zeros(L * dff), ...
-       ones(L * dff * d), zeros(L * d), zeros(L * d), zeros(L * d), zeros(L * d), zeros(L * d), ...
-       zeros(d), zeros(d), ones(d * V)];
+  m = [ones(1, V * d), ones(1, L * d * 3 * d), ones(1, L * d * d), ones(1, L * d * dff), zeros(1, L * dff), ...
+       ones(1, L * dff * d), zeros(1, L * d), zeros(1, L * d), zeros(1, L * d), zeros(1, L * d), zeros(1, L * d), ...
+       zeros(1, d), zeros(1, d), ones(1, d * V)];
 end
 
 # === Row broadcasting helper ===
 # A row slice M(l, :) and a plain vector carry no orientation in rustlab, so
 # repmat(v, T, 1) would tile them side by side.  Force a 1 x n row first.
 function R = gpt_rows(v, T)
-  R = outer(ones(T), reshape(v, 1, length(v)));
+  R = outer(ones(1, T), reshape(v, 1, length(v)));
 end
 
 # Broadcast a length-T vector (or T x 1 matrix) down the rows of a T x d
 # matrix.  reshape(v, T, 1) collapses back to a bare vector in rustlab and
 # repmat(v, 1, d) would tile it side by side, so use an outer product.
 function C = gpt_cols(v, d)
-  C = outer(reshape(v, 1, length(v)), ones(d));
+  C = outer(reshape(v, 1, length(v)), ones(1, d));
 end
 
 # === LayerNorm with affine, vectorised over rows, with backward ===
@@ -186,7 +186,7 @@ function [logits, L, cache] = gpt_forward(ids, mask, P, cfg)
   Hmid_all = zeros(Lyr * T, d);  xn2_all = zeros(Lyr * T, d);  sig2_all = zeros(Lyr * T, 1);
   pre_all = zeros(Lyr * T, dff);  hid_all = zeros(Lyr * T, dff);
 
-  X = E(ids, :) + PE(1:T, :);
+  X = E(ids(:), :) + PE(1:T, :);
   for l = 1:Lyr
     r = ((l - 1) * T + 1):(l * T);          # cache rows for this layer
     w = ((l - 1) * d + 1):(l * d);          # weight rows for this layer
@@ -334,7 +334,7 @@ end
 # === Convenience: loss and flat gradient of one window ===
 # ids is a 1 x T window; every position counts.
 function L = gpt_loss(ids, P, cfg)
-  [lo, L, cache] = gpt_forward(ids, ones(length(ids) - 1), P, cfg);
+  [lo, L, cache] = gpt_forward(ids, ones(1, length(ids) - 1), P, cfg);
 end
 
 # Flat gradient vector (gpt_flatten order) of the mean loss on one window,
@@ -383,7 +383,7 @@ function p = gpt_next_dist(prefix, P, cfg, tau)
     prefix = prefix((n - cfg.Tmax + 1):n);
     n = cfg.Tmax;
   end
-  [logits, L, cache] = gpt_forward(prefix, zeros(max(n - 1, 1)), P, cfg);
+  [logits, L, cache] = gpt_forward(prefix, zeros(1, max(n - 1, 1)), P, cfg);
   p = softmax(logits(n, :) / tau);
 end
 
@@ -407,7 +407,7 @@ function q = gpt_topk(p, K_top)
     [s_asc, idx] = sort(p);
     N = length(p);
     keep = idx(N:-1:(N - K_top + 1));
-    q = zeros(N);
+    q = zeros(1, N);
     mass = 0.0;
     for j = 1:K_top
       mass = mass + p(keep(j));

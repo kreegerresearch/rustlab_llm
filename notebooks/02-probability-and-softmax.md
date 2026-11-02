@@ -175,7 +175,7 @@ Entropy climbs with temperature: $H(\tau{=}0.5) = ${H05:%.3f}$, $H(\tau{=}1) = $
 ### Example — Sanity checks: uniform vs. near-deterministic
 
 ```rustlab
-p_uniform = ones(vocab_size) / vocab_size;
+p_uniform = ones(1, vocab_size) / vocab_size;
 H_uniform = -sum(p_uniform .* log2(p_uniform));
 
 p_det = [0.999, 0.0003, 0.0003, 0.0004];
@@ -240,7 +240,7 @@ Both perturbed distributions lose entropy — ${entropy_bits(q_plus):%.4f}$ and 
 
 ```rustlab
 taus = logspace(log10(0.05), log10(50), 60);
-H_tau = zeros(length(taus));
+H_tau = zeros(1, length(taus));
 for k = 1:length(taus)
   H_tau(k) = entropy_bits(softmax(z / taus(k)));
 end

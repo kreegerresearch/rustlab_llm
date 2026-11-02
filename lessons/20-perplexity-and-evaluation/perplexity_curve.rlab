@@ -21,7 +21,7 @@ W = randn(d_emb, vocab) * 0.3;
 
 # === Period-4 corpus (same as lesson 18) ===
 function tokens = build_seq(n)
-  tokens = zeros(n);
+  tokens = zeros(1, n);
   pat = [1, 2, 3, 2];
   for i = 1:n
     tokens(i) = pat(mod(i - 1, 4) + 1);
@@ -37,7 +37,7 @@ function [dE, dW, L] = step_grad(curr, nxt, E, W, vocab, d_emb)
   h_m = E(curr, :);
   p = softmax(h_m * W);
   L = -log(p(nxt));
-  e_y = zeros(vocab); e_y(nxt) = 1.0;
+  e_y = zeros(1, vocab); e_y(nxt) = 1.0;
   dlogits = p - e_y;
   dW = h_m' * dlogits;
   dh = dlogits * W';
@@ -73,8 +73,8 @@ v_E = zeros(vocab, d_emb);
 m_W = zeros(d_emb, vocab);
 v_W = zeros(d_emb, vocab);
 
-L_train = zeros(n_train + 1);
-L_val   = zeros(n_train + 1);
+L_train = zeros(1, n_train + 1);
+L_val   = zeros(1, n_train + 1);
 L_train(1) = mean_loss(1,  n_train_pairs, corpus, E, W);
 L_val(1)   = mean_loss(50, n_val_pairs,   corpus, E, W);
 

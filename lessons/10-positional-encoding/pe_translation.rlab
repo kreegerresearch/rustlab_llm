@@ -30,9 +30,9 @@ end
 n_pairs = d_model / 2;
 omega = 10000.0 .^ (-2 * (0:(n_pairs - 1)) / d_model);
 n_offsets = 40;
-sims_short = zeros(n_offsets);
-sims_far   = zeros(n_offsets);
-sims_cf    = zeros(n_offsets);
+sims_short = zeros(1, n_offsets);
+sims_far   = zeros(1, n_offsets);
+sims_cf    = zeros(1, n_offsets);
 for k = 0:(n_offsets - 1)
   sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));   # row t=10 vs row t=10+k
   sims_far(k + 1)   = sum(PE(20, :) .* PE(20 + k, :));   # row t=20 vs row t=20+k

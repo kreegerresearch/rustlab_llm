@@ -60,7 +60,7 @@ vocab_size = length(chars);
 T = length(corpus);
 
 % encode: ids(t) = position of corpus(t) in the vocabulary
-ids = zeros(T);
+ids = zeros(1, T);
 for t = 1:T
   j = 1;
   while j < vocab_size && corpus(t) != chars(j)
@@ -68,6 +68,7 @@ for t = 1:T
   end
   ids(t) = j;
 end
+ids = ids(:);   % zeros(1, T) is a 1×T matrix; a subscript has to be a vector
 
 % decode: concatenate the vocabulary entry for each id
 decoded = "";
@@ -100,7 +101,7 @@ This is a discrete probability distribution — a PMF — over the vocabulary: e
 The counts come from the encoded ids, not from a hand-typed table:
 
 ```rustlab
-counts = zeros(vocab_size);
+counts = zeros(1, vocab_size);
 for t = 1:T
   counts(ids(t)) = counts(ids(t)) + 1;
 end

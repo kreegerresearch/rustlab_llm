@@ -31,19 +31,19 @@ d_ff = 8;
 T_max = T + 16;
 E = randn(vocab, d_model) * 0.3;
 PE = sinusoidal_pe(T_max, d_model);
-gamma1 = ones(d_model);   beta1 = zeros(d_model);
-gamma2 = ones(d_model);   beta2 = zeros(d_model);
+gamma1 = ones(1, d_model);   beta1 = zeros(1, d_model);
+gamma2 = ones(1, d_model);   beta2 = zeros(1, d_model);
 Wq = randn(d_model, d_model) * 0.3;
 Wk = randn(d_model, d_model) * 0.3;
 Wv = randn(d_model, d_model) * 0.3;
 Wo = randn(d_model, d_model) * 0.3;
-W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
-W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(1, d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(1, d_model);
 W_U = randn(d_model, vocab) * 0.3;
 P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
 n_params = vocab * d_model + 4 * d_model + 4 * d_model * d_model + 2 * d_model * d_ff + d_ff + d_model + d_model * vocab;
-mask_train = ones(T - 1);
+mask_train = ones(1, T - 1);
 n_train = 600;  T_w = 60;  eta_max = 0.05;  eta_min = 0.005;
 bet1 = 0.9;  bet2 = 0.999;  eps_a = 1e-8;
 [M, V] = adamw_init(P);
@@ -74,7 +74,7 @@ The capstone's single-block transformer has 300 parameters: 272 of them sit in e
 [lo_fp, L_fp, cache_fp] = transformer_forward(tokens, mask_train, P);
 print("re-trained capstone: params =", n_params, "  L =", L_fp, "  PPL =", exp(L_fp));
 n_q = 0;
-ranges = zeros(8);
+ranges = zeros(1, 8);
 for k = 1:8
   W = mat_k(P, k);
   n_q = n_q + numel(W);
@@ -180,7 +180,7 @@ function d = snr_mat(W, Wq)
 end
 
 b_demo = 4;
-snr_t4 = zeros(8);  snr_r4 = zeros(8);
+snr_t4 = zeros(1, 8);  snr_r4 = zeros(1, 8);
 for k = 1:8
   W = mat_k(P, k);
   [Wt, st] = quant_tensor(W, b_demo);  snr_t4(k) = snr_mat(W, Wt);
@@ -237,7 +237,7 @@ crest_E = max(max(abs(P.E))) / sqrt(mean(mean(P.E .^ 2)));
 model_E = 6.02 * bits + 4.77 - 20 * log10(crest_E);
 b_fine = linspace(2, 8, 61);                                   % fine grid so the dashed model line draws cleanly
 gain_per_bit = SNR_t(2:n_b, :) - SNR_t(1:(n_b - 1), :);        % dB gained by each added bit
-mean_gain = zeros(n_b - 1);
+mean_gain = zeros(1, n_b - 1);
 for i = 1:(n_b - 1)
   mean_gain(i) = mean(gain_per_bit(i, :));
 end
@@ -311,7 +311,7 @@ end
 ```
 
 ```rustlab
-L_t = zeros(n_b);  L_r = zeros(n_b);  KL_t = zeros(n_b);  KL_r = zeros(n_b);
+L_t = zeros(1, n_b);  L_r = zeros(1, n_b);  KL_t = zeros(1, n_b);  KL_r = zeros(1, n_b);
 for i = 1:n_b
   Pq = quant_params(P, bits(i), 0);
   [lo_q, L_q, c] = transformer_forward(tokens, mask_train, Pq);
@@ -355,7 +355,7 @@ Weights are quantised once, offline, with a scale chosen from the whole tensor. 
 
 ```rustlab
 H = cache_fp.H_out;                      % residual stream entering the LM head, T x d_model
-ch_max = zeros(d_model);
+ch_max = zeros(1, d_model);
 for j = 1:d_model
   ch_max(j) = max(abs(H(:, j)));
 end
@@ -481,7 +481,7 @@ for k = 1:8
 end
 print("4-bit errors e/Delta over", length(e_pool), "weights: mean", mean(e_pool), "  12 var", 12 * mean(e_pool .^ 2), "  max|e|/Delta", max(abs(e_pool)));
 seed(26);
-x = randn(10000) * 0.3;                                   % Gaussian "weights", max |x| ~ 1.4 < 2
+x = randn(1, 10000) * 0.3;                                   % Gaussian "weights", max |x| ~ 1.4 < 2
 snr_round = snr(x, quantize(x, qfmt(8, 6, "round", "saturate")));
 snr_floor = snr(x, quantize(x, qfmt(8, 6)));              % default: floor rounding
 snr_model = 10 * log10(0.09 / ((2 ^ -6) ^ 2 / 12));

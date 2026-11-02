@@ -16,12 +16,12 @@ cfg = gpt_config(20, 32, 2, 2, 64, 33);
 P = gpt_init(cfg, 0.1);
 theta = gpt_flatten(P, cfg);
 n = length(theta);
-mask = ones(32);
+mask = ones(1, 32);
 
 # A learnable sequence: a period-5 pattern with 20 % random substitutions.
 base = mod(0:199, 5) + 1;
-noise = floor(rand(200) * 20) + 1;
-flip = rand(200) < 0.2;
+noise = floor(rand(1, 200) * 20) + 1;
+flip = rand(1, 200) < 0.2;
 data = base .* (1 - flip) + noise .* flip;
 
 # (1) Gradient check on 16 coordinates spread over every parameter block.
@@ -43,7 +43,7 @@ end
 print(sprintf("GATE gradcheck %.6g", worst));
 
 # (2) Serial training trajectory: no parmap, fixed windows, fixed LR.
-m = zeros(n);  v = zeros(n);  wdm = gpt_wd_mask(cfg);
+m = zeros(1, n);  v = zeros(1, n);  wdm = gpt_wd_mask(cfg);
 for step = 1:25
   s = mod((step - 1) * 7, 200 - 33) + 1;
   gL = gpt_grad_flat(data(s:(s + 32)), mask, gpt_unflatten(theta, cfg), cfg);

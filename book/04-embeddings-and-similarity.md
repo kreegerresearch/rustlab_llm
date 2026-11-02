@@ -204,7 +204,7 @@ Matrix(4x4)
   [0.872754, 1.000000, 0.754961, 0.834240]
   [0.824250, 0.754961, 1.000000, 0.657018]
   [0.509099, 0.834240, 0.657018, 1.000000]
-max|S - S'| = 0    min(S) = 0.5090986003882718   (king/woman)
+max|S - S'| = 0    min(S) = 0.5090986003882719   (king/woman)
 ```
 
 <!-- rustlab:output-end -->
@@ -295,7 +295,7 @@ ylim([-0.1, 1.2])
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/04-embeddings-and-similarity/plot-3-11e2e303.svg)
+![plot 3](plots/04-embeddings-and-similarity/plot-3-2743728a.svg)
 
 <!-- rustlab:output-end -->
 
@@ -335,7 +335,7 @@ normalised (cosine)      (king , row): [1×4]  1.000000  0.872754  0.824250  0.5
 10*king . queen = 22.7    cos(10*king, queen) = 0.8727542186034793   (was 0.8727542186034795 )
 ```
 
-![plot 4](plots/04-embeddings-and-similarity/plot-4-6e409acd.svg)
+![plot 4](plots/04-embeddings-and-similarity/plot-4-71373909.svg)
 
 <!-- rustlab:output-end -->
 
@@ -365,12 +365,12 @@ end
 
 <!-- rustlab:output-start -->
 ```text
-d = 2 : mean|cos| = 0.6293227817710451   std(cos) = 0.7014465768602673   1/sqrt(d) = 0.7071067811865475
-d = 8 : mean|cos| = 0.2835495335637865   std(cos) = 0.34894596930814564   1/sqrt(d) = 0.35355339059327373
-d = 64 : mean|cos| = 0.09817975782434396   std(cos) = 0.12163438477024725   1/sqrt(d) = 0.125
+d = 2 : mean|cos| = 0.6293227817710454   std(cos) = 0.7014465768602673   1/sqrt(d) = 0.7071067811865475
+d = 8 : mean|cos| = 0.28354953356378637   std(cos) = 0.3489459693081456   1/sqrt(d) = 0.35355339059327373
+d = 64 : mean|cos| = 0.09817975782434375   std(cos) = 0.12163438477024725   1/sqrt(d) = 0.125
 ```
 
-![plot 5](plots/04-embeddings-and-similarity/plot-5-8e0e1730.svg)
+![plot 5](plots/04-embeddings-and-similarity/plot-5-bc2c0b39.svg)
 
 <!-- rustlab:output-end -->
 

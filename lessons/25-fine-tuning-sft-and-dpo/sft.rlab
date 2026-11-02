@@ -35,7 +35,7 @@ T_max = 16;
 # which never appears in pre-train data).
 pat = [1, 2, 2];
 T_pre = 12;
-ids_pre = zeros(T_pre);
+ids_pre = zeros(1, T_pre);
 for i = 1:T_pre
   ids_pre(i) = pat(mod(i - 1, 3) + 1);
 end
@@ -43,21 +43,21 @@ end
 # === 2. Initialise parameters ===
 E = randn(vocab, d_model) * 0.3;
 PE = sinusoidal_pe(T_max, d_model);
-gamma1 = ones(d_model);   beta1 = zeros(d_model);
-gamma2 = ones(d_model);   beta2 = zeros(d_model);
+gamma1 = ones(1, d_model);   beta1 = zeros(1, d_model);
+gamma2 = ones(1, d_model);   beta2 = zeros(1, d_model);
 Wq = randn(d_model, d_model) * 0.3;
 Wk = randn(d_model, d_model) * 0.3;
 Wv = randn(d_model, d_model) * 0.3;
 Wo = randn(d_model, d_model) * 0.3;
-W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
-W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(1, d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(1, d_model);
 W_U = randn(d_model, vocab) * 0.3;
 P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
 
 # === 3. Phase 1: pre-train on the abb corpus (no masking) ===
 # Loss mask = all-ones over the T_pre - 1 prediction positions.
-mask_pre = ones(T_pre - 1);
+mask_pre = ones(1, T_pre - 1);
 [M, V] = adamw_init(P);
 bet1 = 0.9; bet2 = 0.999; eps_a = 1e-8;
 n_pre = 600;
@@ -99,7 +99,7 @@ print("Pre-SFT abb-corpus L:", L_eval_pre);
 
 # SFT loop — 200 steps, one sequence per step round-robin.
 n_sft = 200;
-sft_loss_curve = zeros(n_sft + 1);
+sft_loss_curve = zeros(1, n_sft + 1);
 [lo, L_sft0, cache] = transformer_forward(sft_data(1, :), sft_mask, P);
 sft_loss_curve(1) = L_sft0;
 print("");

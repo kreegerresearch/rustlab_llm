@@ -58,7 +58,7 @@ print("Saved gd_poles.svg");
 # === Three regimes: loss and the signed fast-mode coordinate ===
 function [loss_hist, c_fast] = gd_run(x, y, eta, n_steps, v_fast)
   w = 0.0; b = 0.0; npts = length(x);
-  loss_hist = zeros(n_steps + 1); c_fast = zeros(n_steps + 1);
+  loss_hist = zeros(1, n_steps + 1); c_fast = zeros(1, n_steps + 1);
   loss_hist(1) = mean((w * x + b - y) .^ 2);
   c_fast(1) = v_fast(1) * (w - 2.0) + v_fast(2) * b;
   for k = 1:n_steps

@@ -1,0 +1,67 @@
+<svg width="900" height="500" viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="900" height="500" opacity="1" fill="#1E1E2E" stroke="none"/>
+<text x="450" y="25" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="17.741935483870968" opacity="1" fill="#CDD6F4">
+Supervised fine-tuning loss (only response tokens count)
+</text>
+<text x="20" y="238" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4" transform="rotate(270, 20, 238)">
+L (nats / response-token)
+</text>
+<text x="488" y="480" dy="-0.5ex" text-anchor="middle" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+step
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="96,47 96,429 "/>
+<text x="87" y="398" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="91,398 96,398 "/>
+<text x="87" y="294" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+10.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="91,294 96,294 "/>
+<text x="87" y="190" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+20.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="91,190 96,190 "/>
+<text x="87" y="86" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+30.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="91,86 96,86 "/>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="97,430 879,430 "/>
+<text x="97" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="97,430 97,435 "/>
+<text x="292" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+50.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="292,430 292,435 "/>
+<text x="488" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+100.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="488,430 488,435 "/>
+<text x="683" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+150.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="683,430 683,435 "/>
+<text x="879" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+200.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="879,430 879,435 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="97,429 879,429 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="97,353 879,353 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="97,277 879,277 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="97,200 879,200 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="97,124 879,124 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="97,47 879,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="253,429 253,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="409,429 409,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="566,429 566,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="722,429 722,47 "/>
+<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="97,79 100,79 104,86 108,98 112,99 116,105 120,110 124,118 128,125 132,122 136,138 140,145 143,134 147,158 151,165 155,146 159,180 163,187 167,158 171,203 175,210 179,170 183,227 186,235 190,182 194,252 198,260 202,194 206,277 210,285 214,206 218,297 222,301 226,218 229,307 233,310 237,229 241,315 245,317 249,239 253,322 257,324 261,249 265,328 269,330 272,259 276,335 280,337 284,268 288,341 292,343 296,278 300,347 304,349 308,287 312,352 315,354 319,296 323,358 327,360 331,305 335,363 339,365 343,314 347,368 351,370 355,322 358,373 362,374 366,329 370,377 374,378 378,334 382,380 386,381 390,339 394,383 398,384 401,342 405,385 409,385 413,346 417,386 421,387 425,349 429,388 433,388 437,352 441,389 444,389 448,354 452,390 456,391 460,357 464,391 468,392 472,359 476,392 480,393 484,361 488,393 491,394 495,364 499,394 503,394 507,366 511,395 515,395 519,368 523,395 527,396 531,370 534,396 538,396 542,372 546,396 550,396 554,374 558,396 562,396 566,376 570,397 574,397 577,378 581,397 585,397 589,380 593,397 597,397 601,381 605,397 609,397 613,383 617,397 620,397 624,385 628,397 632,397 636,386 640,397 644,397 648,388 652,397 656,397 660,389 663,397 667,397 671,390 675,397 679,397 683,391 687,397 691,397 695,392 699,397 703,397 706,393 710,397 714,397 718,394 722,397 726,397 730,394 734,397 738,398 742,395 746,398 749,398 753,395 757,398 761,398 765,395 769,398 773,398 777,396 781,398 785,398 789,396 792,398 796,398 800,396 804,398 808,398 812,396 816,398 820,398 824,396 828,398 832,398 835,396 839,398 843,398 847,397 851,398 855,398 859,397 863,398 867,398 871,397 875,398 879,398 "/>
+<rect x="784" y="52" width="91" height="31" opacity="0.85" fill="#1E1E2E" stroke="none"/>
+<rect x="784" y="52" width="91" height="31" opacity="0.3" fill="none" stroke="#CDD6F4"/>
+<text x="824" y="62" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+SFT loss
+</text>
+<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="794,67 814,67 "/>
+</svg>

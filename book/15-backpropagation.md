@@ -152,7 +152,7 @@ fd  = (Lp - Lm) / (2 * eps);
 err = abs(fd - dL_dW1(2, 1));
 ```
 
-Finite-difference estimate at $W_1(2, 1)$: $0.358389$ vs analytic $0.358389$ — error $1.10e-11$ (well under $\varepsilon^2$).
+Finite-difference estimate at $W_1(2, 1)$: $0.358389$ vs analytic $0.358389$ — error $1.12e-11$ (well under $\varepsilon^2$).
 
 Two refinements make this check robust at scale. First, compare **relative** error, $|f - a| / \max(|f|, |a|)$, so that a gradient of size $10^3$ and one of size $10^{-3}$ are judged by the same yardstick. Second, the choice $\varepsilon \approx 10^{-5}$ is not arbitrary: the centred difference has truncation error $O(\varepsilon^2)$ and rounding error $O(\varepsilon_{\text{mach}} / \varepsilon)$ with $\varepsilon_{\text{mach}} \approx 2 \times 10^{-16}$ in double precision, and the sum is smallest near $\varepsilon_{\text{mach}}^{1/3} \approx 6 \times 10^{-6}$. (The one-sided rule of thumb $\sqrt{\varepsilon_{\text{mach}}} \approx 10^{-8}$ is for *forward* differences.) A sweep shows the U shape:
 
@@ -162,7 +162,7 @@ function r = rel_err(a, b)
 end
 
 eps_list = [1e-2, 1e-4, 1e-5, 1e-7, 1e-9];
-rel_list = zeros(length(eps_list));
+rel_list = zeros(1, length(eps_list));
 for i = 1:length(eps_list)
   e = eps_list(i);
   W1p = W1; W1p(2, 1) = W1(2, 1) + e;
@@ -177,9 +177,9 @@ end
 ```text
 eps = 0.01    relative error = 0.000001910093267350235
 eps = 0.0001    relative error = 0.00000000019542205403617214
-eps = 0.00001    relative error = 0.00000000003071841583847614
+eps = 0.00001    relative error = 0.000000000031237919713027026
 eps = 0.0000001    relative error = 0.0000000019209059991718153
-eps = 0.000000001    relative error = 0.0000002714309656523153
+eps = 0.000000001    relative error = 0.0000005812126434145493
 ```
 
 <!-- rustlab:output-end -->
@@ -211,7 +211,7 @@ seed(16);
 d_in  = 5;
 d_out = 3;
 W = randn(d_in, d_out) * 0.5;
-b = randn(d_out) * 0.5;
+b = randn(1, d_out) * 0.5;
 x = [0.1, -0.3, 0.2, 0.4, -0.1];
 
 y = x * W + b;
@@ -258,7 +258,7 @@ p = softmax(z);
 L_ce = -log(p(y_true));
 
 % Analytical gradient
-e_y = zeros(4); e_y(y_true) = 1.0;
+e_y = zeros(1, 4); e_y(y_true) = 1.0;
 dL_dz_analytic = p - e_y;
 
 % Finite-difference check on z(3)
@@ -431,7 +431,7 @@ print("one random J (d = 32):  RMS singular value =", sqrt(mean(sv .^ 2)), "  si
 
 <!-- rustlab:output-start -->
 ```text
-one random J (d = 32):  RMS singular value = 1.0005113956081162   sigma_max = 1.9112734968558776   spectral radius = 1.0547404373380362
+one random J (d = 32):  RMS singular value = 1.000511395608116   sigma_max = 1.9112734968558784   spectral radius = 1.0547404373380327
 ```
 
 <!-- rustlab:output-end -->
@@ -487,10 +487,10 @@ hold("off")
 
 <!-- rustlab:output-start -->
 ```text
-L1 / L12 ratios:  gain 0.7: 0.03693700091743238   gain 1.0: 0.88857285134342   gain 1.3: 25.819017934732837   0.7 + I: 8.390376349540086
+L1 / L12 ratios:  gain 0.7: 0.036937000917432405   gain 1.0: 0.8885728513434212   gain 1.3: 25.819017934732848   0.7 + I: 8.390376349540086
 ```
 
-![plot 1](plots/15-backpropagation/plot-1-216b03d4.svg)
+![plot 1](plots/15-backpropagation/plot-1-d16dbf8e.svg)
 
 <!-- rustlab:output-end -->
 
@@ -543,14 +543,14 @@ print("taps feeding xbar_3 (row 3 of W): ybar_1..ybar_6 weights =", W_conv(3, :)
 
 <!-- rustlab:output-start -->
 ```text
-adjoint identity: <xW, ybar> = 0.6423092740593157    <x, ybar W'> = 0.6423092740593144    difference = 0.0000000000000013322676295501878
+adjoint identity: <xW, ybar> = 0.6423092740593153    <x, ybar W'> = 0.642309274059315    difference = 0.0000000000000002220446049250313
 taps feeding y_3 (row 3 of W'):  x_1..x_6 weights = [1×6]  0.250000  0.500000  1.000000  0.000000  0.000000  0.000000    causal: past x, reversed h
 taps feeding xbar_3 (row 3 of W): ybar_1..ybar_6 weights = [1×6]  0.000000  0.000000  1.000000  0.500000  0.250000  0.000000    anti-causal: future ybar, h in order
 ```
 
 <!-- rustlab:output-end -->
 
-$y_3$ is built from $x_1, x_2, x_3$ with the taps in reverse order (convolution); $\bar{x}_3$ is built from $\bar{y}_3, \bar{y}_4, \bar{y}_5$ with the taps in forward order (correlation). Same three numbers, opposite direction in time — the adjoint identity holds to $1.3e-15$.
+$y_3$ is built from $x_1, x_2, x_3$ with the taps in reverse order (convolution); $\bar{x}_3$ is built from $\bar{y}_3, \bar{y}_4, \bar{y}_5$ with the taps in forward order (correlation). Same three numbers, opposite direction in time — the adjoint identity holds to $2.2e-16$.
 
 ### Systems
 
@@ -588,7 +588,7 @@ The costate at the input, $\boldsymbol{\lambda}_0$, is $\bar{\mathbf{x}}$; the r
 **Exact.** Depth is a cascade of per-stage gains, and the residual's identity branch is a unity feed-forward path around each stage. The per-layer gain ratios $\lVert \mathbf{g}_{k} \rVert / \lVert \mathbf{g}_{k+1} \rVert$ from the stack experiment average to the design values:
 
 ```rustlab
-gain_est = zeros(4);
+gain_est = zeros(1, 4);
 for r = 1:4
   ratios = G_norms(r, 1:(N - 1)) ./ G_norms(r, 2:N);
   gain_est(r) = exp(mean(log(ratios)));    % geometric mean of the per-stage gains
@@ -598,7 +598,7 @@ print("geometric-mean per-stage gain:  0.7 ->", gain_est(1), "  1.0 ->", gain_es
 
 <!-- rustlab:output-start -->
 ```text
-geometric-mean per-stage gain:  0.7 -> 0.7409164532618363   1.0 -> 0.9893175900963115   1.3 -> 1.3438727764480896   0.7 + I -> 1.2133333392461172   (sqrt(1 + 0.49) = 1.2206555615733703 )
+geometric-mean per-stage gain:  0.7 -> 0.7409164532618364   1.0 -> 0.9893175900963116   1.3 -> 1.3438727764480896   0.7 + I -> 1.2133333392461172   (sqrt(1 + 0.49) = 1.2206555615733703 )
 ```
 
 <!-- rustlab:output-end -->
@@ -628,10 +628,10 @@ flowchart LR
 z_s = [2.0, 1.0, 0.5, -0.5];
 p_s = softmax(z_s);
 K_s = length(z_s);
-E_score  = zeros(K_s);
-E_score2 = zeros(K_s);
+E_score  = zeros(1, K_s);
+E_score2 = zeros(1, K_s);
 for c = 1:K_s
-  e_c = zeros(K_s); e_c(c) = 1.0;
+  e_c = zeros(1, K_s); e_c(c) = 1.0;
   score = p_s - e_c;                          % dL/dz when the target is c
   E_score  = E_score  + p_s(c) * score;       % E_y~p [p - y]
   E_score2 = E_score2 + p_s(c) * score .^ 2;  % E_y~p [(p - y)^2]: diagonal of the Fisher
@@ -643,8 +643,10 @@ print("p (1 - p)    =", p_s .* (1 - p_s));
 
 <!-- rustlab:output-start -->
 ```text
-E[p - y]     = [1×4]  0.000000  -0.000000  0.000000  0.000000
-E[(p - y)^2] = [1×4]  0.240456  0.171533  0.115578  0.046655
+E[p - y]     = Matrix(1x4)
+  [0.000000, -0.000000, 0.000000, 0.000000]
+E[(p - y)^2] = Matrix(1x4)
+  [0.240456, 0.171533, 0.115578, 0.046655]
 p (1 - p)    = [1×4]  0.240456  0.171533  0.115578  0.046655
 ```
 

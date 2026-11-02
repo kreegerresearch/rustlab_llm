@@ -59,12 +59,12 @@ d_ff = 4 * d_model;
 H = randn(T, d_model);
 
 W1 = randn(d_model, d_ff) * sqrt(2.0 / d_model);   % He init for the GELU layer
-b1 = zeros(d_ff);
+b1 = zeros(1, d_ff);
 W2 = randn(d_ff, d_model) * sqrt(2.0 / d_ff);
-b2 = zeros(d_model);
+b2 = zeros(1, d_model);
 
 % Forward pass — broadcast biases by adding row vectors via outer with ones
-ones_T = ones(T);
+ones_T = ones(1, T);
 hidden_pre  = H * W1 + outer(ones_T, b1);
 hidden_post = gelu(hidden_pre);
 out         = hidden_post * W2 + outer(ones_T, b2);
@@ -105,8 +105,8 @@ h_step = 1e-4;
 xs_grad = -3:0.05:3;
 n_grad = length(xs_grad);
 
-dRelu = zeros(n_grad);
-dGelu = zeros(n_grad);
+dRelu = zeros(1, n_grad);
+dGelu = zeros(1, n_grad);
 for i = 1:n_grad
   x = xs_grad(i);
   dRelu(i) = (relu(x + h_step) - relu(x - h_step)) / (2.0 * h_step);
@@ -255,7 +255,7 @@ Each of the $d_{\text{ff}}$ slots correlates the token with its key (the same do
 
 ```rustlab
 % Slot-sum identity for token 2: sum_m hidden_post(2, m) * W2(m, :) == out(2, :)
-acc = zeros(d_model);
+acc = zeros(1, d_model);
 for m = 1:d_ff
   acc = acc + hidden_post(2, m) * W2(m, :);
 end

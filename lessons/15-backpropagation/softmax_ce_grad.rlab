@@ -23,8 +23,8 @@ print("p sums to 1:", sum(p));
 print("Cross-entropy loss L = -log p(y_true):", L_ce);
 
 # === Analytical gradient: dL/dz = p - 1_y ===
-# Use zeros(K) (vector) so p - e_y stays vector + vector.
-e_y = zeros(K);
+# Use zeros(1, K) (vector) so p - e_y stays vector + vector.
+e_y = zeros(1, K);
 e_y(y_true) = 1.0;
 dL_dz_analytic = p - e_y;
 print("Analytical dL/dz (= p - 1_y):", dL_dz_analytic);

@@ -47,8 +47,8 @@ if C.resume
   print("resumed from step", step0);
 else
   theta = gpt_flatten(gpt_init(cfg, C.init_std), cfg);
-  m_adam = zeros(length(theta));
-  v_adam = zeros(length(theta));
+  m_adam = zeros(1, length(theta));
+  v_adam = zeros(1, length(theta));
 end
 wd_mask = gpt_wd_mask(cfg);
 cfgv = [cfg.V, cfg.d, cfg.L, cfg.H, cfg.dff, cfg.Tmax];
@@ -77,9 +77,9 @@ function L = eval_loss(ids, n_w, T, P, cfg)
 end
 
 # === 4. Training loop (Lesson 18) ===
-mask = ones(C.T);
+mask = ones(1, C.T);
 B = C.batch;
-hist_step = zeros(C.n_steps);  hist_loss = zeros(C.n_steps);  hist_gn = zeros(C.n_steps);
+hist_step = zeros(1, C.n_steps);  hist_loss = zeros(1, C.n_steps);  hist_gn = zeros(1, C.n_steps);
 val_steps = [];  val_losses = [];
 tic;
 t_last = toc;

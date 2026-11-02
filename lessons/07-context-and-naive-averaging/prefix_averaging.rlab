@@ -26,7 +26,7 @@ print(X);
 # === Method 1: Loop-based Running Average ===
 # Accumulate a running sum and divide by t to get x̄_t.
 X_bar_loop = zeros(T, d);
-running = zeros(d);
+running = zeros(1, d);
 for t = 1:T
   running = running + X(t, :);
   for k = 1:d
@@ -60,7 +60,7 @@ print("Averaging matrix W (lower-triangular, rows sum to 1):");
 print(W);
 
 # Sanity check: upper triangle is exactly zero, rows sum to 1.
-row_sums = zeros(T);
+row_sums = zeros(1, T);
 for t = 1:T
   row_sums(t) = sum(W(t, :));
 end

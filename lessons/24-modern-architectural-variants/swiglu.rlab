@@ -38,9 +38,9 @@ H = randn(T, d_model);                                % (T, d_model)
 
 # === 2. Standard GELU FFN (Lesson 11) ===
 W1_std = randn(d_model, d_ff_std) * 0.3;
-b1_std = randn(d_ff_std) * 0.1;
+b1_std = randn(1, d_ff_std) * 0.1;
 W2_std = randn(d_ff_std, d_model) * 0.3;
-b2_std = randn(d_model) * 0.1;
+b2_std = randn(1, d_model) * 0.1;
 
 function H_out = ffn_gelu(H, W1, b1, W2, b2)
   T = size(H)(1);

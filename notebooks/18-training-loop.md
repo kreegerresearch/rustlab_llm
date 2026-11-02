@@ -73,7 +73,7 @@ function [dE, dW, L] = backward_one(x_curr, x_next, E, W, vocab, d_emb)
   pvec = softmax(h * W);
   L = -log(pvec(x_next));
 
-  e_y = zeros(vocab); e_y(x_next) = 1.0;
+  e_y = zeros(1, vocab); e_y(x_next) = 1.0;
   dlogits = pvec - e_y;             % vector of length vocab
   dW = h' * dlogits;                % d_emb × vocab
   dh = dlogits * W';                % vector of length d_emb
@@ -125,7 +125,7 @@ seed(18);
 E0 = randn(vocab, d_emb) * 0.3;          % the same init as the forward-pass block
 W0 = randn(d_emb, vocab) * 0.3;
 pat = [1, 2, 3, 2];                       % a, b, c, b — period 4
-corpus = zeros(60);
+corpus = zeros(1, 60);
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
 end
@@ -169,8 +169,8 @@ end
 function [Ltr, Lva, gn, etas, g21, n_clip, E, W] = train_run(E, W, corpus, n_tr, va_start, n_va, n_steps, eta_of_t, lambda, c_clip)
   vocab = size(E, 1);  d_emb = size(E, 2);
   mE = zeros(vocab, d_emb);  vE = mE;  mW = zeros(d_emb, vocab);  vW = mW;
-  Ltr = zeros(n_steps + 1);  Lva = zeros(n_steps + 1);
-  gn = zeros(n_steps);  etas = zeros(n_steps);  g21 = zeros(n_steps);  n_clip = 0;
+  Ltr = zeros(1, n_steps + 1);  Lva = zeros(1, n_steps + 1);
+  gn = zeros(1, n_steps);  etas = zeros(1, n_steps);  g21 = zeros(1, n_steps);  n_clip = 0;
   Ltr(1) = range_loss(1, n_tr, corpus, E, W);  Lva(1) = range_loss(va_start, n_va, corpus, E, W);
   for t = 1:n_steps
     etas(t) = eta_of_t(t);                                        % gain from the schedule (L17)
@@ -359,18 +359,18 @@ The ${nc_c}$ clipped steps change the final losses in the fourth decimal or not 
 seed(181);
 Bs = [4, 8, 16, 49];
 [gE_full, gW_full] = batch_grad(1:n_tr, corpus, E0, W0);          % exact gradient at the initial parameters
-noise_pow = zeros(4);
+noise_pow = zeros(1, 4);
 for bi = 1:4
   acc = 0.0;
   for r = 1:200
-    [gEb, gWb] = batch_grad(randi(n_tr, Bs(bi)), corpus, E0, W0); % B pair indices drawn with replacement
+    [gEb, gWb] = batch_grad(randi(n_tr, 1, Bs(bi)), corpus, E0, W0); % B pair indices drawn with replacement
     acc = acc + sum(sum((gEb - gE_full) .^ 2)) + sum(sum((gWb - gW_full) .^ 2));
   end
   noise_pow(bi) = acc / 200;
 end
-seqn = zeros(256);                                                % one entry's noise, B = 8, 256 consecutive draws
+seqn = zeros(1, 256);                                                % one entry's noise, B = 8, 256 consecutive draws
 for r = 1:256
-  [gEb, gWb] = batch_grad(randi(n_tr, 8), corpus, E0, W0);
+  [gEb, gWb] = batch_grad(randi(n_tr, 1, 8), corpus, E0, W0);
   seqn(r) = gWb(2, 1) - gW_full(2, 1);
 end
 Sx = abs(fft(seqn)) .^ 2;

@@ -39,7 +39,7 @@ function [dE, dW, L] = step_grad(curr, nxt, E, W, vocab, d_emb)
   h_m = E(curr, :);
   p = softmax(h_m * W);
   L = -log(p(nxt));
-  e_y = zeros(vocab); e_y(nxt) = 1.0;
+  e_y = zeros(1, vocab); e_y(nxt) = 1.0;
   dlogits = p - e_y;
   dW = h_m' * dlogits;
   dh = dlogits * W';
@@ -74,8 +74,8 @@ v_E = zeros(vocab, d_emb);
 m_W = zeros(d_emb, vocab);
 v_W = zeros(d_emb, vocab);
 
-loss_train = zeros(n_train + 1);
-loss_val   = zeros(n_train + 1);
+loss_train = zeros(1, n_train + 1);
+loss_val   = zeros(1, n_train + 1);
 loss_train(1) = mean_loss_pairs(train_pairs_curr, train_pairs_next, n_train_pairs, E, W);
 loss_val(1)   = mean_loss_pairs(val_pairs_curr,   val_pairs_next,   n_val_pairs,   E, W);
 

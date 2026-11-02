@@ -95,7 +95,7 @@ function [Y, x_norm_M, sigma_v] = layernorm_fwd(X, gamma, beta)
   eps = 1e-5;
   Y = zeros(T, d);
   x_norm_M = zeros(T, d);
-  sigma_v = zeros(T);
+  sigma_v = zeros(1, T);
   for t = 1:T
     x = X(t, :);
     mu = mean(x);
@@ -120,8 +120,8 @@ function [dX, dgamma, dbeta] = layernorm_bwd(dY, x_norm_M, sigma_v, gamma)
   T = size(dY)(1);
   d = size(dY)(2);
   dX = zeros(T, d);
-  dgamma = zeros(d);
-  dbeta = zeros(d);
+  dgamma = zeros(1, d);
+  dbeta = zeros(1, d);
   for t = 1:T
     dgamma = dgamma + dY(t, :) .* x_norm_M(t, :);
     dbeta  = dbeta  + dY(t, :);
@@ -225,7 +225,7 @@ function dl = ce_dlogits(ids, loss_mask, logits, total)
     for t = 1:(T - 1)
       if loss_mask(t) > 0
         p = softmax(logits(t, :));
-        e_y = zeros(vocab); e_y(ids(t + 1)) = 1.0;
+        e_y = zeros(1, vocab); e_y(ids(t + 1)) = 1.0;
         dl(t, :) = (p - e_y) / total;
       end
     end
@@ -274,7 +274,7 @@ function G = transformer_backward(ids, dlogits, cache, P)
   # FFN backward.
   dhidden = d_ffn_out * W2';
   dW2 = hidden' * d_ffn_out;
-  db2f = zeros(d_model);
+  db2f = zeros(1, d_model);
   for t = 1:T
     db2f = db2f + d_ffn_out(t, :);
   end
@@ -283,7 +283,7 @@ function G = transformer_backward(ids, dlogits, cache, P)
   dH_ln2 = dpre_gelu * W1';
   dW1 = H_ln2' * dpre_gelu;
   d_ff = size(W1)(2);
-  db1f = zeros(d_ff);
+  db1f = zeros(1, d_ff);
   for t = 1:T
     db1f = db1f + dpre_gelu(t, :);
   end
@@ -351,12 +351,12 @@ end
 # Moment buffers are two structs shaped like the trainable part of P.
 function [M, V] = adamw_init(P)
   M = struct("E", zeros(size(P.E)(1), size(P.E)(2)), ...
-             "gamma1", zeros(length(P.gamma1)), "beta1", zeros(length(P.beta1)), ...
-             "gamma2", zeros(length(P.gamma2)), "beta2", zeros(length(P.beta2)), ...
+             "gamma1", zeros(1, length(P.gamma1)), "beta1", zeros(1, length(P.beta1)), ...
+             "gamma2", zeros(1, length(P.gamma2)), "beta2", zeros(1, length(P.beta2)), ...
              "Wq", zeros(size(P.Wq)(1), size(P.Wq)(2)), "Wk", zeros(size(P.Wk)(1), size(P.Wk)(2)), ...
              "Wv", zeros(size(P.Wv)(1), size(P.Wv)(2)), "Wo", zeros(size(P.Wo)(1), size(P.Wo)(2)), ...
-             "W1", zeros(size(P.W1)(1), size(P.W1)(2)), "b1f", zeros(length(P.b1f)), ...
-             "W2", zeros(size(P.W2)(1), size(P.W2)(2)), "b2f", zeros(length(P.b2f)), ...
+             "W1", zeros(size(P.W1)(1), size(P.W1)(2)), "b1f", zeros(1, length(P.b1f)), ...
+             "W2", zeros(size(P.W2)(1), size(P.W2)(2)), "b2f", zeros(1, length(P.b2f)), ...
              "W_U", zeros(size(P.W_U)(1), size(P.W_U)(2)));
   V = M;
 end
@@ -420,7 +420,7 @@ end
 # Next-token distribution after a prefix (all-zero mask: logits only).
 function p = next_token_dist(prefix, P)
   T = length(prefix);
-  zero_mask = zeros(T - 1);
+  zero_mask = zeros(1, T - 1);
   [logits, L, cache] = transformer_forward(prefix, zero_mask, P);
   p = softmax(logits(T, :));
 end

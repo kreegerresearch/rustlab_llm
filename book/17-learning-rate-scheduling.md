@@ -83,7 +83,7 @@ T_decay  = T_total;
 eta_max  = 6e-4;
 eta_min  = 6e-5;
 
-eta_sched = zeros(T_total + 1);
+eta_sched = zeros(1, T_total + 1);
 for t = 0:T_total
   if t < T_warmup
     eta_sched(t + 1) = eta_max * (t / T_warmup);
@@ -104,7 +104,7 @@ ylabel("eta")
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/17-learning-rate-scheduling/plot-1-8f4379b7.svg)
+![plot 1](plots/17-learning-rate-scheduling/plot-1-21dfaf18.svg)
 
 <!-- rustlab:output-end -->
 
@@ -143,13 +143,13 @@ end
 % One noisy-SGD run under the schedule eta_of_t(t).  Returns the loss curve,
 % the eta_t actually used, and the per-step SNR  ||grad L||^2 / (2 sigma^2).
 function [L, etas, snr] = run_sgd(eta_of_t, n, sigma, init)
-  theta = init;  L = zeros(n + 1);  etas = zeros(n);  snr = zeros(n);
+  theta = init;  L = zeros(1, n + 1);  etas = zeros(1, n);  snr = zeros(1, n);
   L(1) = surrogate_loss(theta);
   for t = 1:n
     etas(t) = eta_of_t(t);
     g_true = surrogate_grad(theta);
     snr(t) = sum(g_true .^ 2) / (2 * sigma ^ 2);
-    theta = theta - etas(t) * (g_true + sigma * randn(2));
+    theta = theta - etas(t) * (g_true + sigma * randn(1, 2));
     L(t + 1) = surrogate_loss(theta);
   end
 end
@@ -242,7 +242,7 @@ legend("0.25", "0.02", "schedule", "= 1")
 ```
 
 <!-- rustlab:output-start -->
-![plot 2](plots/17-learning-rate-scheduling/plot-2-315466b8.svg)
+![plot 2](plots/17-learning-rate-scheduling/plot-2-634f5d07.svg)
 
 <!-- rustlab:output-end -->
 
@@ -268,7 +268,7 @@ legend("0.25", "0.02", "schedule", "1.01")
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/17-learning-rate-scheduling/plot-3-4cc87181.svg)
+![plot 3](plots/17-learning-rate-scheduling/plot-3-16e020c3.svg)
 
 <!-- rustlab:output-end -->
 
@@ -309,7 +309,7 @@ The noise floor is **proportional to $\eta$** (until $\eta\lambda$ approaches 2,
 ```rustlab
 seed(171);
 etas_sw = logspace(-2, log10(0.19), 6);
-meas = zeros(6);  pred = zeros(6);
+meas = zeros(1, 6);  pred = zeros(1, 6);
 for i = 1:6
   e = etas_sw(i);
   [Lc, ec, sc] = run_sgd(@(t) e, 4000, sigma, init);
@@ -333,11 +333,13 @@ print("predicted:", pred);
 <!-- rustlab:output-start -->
 ```text
 eta      : [1×6]  0.010000  0.018020  0.032471  0.058513  0.105439  0.190000
-measured : [1×6]  0.000477  0.000740  0.001554  0.003433  0.008106  0.083488
-predicted: [1×6]  0.000463  0.000855  0.001615  0.003217  0.007522  0.090224
+measured : Matrix(1x6)
+  [0.000477, 0.000740, 0.001554, 0.003433, 0.008106, 0.083488]
+predicted: Matrix(1x6)
+  [0.000463, 0.000855, 0.001615, 0.003217, 0.007522, 0.090224]
 ```
 
-![plot 4](plots/17-learning-rate-scheduling/plot-4-aa86edb1.svg)
+![plot 4](plots/17-learning-rate-scheduling/plot-4-c607c137.svg)
 
 <!-- rustlab:output-end -->
 
@@ -382,11 +384,11 @@ print("log10 gain after 300 steps, slow mode (0.25 / 0.02 / schedule):", P_slow(
 
 <!-- rustlab:output-start -->
 ```text
-log10 gain after 300 steps, fast mode (0.25 / 0.02 / schedule): 52.8273777167044 -29.073003902416875 -130.74047586714738
+log10 gain after 300 steps, fast mode (0.25 / 0.02 / schedule): 52.8273777167044 -29.073003902416875 -130.74047586714735
 log10 gain after 300 steps, slow mode (0.25 / 0.02 / schedule): -37.48162098248998 -2.632177292251555 -13.841331073768968
 ```
 
-![plot 5](plots/17-learning-rate-scheduling/plot-5-d9a3046f.svg)
+![plot 5](plots/17-learning-rate-scheduling/plot-5-032b197b.svg)
 
 <!-- rustlab:output-end -->
 
@@ -420,11 +422,11 @@ print("bits/step at the end      :  low", bits(snr_end_low), "  schedule", bits(
 <!-- rustlab:output-start -->
 ```text
 SNR at step 1: 5022.222222222223   -> 6.147198692219589 bits/step
-SNR, mean of steps 271-300:  low 0.04033768319248866   schedule 0.08986671853904973
+SNR, mean of steps 271-300:  low 0.04033768319248868   schedule 0.08986671853904976
 bits/step at the end      :  low 0.028525944372010593   schedule 0.06207585820767956
 ```
 
-![plot 6](plots/17-learning-rate-scheduling/plot-6-56d89d95.svg)
+![plot 6](plots/17-learning-rate-scheduling/plot-6-caa63196.svg)
 
 <!-- rustlab:output-end -->
 

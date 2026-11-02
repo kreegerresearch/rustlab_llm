@@ -13,10 +13,10 @@
 z_s = [2.0, 1.0, 0.5, -0.5];
 p_s = softmax(z_s);
 K_s = length(z_s);
-E_score  = zeros(K_s);
-E_score2 = zeros(K_s);
+E_score  = zeros(1, K_s);
+E_score2 = zeros(1, K_s);
 for c = 1:K_s
-  e_c = zeros(K_s); e_c(c) = 1.0;
+  e_c = zeros(1, K_s); e_c(c) = 1.0;
   score = p_s - e_c;                          # dL/dz when the target is c
   E_score  = E_score  + p_s(c) * score;       # E_y~p [p - y]
   E_score2 = E_score2 + p_s(c) * score .^ 2;  # E_y~p [(p - y)^2]

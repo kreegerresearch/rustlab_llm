@@ -1,0 +1,83 @@
+<svg width="900" height="500" viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="900" height="500" opacity="1" fill="#1E1E2E" stroke="none"/>
+<text x="450" y="25" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="17.741935483870968" opacity="1" fill="#CDD6F4">
+Output entropy vs temperature: noise power vs the knob
+</text>
+<text x="20" y="238" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4" transform="rotate(270, 20, 238)">
+H [bits]
+</text>
+<text x="487" y="480" dy="-0.5ex" text-anchor="middle" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+tau (log axis)
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="93,47 93,429 "/>
+<text x="84" y="398" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="88,398 93,398 "/>
+<text x="84" y="302" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+1.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="88,302 93,302 "/>
+<text x="84" y="206" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+2.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="88,206 93,206 "/>
+<text x="84" y="110" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+3.0
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="88,110 93,110 "/>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="94,430 879,430 "/>
+<text x="201" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.1
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="201,430 201,435 "/>
+<text x="417" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+1
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="417,430 417,435 "/>
+<text x="633" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+10
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="633,430 633,435 "/>
+<text x="849" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+100
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="849,430 849,435 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="94,429 879,429 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="94,353 879,353 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="94,277 879,277 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="94,200 879,200 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="94,124 879,124 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="94,47 879,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="251,429 251,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="408,429 408,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="565,429 565,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="722,429 722,47 "/>
+<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="94,398 106,398 119,398 132,398 145,398 158,397 170,397 183,395 196,393 209,390 222,385 234,379 247,370 260,361 273,349 286,336 298,322 311,307 324,291 337,275 350,258 363,240 375,223 388,205 401,188 414,172 427,157 439,144 452,132 465,121 478,113 491,106 503,100 516,95 529,92 542,89 555,87 568,85 580,84 593,83 606,82 619,81 632,81 644,80 657,80 670,80 683,80 696,80 708,80 721,80 734,79 747,79 760,79 773,79 785,79 798,79 811,79 824,79 837,79 849,79 "/>
+<polyline fill="none" opacity="1" stroke="#D62728" stroke-width="2" points="94,302 106,302 119,302 132,302 145,302 158,302 170,302 183,302 196,302 209,302 222,302 234,302 247,302 260,302 273,302 286,302 298,302 311,302 324,302 337,302 350,302 363,302 375,302 388,302 401,302 414,302 427,302 439,302 452,302 465,302 478,302 491,302 503,301 516,301 529,300 542,298 555,295 568,292 580,289 593,285 606,280 619,275 632,271 644,267 657,263 670,260 683,257 696,255 708,253 721,252 734,250 747,249 760,249 773,248 785,247 798,247 811,247 824,247 837,246 849,246 "/>
+<polyline fill="none" opacity="1" stroke="#808080" stroke-width="1" points="94,79 858,79 "/>
+<polyline fill="none" opacity="1" stroke="#808080" stroke-width="1" points="94,246 868,246 "/>
+<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="94,302 879,302 "/>
+<rect x="657" y="52" width="218" height="101" opacity="0.85" fill="#1E1E2E" stroke="none"/>
+<rect x="657" y="52" width="218" height="101" opacity="0.3" fill="none" stroke="#CDD6F4"/>
+<text x="697" y="62" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+10-class logit vector
+</text>
+<text x="697" y="80" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+trained model, P(. | b)
+</text>
+<text x="697" y="97" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+log2 10 = 3.32 (uniform over 10)
+</text>
+<text x="697" y="115" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+log2 3 = 1.58 (uniform over 3)
+</text>
+<text x="697" y="132" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+1 bit: the tie
+</text>
+<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="667,67 687,67 "/>
+<polyline fill="none" opacity="1" stroke="#D62728" stroke-width="2" points="667,85 687,85 "/>
+<polyline fill="none" opacity="1" stroke="#808080" stroke-width="1" points="667,102 687,102 "/>
+<polyline fill="none" opacity="1" stroke="#808080" stroke-width="1" points="667,120 687,120 "/>
+<polyline fill="none" opacity="1" stroke="#000000" stroke-width="1" points="667,137 687,137 "/>
+</svg>

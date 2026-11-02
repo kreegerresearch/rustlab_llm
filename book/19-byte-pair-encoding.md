@@ -80,7 +80,7 @@ Initial seq length: 35   vocab size: 6
 % --- Rewrite: replace every adjacent (a, b) by new_id, scanning left to right ---
 function out = apply_merge(seq, a, b, new_id)
   L = length(seq);
-  buf = zeros(L);                       % preallocate, trim at the end
+  buf = zeros(1, L);                       % preallocate, trim at the end
   k = 1;  i = 1;
   while i <= L
     if i < L && seq(i) == a && seq(i + 1) == b
@@ -121,11 +121,11 @@ function s = tok_str(id, left, right, names)
 end
 
 K = 10;                                   % enough merges to collapse the corpus to one token
-N_k     = zeros(K + 1);  N_k(1) = length(seq);
-left    = zeros(vocab_size + K);          % parents of each id (0 = base character)
-right   = zeros(vocab_size + K);
-tok_len = ones(vocab_size + K);           % characters per token id
-m_count = zeros(K);
+N_k     = zeros(1, K + 1);  N_k(1) = length(seq);
+left    = zeros(1, vocab_size + K);          % parents of each id (0 = base character)
+right   = zeros(1, vocab_size + K);
+tok_len = ones(1, vocab_size + K);           % characters per token id
+m_count = zeros(1, K);
 cur_seq = seq;  cur_vocab = vocab_size;
 for k = 1:K
   step = bpe_step(cur_seq, cur_vocab);
@@ -172,7 +172,8 @@ print("Sequence length N_k for k = 0..10 merges:", N_k);
 ```text
 merge 4 : 'c' + 'a' -> 'ca'  (id 10 , count 3 , N = 14 )
 merge 5 : 'ca' + 'd' -> 'cad'  (id 11 , count 3 , N = 11 )
-Sequence length N_k for k = 0..10 merges: [1×11]  35.000000  29.000000  23.000000  17.000000  14.000000  11.000000  8.000000  5.000000  ... (11 total)
+Sequence length N_k for k = 0..10 merges: Matrix(1x11)
+  [35.000000, 29.000000, 23.000000, 17.000000, 14.000000, 11.000000, 8.000000, 5.000000, ...]
 ```
 
 <!-- rustlab:output-end -->
@@ -205,7 +206,7 @@ Once `merge_list` is fixed, encoding *any* string is deterministic: apply the me
 % Characters per token of every token in the encoded corpus (five merges)
 lens_corpus = tok_len(seq_5);
 N_tok = length(seq_5);
-cpt_hist = zeros(4);
+cpt_hist = zeros(1, 4);
 for L = 1:4
   cpt_hist(L) = sum(lens_corpus == L);
 end
@@ -224,7 +225,7 @@ mid = (vocab_size + 1):(vocab_size + 5);
 ma  = left(mid);
 mb  = right(mid);
 words = {"abracadabra", "abra", "cad", "bra", "ac", "d"};
-tpw = zeros(6);
+tpw = zeros(1, 6);
 tpw(1) = length(encode([1, 2, 5, 1, 3, 1, 4, 1, 2, 5, 1], ma, mb, mid));
 tpw(2) = length(encode([1, 2, 5, 1], ma, mb, mid));
 tpw(3) = length(encode([3, 1, 4], ma, mb, mid));
@@ -246,12 +247,14 @@ xlabel("word"); ylabel("tokens")
 
 <!-- rustlab:output-start -->
 ```text
-tokens in corpus after 5 merges: 11   chars/token histogram (1..4): [1×4]  2.000000  0.000000  3.000000  6.000000
+tokens in corpus after 5 merges: 11   chars/token histogram (1..4): Matrix(1x4)
+  [2.000000, 0.000000, 3.000000, 6.000000]
 compression ratio N_char/N_tok = 3.1818181818181817   tokens per character = 0.3142857142857143   mean chars/token = 3.1818181818181817
-tokens per word: [1×6]  3.000000  1.000000  1.000000  2.000000  2.000000  1.000000
+tokens per word: Matrix(1x6)
+  [3.000000, 1.000000, 1.000000, 2.000000, 2.000000, 1.000000]
 ```
 
-![plot 1](plots/19-byte-pair-encoding/plot-1-68b5aaa4.svg)
+![plot 1](plots/19-byte-pair-encoding/plot-1-a9d6214d.svg)
 
 <!-- rustlab:output-end -->
 
@@ -286,7 +289,7 @@ No signals or systems reading adds to this lesson: BPE is a static dictionary bu
 
 ```rustlab
 N_char = length(seq);
-c_char = zeros(vocab_size);
+c_char = zeros(1, vocab_size);
 for i = 1:vocab_size
   c_char(i) = sum(seq == i);
 end
@@ -330,13 +333,15 @@ hold("off")
 
 <!-- rustlab:output-start -->
 ```text
-char counts a b c d r _ : [1×6]  15.000000  6.000000  3.000000  3.000000  6.000000  2.000000   H(chars) = 2.2397777613132925 bits/char
+char counts a b c d r _ : Matrix(1x6)
+  [15.000000, 6.000000, 3.000000, 3.000000, 6.000000, 2.000000]   H(chars) = 2.2397777613132925 bits/char
 ASCII: 280 bits   fixed 3-bit: 105 bits   order-0 bound: 78.39222164596524 bits   Huffman: 80 bits
-BPE data + table (k = 0..10): [1×11]  105.000000  93.000000  81.000000  92.000000  88.000000  84.000000  80.000000  76.000000  ... (11 total)
+BPE data + table (k = 0..10): Matrix(1x11)
+  [105.000000, 93.000000, 81.000000, 92.000000, 88.000000, 84.000000, 80.000000, 76.000000, ...]
 minimum 76 bits at k* = 7 merges (|V| = 13 )
 ```
 
-![plot 2](plots/19-byte-pair-encoding/plot-2-f1941713.svg)
+![plot 2](plots/19-byte-pair-encoding/plot-2-f6527615.svg)
 
 <!-- rustlab:output-end -->
 
@@ -352,7 +357,7 @@ $$N_{\text{tok}} \cdot \mathcal{L}_{\text{tok}} \;=\; N_{\text{char}} \cdot \tex
 and **bits per character** is the tokeniser-invariant quantity — the reason [20-perplexity-and-evaluation](20-perplexity-and-evaluation.md) normalises per-token losses to BPC before comparing models. The identity is about *one* model; two order-0 estimators over two alphabets are two different models, and the computation shows how different:
 
 ```rustlab
-p_tok = zeros(vocab_size + 5);
+p_tok = zeros(1, vocab_size + 5);
 for i = 1:(vocab_size + 5)
   p_tok(i) = sum(seq_5 == i) / N_tok;
 end

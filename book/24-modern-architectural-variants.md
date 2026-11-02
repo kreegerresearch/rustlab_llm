@@ -69,7 +69,7 @@ Q = randn(T, d_head);
 K = randn(T, d_head);
 
 n_pairs = d_head / 2;
-theta = zeros(n_pairs);
+theta = zeros(1, n_pairs);
 for k = 0:(n_pairs - 1)
   theta(k + 1) = base ^ (-2 * k / d_head);
 end
@@ -80,8 +80,10 @@ print("wavelength 2 pi / theta_k (tokens):", 2 * pi ./ theta);
 
 <!-- rustlab:output-start -->
 ```text
-theta_k : [1×2]  1.000000  0.010000
-wavelength 2 pi / theta_k (tokens): [1×2]  6.283185  628.318531
+theta_k : Matrix(1x2)
+  [1.000000, 0.010000]
+wavelength 2 pi / theta_k (tokens): Matrix(1x2)
+  [6.283185, 628.318531]
 ```
 
 <!-- rustlab:output-end -->
@@ -102,7 +104,7 @@ S_phasor = real(Qz_rot * Kz_rot');                  % ' conjugates: Re sum_k z_k
 function x_rot = rope_apply(x, m, theta)
   d = length(x);
   n_pairs = d / 2;
-  x_rot = zeros(d);
+  x_rot = zeros(1, d);
   for k = 1:n_pairs
     phi = m * theta(k);
     cos_p = cos(phi);
@@ -150,8 +152,10 @@ q2 = rope_apply(Q_long(3, :), 2, theta);
 k5 = rope_apply(K_long(3, :), 5, theta);
 q4 = rope_apply(Q_long(3, :), 4, theta);
 k7 = rope_apply(K_long(3, :), 7, theta);
-print("<RoPE(q, 2), RoPE(k, 5)> =", q2 * k5');
-print("<RoPE(q, 4), RoPE(k, 7)> =", q4 * k7');
+dot_25 = sum(q2 .* k5);   % 1×1 matrix product is not a scalar; the sum is
+dot_47 = sum(q4 .* k7);
+print("<RoPE(q, 2), RoPE(k, 5)> =", dot_25);
+print("<RoPE(q, 4), RoPE(k, 7)> =", dot_47);
 
 qz = Q_long(3, 1:2:end) + 1i * Q_long(3, 2:2:end);
 kz = K_long(3, 1:2:end) + 1i * K_long(3, 2:2:end);
@@ -192,13 +196,13 @@ imagesc(M, "viridis")
 title("<RoPE(q,m), RoPE(k,n)>: constant along diagonals")
 xlabel("key position n"); ylabel("query position m")
 subplot(1, 3, 2)
-polar(angle(qz(1)) + m_fine * theta(1), abs(qz(1)) * ones(141))
+polar(angle(qz(1)) + m_fine * theta(1), abs(qz(1)) * ones(1, 141))
 hold("on")
 scatter(abs(qz(1)) * cos(angle(qz(1)) + pos8' * theta(1)), abs(qz(1)) * sin(angle(qz(1)) + pos8' * theta(1)))
 hold("off")
 title("pair 1: z_1 e^{j m theta_1}, theta_1 = 1 rad/token, m = 0..7")
 subplot(1, 3, 3)
-polar(angle(qz(2)) + m_fine * theta(2), abs(qz(2)) * ones(141))
+polar(angle(qz(2)) + m_fine * theta(2), abs(qz(2)) * ones(1, 141))
 hold("on")
 scatter(abs(qz(2)) * cos(angle(qz(2)) + pos8' * theta(2)), abs(qz(2)) * sin(angle(qz(2)) + pos8' * theta(2)))
 hold("off")
@@ -210,7 +214,7 @@ title("pair 2: theta_2 = 0.01 rad/token — 0.07 rad in 7 tokens")
 M(1, 4) = -0.3971390885154638   M(4, 7) = -0.39713908851546376   (both offset n - m = 3)
 ```
 
-![plot 1](plots/24-modern-architectural-variants/plot-1-a5e104a2.svg)
+![plot 1](plots/24-modern-architectural-variants/plot-1-b8b0619a.svg)
 
 <!-- rustlab:output-end -->
 
@@ -275,8 +279,8 @@ seed(23);
 T = 5;
 d_model = 8;
 H = randn(T, d_model);
-gamma = ones(d_model);
-beta = zeros(d_model);
+gamma = ones(1, d_model);
+beta = zeros(1, d_model);
 eps = 1e-5;
 
 function H_out = rmsnorm_naive(H, gamma, eps)
@@ -286,7 +290,7 @@ function H_out = rmsnorm_naive(H, gamma, eps)
   for t = 1:T
     x = H(t, :);
     rms = sqrt(mean(x .^ 2) + eps);
-    H_out(t) = (x / rms) .* gamma;
+    H_out(t, :) = (x / rms) .* gamma;
   end
 end
 
@@ -298,7 +302,7 @@ function H_out = layernorm_naive(H, gamma, beta, eps)
     x = H(t, :);
     mu = mean(x);
     sd = sqrt(mean((x - mu) .^ 2) + eps);
-    H_out(t) = ((x - mu) / sd) .* gamma + beta;
+    H_out(t, :) = ((x - mu) / sd) .* gamma + beta;
   end
 end
 
@@ -322,15 +326,15 @@ print("AGC gain 1/RMS on row 1:  unshifted", 1 / sqrt(mean(H(1, :) .^ 2)), "  sh
 
 <!-- rustlab:output-start -->
 ```text
-zero-mean inputs: max | RMSNorm - LayerNorm | = 0.00000000000000011102230246251565
-shifted row 1 LayerNorm: [1×8]  -0.505944  0.876319  -0.524532  1.694489  0.203441  0.545740  -1.804077  -0.485436   mean = -0.00000000000000008326672684688674
-shifted row 1 RMSNorm:  [1×8]  0.663821  1.287935  0.655428  1.657353  0.984120  1.138673  0.077692  0.673080   mean = 0.8922626945950174
+zero-mean inputs: max | RMSNorm - LayerNorm | = 0.00000000000000005551115123125783
+shifted row 1 LayerNorm: [1×8]  -0.505944  0.876319  -0.524532  1.694489  0.203441  0.545740  -1.804077  -0.485436   mean = -0.00000000000000011102230246251565
+shifted row 1 RMSNorm:  [1×8]  0.663821  1.287935  0.655428  1.657353  0.984120  1.138673  0.077692  0.673080   mean = 0.8922626945950171
 AGC gain 1/RMS on row 1:  unshifted 1.0772841442504095   shifted 0.500129270430723
 ```
 
 <!-- rustlab:output-end -->
 
-The first comparison gives $1.1e-16$ — floating-point round-off. On the shifted row LayerNorm's output has mean $-8.3e-17$ (the DC is blocked) while RMSNorm's has mean $0.89$: the offset came through, scaled by a gain that fell from $1.08$ to $0.50$ because the DC also counts as power.
+The first comparison gives $5.6e-17$ — floating-point round-off. On the shifted row LayerNorm's output has mean $-1.1e-16$ (the DC is blocked) while RMSNorm's has mean $0.89$: the offset came through, scaled by a gain that fell from $1.08$ to $0.50$ because the DC also counts as power.
 
 ```rustlab
 figure();
@@ -353,7 +357,7 @@ xlabel("feature"); ylabel("output")
 ```
 
 <!-- rustlab:output-start -->
-![plot 2](plots/24-modern-architectural-variants/plot-2-0c05d2ac.svg)
+![plot 2](plots/24-modern-architectural-variants/plot-2-5e484a19.svg)
 
 <!-- rustlab:output-end -->
 
@@ -399,9 +403,9 @@ H = randn(T, d_model);
 
 % Standard FFN (Lesson 11).
 W1s = randn(d_model, d_ff_std) * 0.3;
-b1s = randn(d_ff_std) * 0.1;
+b1s = randn(1, d_ff_std) * 0.1;
 W2s = randn(d_ff_std, d_model) * 0.3;
-b2s = randn(d_model) * 0.1;
+b2s = randn(1, d_model) * 0.1;
 H_std = (gelu(H * W1s + repmat(b1s, T, 1))) * W2s + repmat(b2s, T, 1);
 
 % SwiGLU FFN.
@@ -587,7 +591,7 @@ KV cache per request at T = 8192, fp16:  MHA 20 GiB   GQA n_kv = 8: 2.5 GiB   MQ
 time to stream the cache once at 3.35 TB/s:  MHA 6.410398949253731 ms   GQA 0.8012998686567164 ms per token
 ```
 
-![plot 3](plots/24-modern-architectural-variants/plot-3-841fcb35.svg)
+![plot 3](plots/24-modern-architectural-variants/plot-3-e66cf4ca.svg)
 
 <!-- rustlab:output-end -->
 
@@ -691,9 +695,9 @@ Every change is local. The training loop ([18-training-loop](18-training-loop.md
 delta = -40:40;
 tones = real((ones(81, 1) * (qz .* conj(kz))) .* exp(1i * delta' * theta));   % (81, 2): one tone per pair
 s_het = sum(tones, 2)';
-s_rot = zeros(81);
+s_rot = zeros(1, 81);
 for i = 1:81
-  s_rot(i) = rope_apply(q_fixed, delta(i), theta) * rope_apply(k_fixed, 0, theta)';
+  s_rot(i) = sum(rope_apply(q_fixed, delta(i), theta) .* rope_apply(k_fixed, 0, theta));
 end
 print("max |heterodyne s(delta) - rotated dot product| over 81 offsets:", max(abs(s_het - s_rot)));
 figure();
@@ -709,10 +713,10 @@ xlabel("offset delta = m - n (tokens)"); ylabel("score")
 
 <!-- rustlab:output-start -->
 ```text
-max |heterodyne s(delta) - rotated dot product| over 81 offsets: 0.0000000000000004440892098500626
+max |heterodyne s(delta) - rotated dot product| over 81 offsets: 0.0000000000000002220446049250313
 ```
 
-![plot 5](plots/24-modern-architectural-variants/plot-5-7da728a1.svg)
+![plot 5](plots/24-modern-architectural-variants/plot-5-1b74106f.svg)
 
 <!-- rustlab:output-end -->
 
@@ -744,8 +748,8 @@ xlabel("frequency bin"); ylabel("amplitude")
 
 <!-- rustlab:output-start -->
 ```text
-pure product  — amplitude at bins 5, 15, 25, 35, 45: 0.00000000000000003855076336535854 0.5000000000000002 0.5000000000000004 0.00000000000000004203848670399389 0.0000000000000000302517240521295
-SiLU(u) .* v  — amplitude at bins 5, 15, 25, 35, 45: 0.11778570696201043 0.25 0.2500000000000002 0.057737830547187646 0.05773783054718766
+pure product  — amplitude at bins 5, 15, 25, 35, 45: 0.000000000000000034973644640795726 0.5000000000000001 0.5000000000000004 0.000000000000000039511463312855584 0.00000000000000002801401210239103
+SiLU(u) .* v  — amplitude at bins 5, 15, 25, 35, 45: 0.11778570696201043 0.25 0.2500000000000002 0.05773783054718766 0.05773783054718766
 ```
 
 ![plot 6](plots/24-modern-architectural-variants/plot-6-3a05161a.svg)
@@ -782,12 +786,12 @@ xlabel("concurrent sequences B"); ylabel("tokens / s per sequence (upper bound)"
 
 <!-- rustlab:output-start -->
 ```text
-per-sequence tok/s bound at B = 1:   MHA 20.746266557854206   GQA 23.478397546321705   MQA 23.871357867548976
+per-sequence tok/s bound at B = 1:   MHA 20.746266557854202   GQA 23.478397546321705   MQA 23.871357867548976
 per-sequence tok/s bound at B = 32:  MHA 4.049832194528451   GQA 14.829613544726106   MQA 22.22407706801918
 batch at which the MHA cache equals the weights: 6.51925802230835   GQA: 52.1540641784668
 ```
 
-![plot 7](plots/24-modern-architectural-variants/plot-7-d46020fe.svg)
+![plot 7](plots/24-modern-architectural-variants/plot-7-d108b3f4.svg)
 
 <!-- rustlab:output-end -->
 
@@ -834,8 +838,10 @@ print("max row entropy under the window:", max(H_band), "bits  <=  log2(W) =", l
 
 <!-- rustlab:output-start -->
 ```text
-row entropies (bits), causal: [1×12]  0.000000  0.257843  1.468474  1.714810  1.908626  2.449971  1.896044  2.540269  ... (12 total)
-row entropies (bits), W = 4:   [1×12]  0.000000  0.257843  1.468474  1.714810  1.488802  1.902453  1.302468  1.311680  ... (12 total)
+row entropies (bits), causal: Matrix(1x12)
+  [0.000000, 0.257843, 1.468474, 1.714810, 1.908626, 2.449971, 1.896044, 2.540269, ...]
+row entropies (bits), W = 4:   Matrix(1x12)
+  [0.000000, 0.257843, 1.468474, 1.714810, 1.488802, 1.902453, 1.302468, 1.311680, ...]
 max row entropy under the window: 1.902453015507306 bits  <=  log2(W) = 2   (causal rows reach 3.105238753872921 )
 ```
 
