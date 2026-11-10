@@ -166,10 +166,10 @@ T_big = 256;
 pre_big  = reshape(randn(T_big, d_model) * W1, 1, T_big * d_ff);
 post_big = gelu(pre_big);
 
-print("fraction pre  < 0:        ", mean(pre_big < 0));
+print("fraction pre  < 0:        ", mean(double(pre_big < 0)));
 print("min post:                 ", min(post_big));
-print("fraction |pre|  < 0.05:   ", mean(abs(pre_big) < 0.05));
-print("fraction |post| < 0.05:   ", mean(abs(post_big) < 0.05));
+print("fraction |pre|  < 0.05:   ", mean(double(abs(pre_big) < 0.05)));
+print("fraction |post| < 0.05:   ", mean(double(abs(post_big) < 0.05)));
 
 figure();
 subplot(1, 2, 1)
@@ -186,7 +186,7 @@ ylabel("count")
 ```
 
 > [!TIP]
-> Left: symmetric about zero — the He-initialised projection sends signed inputs into both half-spaces (${mean(pre_big < 0) * 100:%.1f}$ % negative). Right: the entire negative half has been folded into a spike just left of zero (nothing below ${min(post_big):%.3f}$), while the positive tail is unchanged. The fraction of values within $\pm 0.05$ of zero rises from ${mean(abs(pre_big) < 0.05) * 100:%.1f}$ % to ${mean(abs(post_big) < 0.05) * 100:%.1f}$ % — that pile-up is the "sparse gate" of the Engineering Lenses below.
+> Left: symmetric about zero — the He-initialised projection sends signed inputs into both half-spaces (${mean(double(pre_big < 0)) * 100:%.1f}$ % negative). Right: the entire negative half has been folded into a spike just left of zero (nothing below ${min(post_big):%.3f}$), while the positive tail is unchanged. The fraction of values within $\pm 0.05$ of zero rises from ${mean(double(abs(pre_big) < 0.05)) * 100:%.1f}$ % to ${mean(double(abs(post_big) < 0.05)) * 100:%.1f}$ % — that pile-up is the "sparse gate" of the Engineering Lenses below.
 
 ## Why $d_{\text{ff}} = 4 \cdot d_{\text{model}}$?
 
@@ -260,7 +260,7 @@ for m = 1:d_ff
   acc = acc + hidden_post(2, m) * W2(m, :);
 end
 print("max | slot sum - out(2,:) | =", max(abs(acc - out(2, :))));
-n_open = sum(reshape(hidden_post > 0.1, 1, T * d_ff));
+n_open = sum(reshape(double(hidden_post > 0.1), 1, T * d_ff));
 print("slots with output > 0.1:", n_open, "of", T * d_ff);
 
 figure();

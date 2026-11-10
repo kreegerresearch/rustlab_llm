@@ -331,7 +331,7 @@ title("Three of the sixteen phasors, before and after a shift of 3 tokens")
 
 <!-- rustlab:output-start -->
 ```text
-max |e^{j w d} z(t) - z(t+d)| = 0.00000000000000011102230246251565
+max |e^{j w d} z(t) - z(t+d)| = 0.00000000000000015700924586837752
 PE(10, 1:2) = [1×2]  -0.544021  -0.839072   [Im, Re] of z_0(10) = -0.5440211108893698 -0.8390715290764524
 ```
 
@@ -342,7 +342,7 @@ PE(10, 1:2) = [1×2]  -0.544021  -0.839072   [Im, Re] of z_0(10) = -0.5440211108
 > [!TIP]
 > Each pair advances by its own angle $\omega_k \delta$: the fast pair 0 swings 3 rad (almost half a turn), pair 2 about 0.95 rad, pair 4 only 0.3 rad. The same $\delta$ is read on three clocks of different rates.
 
-One complex multiply per pair reproduces the rotation identity to $1.1e-16$.
+One complex multiply per pair reproduces the rotation identity to $1.6e-16$.
 
 **Exact.** *Frequency ladder and spectrum.* The 16 rates $\omega_k = 10000^{-2k/d}$ are geometrically spaced — a straight line on a log axis, wavelengths $\lambda_k = 2\pi/\omega_k$ from $6.28$ to $35\,300$ tokens — constant-Q coverage from one token to the ten-thousand-token scale. Each column of PE is a single tone, so the DFT of a column shows one spectral line.
 

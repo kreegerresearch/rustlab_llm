@@ -40,7 +40,7 @@ shuffle_err = max(reshape(abs(out_perm - out(perm, :)), 1, T * d_model));
 print("max | FFN(P*H) - P*FFN(H) | =", shuffle_err);
 
 # === Slot heatmap: hidden_post is T x d_ff, one column per memory slot ===
-n_open = sum(reshape(hidden_post > 0.1, 1, T * d_ff));
+n_open = sum(reshape(double(hidden_post > 0.1), 1, T * d_ff));
 print("slots with output > 0.1:", n_open, "of", T * d_ff);
 figure();
 heatmap({"1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16"}, {"t=1","t=2","t=3","t=4","t=5"}, hidden_post, "hidden_post (T x d_ff): which slots fire per token")

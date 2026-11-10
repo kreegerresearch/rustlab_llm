@@ -218,7 +218,7 @@ Both axes are **token positions**: rows are the query positions $t$ (which token
 
 ```rustlab
 positions = {"t1", "t2", "t3", "t4", "t5"};
-M_ind = (M < 0);   % 1 where the causal mask blocks attention, 0 elsewhere
+M_ind = double(M < 0);   % 1 where the causal mask blocks attention, 0 elsewhere. Comparisons are logical (0.3.56); heatmap wants doubles.
 
 figure();
 subplot(1, 3, 1)
