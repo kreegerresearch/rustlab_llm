@@ -139,7 +139,7 @@ make notebooks          # regenerate book/<slug>.md from notebooks/<slug>.md
 make html               # build book/index.html for local Plotly view (gitignored)
 make notebooks-check    # CI drift guard
 make lesson-06          # run lesson 06's .rlab scripts (pattern target: lesson-NN for any 01–26)
-make sherlock-quick     # standalone Sherlock tutorial, every stage in a few minutes (make sherlock for the default model; make help lists the stages)
+make sherlock-quick     # standalone Sherlock tutorial, every stage in about 30 seconds (make sherlock for the default model; make help lists the stages)
 make clean              # delete the interactive HTML build and .rlab artefacts
 ```
 
@@ -159,14 +159,14 @@ Standalone scripts call `savefig("foo.svg")` next to themselves (gitignored). Ea
 [`tutorial/sherlock/`](tutorial/sherlock/) takes the curriculum's components off the toy corpora. It pre-trains a character-level GPT (811 k parameters by default: $d = 128$, 4 layers, 4 heads, context 128) on *The Adventures of Sherlock Holmes*, samples from it, fine-tunes it on hand-written Q/A pairs with prompt masking, and distils it into a half-size student. The model is [`lib/gpt.rlab`](lib/gpt.rlab) — the Lesson 14 architecture with the Lesson 15/22 backward pass generalised to any depth and head count — and every knob lives in [`tutorial/sherlock/config.rlab`](tutorial/sherlock/config.rlab).
 
 ```sh
-make sherlock-quick      # everything with a small model in a few minutes -> tutorial/sherlock/report.md
-make sherlock            # everything with the default model (about 30 minutes)
+make sherlock-quick      # everything with a small model in about 30 seconds -> tutorial/sherlock/report.md
+make sherlock            # everything with the default model (about 7 minutes)
 make sherlock-ask Q="Who is the woman?"   # then ask the fine-tuned model
 make sherlock-status     # progress report of a running or finished run
 
 # the same, one stage at a time
 make sherlock-data       # one-time corpus step (Python 3, standard library only)
-make sherlock-train      # pre-train: about 20 minutes at the defaults
+make sherlock-train      # pre-train: about 5 minutes at the defaults
 make sherlock-generate   # three samples from the checkpoint
 make sherlock-sft        # supervised fine-tuning + forgetting probe
 make sherlock-distill    # distil into a half-size student
@@ -174,7 +174,7 @@ make sherlock-report     # assemble report.md from the stage logs and figures
 make sherlock-bench      # throughput at several model sizes
 ```
 
-Expect word-shaped, Sherlock-flavoured text after the 20-minute default run (2.2 bits per character; spelling and names need a longer run or more books), memorised answers after SFT (43 of 46 questions on the recorded run), and no reasoning — this is a 0.8 M-parameter character model. A complete run is committed under [`tutorial/sherlock/example-run/`](tutorial/sherlock/example-run/). The tutorial page — parameter table, what every printed number means and what good values look like, resuming, scaling to the full canon, troubleshooting — is [`tutorial/sherlock/README.md`](tutorial/sherlock/README.md). Measured throughput and what rustlab would need to go faster are in [`docs/sherlock-performance-and-rustlab-requests.md`](docs/sherlock-performance-and-rustlab-requests.md).
+Expect word-shaped, Sherlock-flavoured text after the 5-minute default run (2.2 bits per character; spelling and names need a longer run or more books), memorised answers after SFT (43 of 46 questions on the recorded run), and no reasoning — this is a 0.8 M-parameter character model. A complete run is committed under [`tutorial/sherlock/example-run/`](tutorial/sherlock/example-run/). The tutorial page — parameter table, what every printed number means and what good values look like, resuming, scaling to the full canon, troubleshooting — is [`tutorial/sherlock/README.md`](tutorial/sherlock/README.md). Measured throughput and what rustlab would need to go faster are in [`docs/sherlock-performance-and-rustlab-requests.md`](docs/sherlock-performance-and-rustlab-requests.md).
 
 ---
 

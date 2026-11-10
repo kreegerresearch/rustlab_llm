@@ -138,6 +138,9 @@ Notes: <behaviour changes, new builtins the library should adopt, caveats>
 
 | Iteration | Report | Requests | Training step |
 |---|---|---|---|
-| 00 baseline | [`perf/reports/00-baseline.md`](../perf/reports/00-baseline.md) | [`perf/iterations/01-requests.md`](../perf/iterations/01-requests.md) | 2,250 tok/s (rustlab 0.3.9) |
+| 00 baseline | [`perf/reports/00-baseline.md`](../perf/reports/00-baseline.md) | [`perf/iterations/01-requests.md`](../perf/iterations/01-requests.md) | 2,246 tok/s (rustlab 0.3.9) |
+| 01 rustlab 0.3.10 | [`perf/reports/01-iter01.md`](../perf/reports/01-iter01.md) | 01: R1, R2, R4 met, R3 partly met | 8,859 tok/s (3.94×) |
+| 01b library adoption | [`perf/reports/02-iter01b.md`](../perf/reports/02-iter01b.md) | `gelu_grad` builtin; vectorized positional encoding | 9,967 tok/s (4.44×) |
+| 03 suite v2, same binary | [`perf/reports/03-suite-v2.md`](../perf/reports/03-suite-v2.md) | [`perf/iterations/02-requests.md`](../perf/iterations/02-requests.md), open | 9,542 tok/s (within noise of 01b) |
 
 Update this table at the end of every turn.

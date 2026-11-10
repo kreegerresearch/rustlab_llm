@@ -60,14 +60,15 @@ function P = gpt_init(cfg, std)
 end
 
 function PE = gpt_sinusoidal_pe(T_max, d)
+  # Angles (t-1)*omega_k for every position and frequency at once; sine in
+  # the odd columns, cosine in the even ones.  Bit-identical to the
+  # double loop it replaced (perf flywheel 01b), about 100x faster.
+  k = 0:(d / 2 - 1);
+  omega = 10000.0 .^ (-2 * k / d);
+  A = outer(0:(T_max - 1), omega);
   PE = zeros(T_max, d);
-  for t = 1:T_max
-    for k = 0:(d / 2 - 1)
-      omega = 10000.0 ^ (-2 * k / d);
-      PE(t, 2 * k + 1) = sin((t - 1) * omega);
-      PE(t, 2 * k + 2) = cos((t - 1) * omega);
-    end
-  end
+  PE(:, 1:2:d) = sin(A);
+  PE(:, 2:2:d) = cos(A);
 end
 
 # Number of trainable scalars (everything except PE).
@@ -160,11 +161,11 @@ end
 
 # Derivative of the tanh-approximation GELU (matches the gelu builtin).
 function y = gpt_gelu_grad(z)
-  c = sqrt(2.0 / pi);
-  u = c * (z + 0.044715 * z .^ 3);
-  th = tanh(u);
-  du = c * (1.0 + 0.044715 * 3.0 * z .^ 2);
-  y = 0.5 * (1.0 + th) + 0.5 * z .* (1.0 - th .^ 2) .* du;
+  # d/dz gelu(z) for the tanh approximation.  The builtin (rustlab >= 0.3.10)
+  # evaluates the same formula as the expression it replaced, bit for bit:
+  #   0.5 (1 + tanh u) + 0.5 z (1 - tanh^2 u) sqrt(2/pi) (1 + 3 * 0.044715 z^2),
+  #   u = sqrt(2/pi) (z + 0.044715 z^3)
+  y = gelu_grad(z);
 end
 
 # === Forward pass for one sequence ===

@@ -51,7 +51,7 @@ Then the next turn starts from the new numbers.
 
 `gate.rlab` is the correctness gate. A finite-difference gradient check must stay below 1e-6. A fixed-seed, fully serial 25-step AdamW run must also reproduce `reference/gate.json` to within a relative 1e-6. The reference is written by the first recorded run on unmodified rustlab 0.3.9. Rounding differences from reordered sums, as BLAS or threading may cause, pass. Wrong arithmetic does not. A change that alters precision on purpose, such as an `f32` mode, needs its own looser gate, agreed in that iteration's requests.
 
-`profile_step.rlab` runs under `rustlab run --profile`. In 0.3.9 the profiler records only the outermost user functions, so the whole forward and backward pass appears as a single `gpt_grad_flat` row. Fixing that is one of the first requests, because it is what lets the loop see inside the model without hand-instrumenting it.
+`profile_step.rlab` runs under `rustlab run --profile`. Since rustlab 0.3.10, the profile shows nested user functions with inclusive and self time, a `[matmul]` row, and `parmap:<name>` rows for worker CPU time. `rustlab run --profile=ops` adds operator and indexing rows. `run.py` stores the table and sorts the report by self time. In 0.3.9 the profiler recorded only outermost user functions; fixing that was iteration 01's R2.
 
 ## Rules
 
@@ -65,8 +65,8 @@ Then the next turn starts from the new numbers.
 
 | | Baseline (rustlab 0.3.9) | Goal |
 |---|---:|---:|
-| `e2e.train_step_B8` | 2,250 tok/s | 17,000 tok/s, roughly PyTorch on the same CPU |
-| Default Sherlock run (3,000 steps) | 20 min | under 3 min |
+| `e2e.train_step_B8` | 2,246 tok/s on 0.3.9; 9,967 after iteration 01 | 17,000 tok/s, roughly PyTorch on the same CPU |
+| Default Sherlock run (3,000 steps) | 20 min on 0.3.9; about 5 min after iteration 01 | under 3 min |
 
 ## Files
 
