@@ -166,7 +166,7 @@ make sherlock-status     # progress report of a running or finished run
 
 # the same, one stage at a time
 make sherlock-data       # one-time corpus step (Python 3, standard library only)
-make sherlock-train      # pre-train: about 3 minutes at the defaults
+make sherlock-train      # pre-train: about 1.5 minutes at the defaults
 make sherlock-generate   # three samples from the checkpoint
 make sherlock-sft        # supervised fine-tuning + forgetting probe
 make sherlock-distill    # distil into a half-size student

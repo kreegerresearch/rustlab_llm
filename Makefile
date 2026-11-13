@@ -56,10 +56,10 @@ define sherlock_stage
 	cd $(SHERLOCK) && set -o pipefail && rustlab run $(1).rlab --plot none 2>&1 | tee $(1).log
 endef
 
-sherlock: sherlock-doctor sherlock-data sherlock-train sherlock-generate sherlock-sft sherlock-distill sherlock-report ## Sherlock: run every stage with the selected preset (default: ~4 min on rustlab 0.3.11), then write report.md
+sherlock: sherlock-doctor sherlock-data sherlock-train sherlock-generate sherlock-sft sherlock-distill sherlock-report ## Sherlock: run every stage with the selected preset (default: ~2 min on rustlab 0.3.64), then write report.md
 	@echo; echo "all stages done -> $(SHERLOCK)/report.md   (ask it something: make sherlock-ask Q=\"Who is the woman?\")"
 
-sherlock-quick: ## Sherlock: everything with the 20-second preset (small model, 400 steps, checkpoints-quick/)
+sherlock-quick: ## Sherlock: everything with the 15-second preset (small model, 400 steps, checkpoints-quick/)
 	@$(MAKE) --no-print-directory sherlock-preset PRESET=quick
 	@$(MAKE) --no-print-directory sherlock
 
@@ -77,7 +77,7 @@ sherlock-doctor: ## Sherlock: check rustlab >= 0.3.11, python3, the corpus and t
 sherlock-data: ## Sherlock step 0: python3 prepare_corpus.py -> data/ids.csv + data/vocab.rlab (about a second)
 	cd $(SHERLOCK) && python3 prepare_corpus.py data/adventures.txt
 
-sherlock-train: ## Sherlock step 1: pre-train the character GPT (config.rlab + preset; ~3 min at the defaults on rustlab 0.3.11) -> train.log
+sherlock-train: ## Sherlock step 1: pre-train the character GPT (config.rlab + preset; ~1.5 min at the defaults on rustlab 0.3.64) -> train.log
 	@mkdir -p $(SHERLOCK)/checkpoints $(SHERLOCK)/checkpoints-quick
 	$(call sherlock_stage,train)
 

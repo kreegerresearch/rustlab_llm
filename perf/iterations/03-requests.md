@@ -224,11 +224,19 @@ These are not requests to rustlab. They are done after rustlab's changes land, s
 | Threaded dgemm for large products | Superseded by R1: the matrix unit does not scale with threads, as PyTorch shows. |
 | Parallel math builtins inside `parmap` workers | rustlab found them neutral there, because the cores are already busy. |
 
-## Outcome (filled in after verification)
+## Outcome (measured 2026-11-12, rustlab 0.3.64)
 
-| # | Status | Measured | Note |
+Measured as run 10, [`perf/reports/10-v0.3.64.md`](../reports/10-v0.3.64.md), on rustlab 0.3.64 (source `1c45aa6`), after this repo merged the 0.3.43–0.3.63 compatibility branch. rustlab's response notes for 0.3.17–0.3.64 have not been read here, so the statuses come only from the keys.
+
+| # | Status | Measured (run 10) | Note |
 |---|---|---|---|
-| R1 | open | | |
-| R2 | open | | |
-| R3 | open | | |
-| R4 | open | | |
+| R1 | nearly met | `prim.matmul_512x512x512` 384 GFLOP/s (target 400); `prim.matmul_129x128x512` 231 (200); `prim.matmul_A_Bt_129x128x128` 134 (150) | 5–7× over run 08 at every matmul shape. |
+| R2 | storage met, ratio not met | `parmap` out 50,688 KB (target ≈ 50,688); `par.grad_flat_B8` = 2.39 × `model.grad_flat` (1.4) | The ratio got worse because the serial window got 2.7× faster while packing and the shared matrix unit did not keep pace. |
+| R3 | not met | `par.alloc_window_B8` 0.84 ms (target 0.6) | 1.85× faster than run 08. |
+| R4 | partly met | `flat.sumsq_811k` 0.25 ms (0.4), `flat.clip_811k` 0.29 (0.6) met; `flat.adamw_811k` 1.94 (1.5), `flat.unflatten_811k` 1.23 (0.8) not | The tail is now about 5.5 ms of a 28.4 ms step. |
+
+**Training step:** 19,310 → 36,050 tok/s (28.4 ms per step), 1.95× over run 08 and 16.05× the 0.3.9 baseline. That is past the 26,000 success line and the 35,000 goal (PyTorch `float64`, 34,300–37,200). By the stopping rule the flywheel pauses here. A new goal would be PyTorch `float32` (55,000–62,000), which needs an `f32` mode.
+
+**Real tutorial:** `make sherlock` took 2 min 3 s for every stage. Pre-training took 88 s at 34,871 tok/s and reached the same 2.203 held-out bits/char. SFT scored 40 / 46 (42 on 0.3.11), the known last-digit sensitivity. `make sherlock-quick` took 15 s.
+
+**Run 03b library items:** not done yet. The batched-step prototype is now the most interesting one, because `parmap` efficiency fell to 42 % once the matrix unit was shared.

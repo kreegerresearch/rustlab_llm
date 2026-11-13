@@ -60,12 +60,13 @@ Then the next turn starts from the new numbers.
 | | tok/s |
 |---|---:|
 | rustlab 0.3.16 | 18,350–18,970 |
+| rustlab 0.3.64 (run 10, 2026-11-12) | 36,050 |
 | PyTorch `float64`, 1 thread | 18,140–19,450 |
 | PyTorch `float64`, 10 threads | 34,300–37,190 |
 | PyTorch `float32`, 10 threads, fused attention | 61,950–62,110 |
 | PyTorch `float32`, GPU (MPS) | 172,700–178,000 |
 
-PyTorch's CPU build multiplies matrices through Apple Accelerate on the M4's matrix unit, at 330–810 GFLOP/s in `float64` against rustlab's 42–56. See `iterations/03-requests.md`.
+PyTorch's CPU build multiplies matrices through Apple Accelerate on the M4's matrix unit, at 330–810 GFLOP/s in `float64` against rustlab's 42–56 in 0.3.16. By 0.3.64 rustlab reaches 130–384 GFLOP/s at the same shapes (run 10). See `iterations/03-requests.md`.
 
 ## Rules
 
@@ -79,8 +80,8 @@ PyTorch's CPU build multiplies matrices through Apple Accelerate on the M4's mat
 
 | | Baseline (rustlab 0.3.9) | Goal |
 |---|---:|---:|
-| `e2e.train_step_B8` | 2,246 tok/s on 0.3.9; 9,967 after iteration 01; 19,310 after iteration 02 | 17,000 tok/s, an unmeasured guess at PyTorch: reached in iteration 02. Now 35,000 tok/s, PyTorch `float64` measured on the same CPU (`make perf-torch`). |
-| Default Sherlock run (3,000 steps) | 20 min on 0.3.9; 5 min after iteration 01; 177 s after iteration 02 | under 3 min: reached. Now under 2 min. |
+| `e2e.train_step_B8` | 2,246 tok/s on 0.3.9; 9,967 after iteration 01; 19,310 after iteration 02; 36,050 on 0.3.64 (run 10) | 17,000 tok/s, an unmeasured guess at PyTorch: reached in iteration 02. Then 35,000 tok/s, PyTorch `float64` measured on the same CPU (`make perf-torch`): reached in run 10. |
+| Default Sherlock run (3,000 steps) | 20 min on 0.3.9; 5 min after iteration 01; 177 s after iteration 02; 88 s on 0.3.64 (2 min 3 s for every stage) | under 3 min: reached. Then under 2 min: reached in run 10. |
 
 ## Files
 
