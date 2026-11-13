@@ -16,21 +16,21 @@ run "../../lib/transformer.rlab"
 # === 1. Corpus and parameters (identical to full_backprop.rlab) ===
 seed(24);
 vocab = 2;  d_model = 4;  d_ff = 8;  T_max = 16;
-pat = [1, 2, 2];  T = 12;  ids = zeros(T);
+pat = [1, 2, 2];  T = 12;  ids = zeros(1, T);
 for i = 1:T
   ids(i) = pat(mod(i - 1, 3) + 1);
 end
-mask = ones(T - 1);
+mask = ones(1, T - 1);
 E = randn(vocab, d_model) * 0.3;
 PE = sinusoidal_pe(T_max, d_model);
 Wq = randn(d_model, d_model) * 0.3;  Wk = randn(d_model, d_model) * 0.3;
 Wv = randn(d_model, d_model) * 0.3;  Wo = randn(d_model, d_model) * 0.3;
 W1 = randn(d_model, d_ff) * 0.3;     W2 = randn(d_ff, d_model) * 0.3;
 W_U = randn(d_model, vocab) * 0.3;
-P = struct("E", E, "PE", PE, "gamma1", ones(d_model), "beta1", zeros(d_model), ...
-           "gamma2", ones(d_model), "beta2", zeros(d_model), ...
-           "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", zeros(d_ff), ...
-           "W2", W2, "b2f", zeros(d_model), "W_U", W_U);
+P = struct("E", E, "PE", PE, "gamma1", ones(1, d_model), "beta1", zeros(1, d_model), ...
+           "gamma2", ones(1, d_model), "beta2", zeros(1, d_model), ...
+           "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", zeros(1, d_ff), ...
+           "W2", W2, "b2f", zeros(1, d_model), "W_U", W_U);
 
 # === 2. Analytical gradient at W_U(1, 1) ===
 [logits_0, L_0, cache] = transformer_forward(ids, mask, P);
@@ -41,7 +41,7 @@ print("analytical dL/dW_U(1,1) =", ana_WU);
 
 # === 3. Sweep eps from 1e-1 to 1e-9 ===
 eps_list = logspace(-1, -9, 9);
-rel_list = zeros(9);
+rel_list = zeros(1, 9);
 for k = 1:9
   e = eps_list(k);
   Wp = P.W_U;  Wp(1, 1) = Wp(1, 1) + e;  Pp = P;  Pp.W_U = Wp;

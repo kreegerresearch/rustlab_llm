@@ -42,7 +42,7 @@ end
 # matrix A: returns a vector with one entry per row.
 function Hs = row_entropies_bits(A)
   T = size(A)(1);
-  Hs = zeros(T);
+  Hs = zeros(1, T);
   for t = 1:T
     Hs(t) = entropy_bits(A(t, :));
   end

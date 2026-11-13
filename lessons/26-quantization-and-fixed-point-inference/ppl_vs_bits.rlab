@@ -23,18 +23,18 @@ seed(22);
 d_model = 4;  d_ff = 8;  T_max = T + 16;
 E = randn(vocab, d_model) * 0.3;
 PE = sinusoidal_pe(T_max, d_model);
-gamma1 = ones(d_model);   beta1 = zeros(d_model);
-gamma2 = ones(d_model);   beta2 = zeros(d_model);
+gamma1 = ones(1, d_model);   beta1 = zeros(1, d_model);
+gamma2 = ones(1, d_model);   beta2 = zeros(1, d_model);
 Wq = randn(d_model, d_model) * 0.3;
 Wk = randn(d_model, d_model) * 0.3;
 Wv = randn(d_model, d_model) * 0.3;
 Wo = randn(d_model, d_model) * 0.3;
-W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
-W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(1, d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(1, d_model);
 W_U = randn(d_model, vocab) * 0.3;
 P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
-mask_train = ones(T - 1);
+mask_train = ones(1, T - 1);
 n_train = 600;  T_w = 60;  eta_max = 0.05;  eta_min = 0.005;
 bet1 = 0.9;  bet2 = 0.999;  eps_a = 1e-8;
 [M, V] = adamw_init(P);
@@ -105,7 +105,7 @@ bits = 2:8;
 n_b = length(bits);
 n_q = 272;                                  # parameters in the eight matrices
 SNR_t = zeros(n_b, 8);  SNR_r = zeros(n_b, 8);
-L_t = zeros(n_b);  L_r = zeros(n_b);  KL_t = zeros(n_b);  KL_r = zeros(n_b);
+L_t = zeros(1, n_b);  L_r = zeros(1, n_b);  KL_t = zeros(1, n_b);  KL_r = zeros(1, n_b);
 for i = 1:n_b
   for k = 1:8
     W = mat_k(P, k);

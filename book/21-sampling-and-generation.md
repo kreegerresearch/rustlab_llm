@@ -46,7 +46,7 @@ vocab = 3;
 d_emb = 4;
 
 pat = [1, 2, 3, 2];
-corpus = zeros(60);
+corpus = zeros(1, 60);
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
 end
@@ -71,7 +71,7 @@ After training, the bigram structure is exact: `P(b|a) ≈ P(b|c) ≈ 1` and `P(
 
 ```rustlab
 function seq = greedy_generate(x0, n_new, E, W)
-  seq = zeros(n_new + 1);
+  seq = zeros(1, n_new + 1);
   seq(1) = x0;
   for t = 1:n_new
     p = softmax(E(seq(t), :) * W);
@@ -197,8 +197,9 @@ print("mass kept before renormalising:", sum(sort(p_base)(8:10)), "  support:", 
 
 <!-- rustlab:output-start -->
 ```text
-top-K=3: [1×10]  0.506480  0.307196  0.186324  0.000000  0.000000  0.000000  0.000000  0.000000  ... (10 total)
-mass kept before renormalising: 0.7821398567522391   support: 3
+top-K=3: Matrix(1x10)
+  [0.506480, 0.307196, 0.186324, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, ...]
+mass kept before renormalising: 0.782139856752239   support: 3
 ```
 
 <!-- rustlab:output-end -->
@@ -245,7 +246,7 @@ xlabel("token"); ylabel("probability"); ylim([0, 1])
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/21-sampling-and-generation/plot-1-6c11ff5c.svg)
+![plot 1](plots/21-sampling-and-generation/plot-1-a51ae130.svg)
 
 <!-- rustlab:output-end -->
 
@@ -256,7 +257,7 @@ A useful summary number is the **entropy** of each transformed distribution: hig
 
 ```rustlab
 function q = greedy_dist(z)
-  q = zeros(length(z));
+  q = zeros(1, length(z));
   q(argmax(z)) = 1.0;
 end
 print("H greedy   :", entropy_nats(greedy_dist(logits)), "nats  ", entropy_bits(greedy_dist(logits)), "bits");
@@ -300,7 +301,7 @@ saveanim("temperature_sweep.gif", 8)
 ```
 
 <!-- rustlab:output-start -->
-![animation 2](plots/21-sampling-and-generation/anim-2-6a1dacd6.gif)
+![animation 2](plots/21-sampling-and-generation/anim-2-09550359.gif)
 
 <!-- rustlab:output-end -->
 
@@ -315,7 +316,7 @@ Run the trained Lesson 18 model under three temperatures and observe what change
 % sample_categorical(p) is the inverse-CDF draw from lib/sampling.rlab: walk
 % the cumulative distribution until it crosses r ~ U[0, 1).
 function seq = temperature_generate(x0, n_new, E, W, tau)
-  seq = zeros(n_new + 1);
+  seq = zeros(1, n_new + 1);
   seq(1) = x0;
   for t = 1:n_new
     p = softmax(E(seq(t), :) * W / tau);
@@ -345,7 +346,7 @@ logits at 'b': [1×3]  8.391505  -8.841305  8.391505
 tau = 0.5   P(. | b) = [1×3]  0.500000  0.000000  0.500000   H = 1.0000000000000275 bits
 tau = 1   P(. | b) = [1×3]  0.500000  0.000000  0.500000   H = 1.000000431403955 bits
 tau = 2   P(. | b) = [1×3]  0.499955  0.000091  0.499955   H = 1.001256212153058 bits
-tau = 5   P(. | b) = [1×3]  0.492161  0.015678  0.492161   H = 1.1007526326437544 bits
+tau = 5   P(. | b) = [1×3]  0.492161  0.015678  0.492161   H = 1.1007526326437542 bits
 ```
 
 <!-- rustlab:output-end -->
@@ -444,7 +445,7 @@ tokens = [1, 4, 2, 5, 3, 6, 2, 1];               % pretend the sampler already c
 X = E_tok(tokens, :) + E_pos;                     % T x d_head: token + position (Lesson 10)
 
 K_cache = zeros(0, d_head);  V_cache = zeros(0, d_head);
-max_diff = 0.0;  naive_flops = zeros(T);  cached_flops = zeros(T);
+max_diff = 0.0;  naive_flops = zeros(1, T);  cached_flops = zeros(1, T);
 for t = 1:T
   % naive: recompute Q, K, V for the whole prefix, mask, take the last row
   Xt = X(1:t, :);
@@ -473,8 +474,9 @@ print("cache at t = 8: K and V each", size(K_cache)(1), "x", d_head, " ->", 2 * 
 
 <!-- rustlab:output-start -->
 ```text
-max | naive_out - cached_out | over 8 steps = 0.000000000000000027755575615628914   (round-off: same arithmetic, different order)
-per-step FLOP ratio naive / cached: [1×8]  1.000000  2.000000  3.000000  4.000000  5.000000  6.000000  7.000000  8.000000
+max | naive_out - cached_out | over 8 steps = 0   (round-off: same arithmetic, different order)
+per-step FLOP ratio naive / cached: Matrix(1x8)
+  [1.000000, 2.000000, 3.000000, 4.000000, 5.000000, 6.000000, 7.000000, 8.000000]
 cumulative FLOPs at T=8 — naive: 3564   cached: 708   ratio: 5.033898305084746
 cache at t = 8: K and V each 8 x 4  -> 64 numbers of state
 ```
@@ -483,7 +485,7 @@ cache at t = 8: K and V each 8 x 4  -> 64 numbers of state
 
 Two diagnostics matter:
 
-1. **Equivalence.** The maximum elementwise difference between naive and cached outputs over all eight steps is $2.8e-17$ — floating-point round-off. Not a numerical approximation, a different ordering of the same arithmetic.
+1. **Equivalence.** The maximum elementwise difference between naive and cached outputs over all eight steps is $0.0e+00$: zero, or at most floating-point round-off, depending on how the matrix-multiply kernel orders its sums. The cache is not a numerical approximation, only a different ordering of the same arithmetic.
 2. **Speedup ratio at step $t$.** The per-step FLOP ratio is exactly $t$ for this configuration — at step 8 the cached version does 8× less work; at step 1024 it would do 1024× less. The cumulative ratio at $T$ is roughly $2T/3$ (at $T=8$ it is $5.03$; the projections dominate at small $t$, the attention quadratic at large $t$).
 
 ### Connection to real systems
@@ -544,7 +546,7 @@ The penalty over a 4-token window breaks the tie at `b` whenever the window hold
 ```rustlab
 n_tau = 60;
 taus_s = logspace(-1.5, 2, n_tau);
-H_10 = zeros(n_tau);  H_b = zeros(n_tau);
+H_10 = zeros(1, n_tau);  H_b = zeros(1, n_tau);
 for k = 1:n_tau
   H_10(k) = entropy_bits(softmax(logits / taus_s(k)));
   H_b(k)  = entropy_bits(softmax(logits_b / taus_s(k)));
@@ -572,10 +574,10 @@ ylabel("H [bits]")
 
 <!-- rustlab:output-start -->
 ```text
-dH/dln(tau) at tau=1: 0.808682795298878 nats   Var_q(z) = 0.8086827002533895
+dH/dln(tau) at tau=1: 0.808682795298767 nats   Var_q(z) = 0.8086827002533895
 ```
 
-![plot 3](plots/21-sampling-and-generation/plot-3-ae9f5772.svg)
+![plot 3](plots/21-sampling-and-generation/plot-3-ff65cd5b.svg)
 
 <!-- rustlab:output-end -->
 
@@ -602,7 +604,7 @@ function nxt = argmax_step(x, E, W)
   nxt = argmax(softmax(E(x, :) * W));
 end
 for s = 1:3
-  orbit = zeros(9);  orbit(1) = s;
+  orbit = zeros(1, 9);  orbit(1) = s;
   for t = 1:8
     orbit(t + 1) = argmax_step(orbit(t), E, W);
   end
@@ -668,7 +670,7 @@ print("entropy rate of the sampled stream = sum_i pi_i H(row i) =", dot(pi_stat,
 ```text
 H(P(.|b)) in bits under each control:
   greedy 0   tau=0.5 1.0000000000000275   tau=1 1.000000431403955   tau=2 1.001256212153058
-  top-K=2 1   top-P=0.9 1   penalty rho=2 on 'a' x2 0.019413435029058908
+  top-K=2 1   top-P=0.9 1   penalty rho=2 on 'a' x2 0.019413435029058807
 eigenvalues of P_hat': [1×3]  -1.000000  1.000000  -0.000000   stationary pi = [1×3]  0.250000  0.500000  0.250000
 entropy rate of the sampled stream = sum_i pi_i H(row i) = 0.5000004951647452 bits/token  (corpus: 0.5)
 ```

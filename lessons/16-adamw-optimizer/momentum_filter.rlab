@@ -17,7 +17,7 @@ n_h = 10000;  n_f = 2048;          # impulse-response taps, frequency points
 ks = 0:(n_h - 1);  t_st = 1:1000;
 
 # === Frequency response of the EMA for three betas ===
-H_db = zeros(3, n_f - 1);  f3 = zeros(3);
+H_db = zeros(3, n_f - 1);  f3 = zeros(1, 3);
 for i = 1:3
   b = betas(i);
   R = freqz((1 - b) * b .^ ks, n_f, 1.0);   # row 1: f (cycles/step); row 2: H(f)

@@ -1,0 +1,85 @@
+<svg width="900" height="500" viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="900" height="500" opacity="1" fill="#1E1E2E" stroke="none"/>
+<text x="450" y="25" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="17.741935483870968" opacity="1" fill="#CDD6F4">
+One distribution, three perplexities
+</text>
+<text x="20" y="238" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4" transform="rotate(270, 20, 238)">
+PPL (log axis)
+</text>
+<text x="488" y="480" dy="-0.5ex" text-anchor="middle" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+probability on the favoured class
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="95,47 95,429 "/>
+<text x="86" y="398" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+1
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="90,398 95,398 "/>
+<text x="86" y="306" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+10
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="90,306 95,306 "/>
+<text x="86" y="215" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+100
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="90,215 95,215 "/>
+<text x="86" y="123" dy="0.5ex" text-anchor="end" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+1000
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="90,123 95,123 "/>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="96,430 879,430 "/>
+<text x="148" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.3
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="148,430 148,435 "/>
+<text x="252" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.4
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="252,430 252,435 "/>
+<text x="357" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.5
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="357,430 357,435 "/>
+<text x="461" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.6
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="461,430 461,435 "/>
+<text x="566" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.7
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="566,430 566,435 "/>
+<text x="670" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.8
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="670,430 670,435 "/>
+<text x="775" y="440" dy="0.76em" text-anchor="middle" font-family="sans-serif" font-size="9.67741935483871" opacity="1" fill="#CDD6F4">
+0.9
+</text>
+<polyline fill="none" opacity="1" stroke="#CDD6F4" stroke-width="1" points="775,430 775,435 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="96,429 879,429 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="96,353 879,353 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="96,277 879,277 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="96,200 879,200 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="96,124 879,124 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="96,47 879,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="252,429 252,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="409,429 409,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="565,429 565,47 "/>
+<polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="722,429 722,47 "/>
+<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="96,343 111,343 127,343 143,343 159,343 175,343 191,343 207,344 223,344 239,344 255,345 271,345 287,346 303,346 319,347 335,347 351,348 367,349 383,349 399,350 415,351 431,352 447,353 463,354 479,355 495,355 511,356 527,358 543,359 559,360 575,361 591,362 607,363 623,365 639,366 655,368 671,369 687,371 703,372 719,374 735,376 751,377 767,379 783,381 799,383 815,386 831,388 847,391 863,394 879,397 "/>
+<polyline fill="none" opacity="1" stroke="#2CA02C" stroke-width="2" points="96,343 111,345 127,347 143,349 159,351 175,353 191,355 207,357 223,358 239,360 255,362 271,363 287,364 303,366 319,367 335,368 351,370 367,371 383,372 399,373 415,374 431,375 447,376 463,377 479,378 495,379 511,380 527,381 543,382 559,383 575,384 591,385 607,386 623,386 639,387 655,388 671,389 687,390 703,390 719,391 735,392 751,392 767,393 783,394 799,395 815,395 831,396 847,396 863,397 879,398 "/>
+<polyline fill="none" opacity="1" stroke="#D62728" stroke-width="2" points="96,343 111,342 127,341 143,340 159,339 175,338 191,337 207,336 223,336 239,335 255,334 271,332 287,331 303,330 319,329 335,328 351,327 367,326 383,324 399,323 415,322 431,320 447,319 463,317 479,316 495,314 511,313 527,311 543,309 559,307 575,305 591,303 607,301 623,298 639,296 655,293 671,290 687,287 703,283 719,280 735,275 751,271 767,266 783,259 799,252 815,244 831,232 847,217 863,190 879,79 "/>
+<rect x="613" y="52" width="262" height="66" opacity="0.85" fill="#1E1E2E" stroke="none"/>
+<rect x="613" y="52" width="262" height="66" opacity="0.3" fill="none" stroke="#CDD6F4"/>
+<text x="653" y="62" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+2^H(q): the distribution&apos;s own PPL
+</text>
+<text x="653" y="80" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+model on data, truth = favoured class (1/p)
+</text>
+<text x="653" y="97" dy="0.76em" text-anchor="start" font-family="sans-serif" font-size="11.290322580645162" opacity="1" fill="#CDD6F4">
+model on data, truth = tail class
+</text>
+<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="623,67 643,67 "/>
+<polyline fill="none" opacity="1" stroke="#2CA02C" stroke-width="2" points="623,85 643,85 "/>
+<polyline fill="none" opacity="1" stroke="#D62728" stroke-width="2" points="623,102 643,102 "/>
+</svg>

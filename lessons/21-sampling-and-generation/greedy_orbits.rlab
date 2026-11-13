@@ -19,7 +19,7 @@ run "../../lib/bigram_lm.rlab"
 # === 1. Train the model ===
 seed(18);
 pat = [1, 2, 3, 2];
-corpus = zeros(60);
+corpus = zeros(1, 60);
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
 end
@@ -41,7 +41,7 @@ for s = 1:3
   print("argmax map:", names(s), "->", names(argmax_step(s, E, W)));
 end
 for s = 1:3
-  orbit = zeros(9);  orbit(1) = s;
+  orbit = zeros(1, 9);  orbit(1) = s;
   for t = 1:8
     orbit(t + 1) = argmax_step(orbit(t), E, W);
   end

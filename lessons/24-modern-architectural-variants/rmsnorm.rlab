@@ -21,7 +21,7 @@ d_model = 8;
 H = randn(T, d_model);          % (T, d_model) — each row is one token
 
 # Per-feature scale parameter gamma (initialized to 1 — the identity).
-gamma = ones(d_model);
+gamma = ones(1, d_model);
 
 # === 2. Implementations ===
 function H_out = rmsnorm_naive(H, gamma, eps)
@@ -31,7 +31,7 @@ function H_out = rmsnorm_naive(H, gamma, eps)
   for t = 1:T
     x = H(t, :);
     rms = sqrt(mean(x .^ 2) + eps);
-    H_out(t) = (x / rms) .* gamma;
+    H_out(t, :) = (x / rms) .* gamma;
   end
 end
 
@@ -43,11 +43,11 @@ function H_out = layernorm_naive(H, gamma, beta, eps)
     x = H(t, :);
     mu = mean(x);
     sd = sqrt(mean((x - mu) .^ 2) + eps);
-    H_out(t) = ((x - mu) / sd) .* gamma + beta;
+    H_out(t, :) = ((x - mu) / sd) .* gamma + beta;
   end
 end
 
-beta = zeros(d_model);
+beta = zeros(1, d_model);
 eps = 1e-5;
 
 H_rms = rmsnorm_naive(H, gamma, eps);

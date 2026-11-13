@@ -107,7 +107,7 @@ nm    = 60;
 
 % Plain SGD
 th_s   = [-2.0, 4.0];
-loss_s = zeros(nm + 1);
+loss_s = zeros(1, nm + 1);
 loss_s(1) = loss20(th_s);
 for k = 1:nm
   th_s = th_s - eta_m * grad20(th_s);
@@ -117,7 +117,7 @@ end
 % SGD + heavy-ball momentum:  u <- mu u + g,   theta <- theta - eta u
 th_m   = [-2.0, 4.0];
 u_hb   = [0.0, 0.0];
-loss_v = zeros(nm + 1);
+loss_v = zeros(1, nm + 1);
 loss_v(1) = loss20(th_m);
 for k = 1:nm
   u_hb = mu * u_hb + grad20(th_m);
@@ -355,7 +355,7 @@ with a single pole at $z = \beta$, DC gain $H(1) = 1$, impulse response $(1-\bet
 betas = [0.9, 0.99, 0.999];
 n_h = 10000;  n_f = 2048;                          % impulse-response taps, frequency points
 ks = 0:(n_h - 1);  t_st = 1:1000;
-H_db = zeros(3, n_f - 1);  f3 = zeros(3);
+H_db = zeros(3, n_f - 1);  f3 = zeros(1, 3);
 for i = 1:3
   b = betas(i);
   R = freqz((1 - b) * b .^ ks, n_f, 1.0);          % row 1: f in cycles/step; row 2: H(f)
@@ -447,7 +447,7 @@ sigma = 0.5;  beta2_llm = 0.95;  n_i = 600;
 th_i = [-2.0, 4.0];  m_i = [0.0, 0.0];  v_i = [0.0, 0.0];
 G = zeros(n_i, 2);  S = zeros(n_i, 2);
 for k = 1:n_i
-  g = grad(th_i) + sigma * randn(2);              % score sample = true gradient + sensor noise
+  g = grad(th_i) + sigma * randn(1, 2);              % score sample = true gradient + sensor noise
   m_i = beta1 * m_i + (1 - beta1) * g;
   v_i = beta2_llm * v_i + (1 - beta2_llm) * (g .* g);
   m_hat = m_i / (1 - beta1 ^ k);

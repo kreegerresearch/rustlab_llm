@@ -27,7 +27,7 @@ eta = 0.01;            # small LR: well below the 2/a = 0.1 stability bound, so
                        # the regime where momentum's accumulation pays off.
 n_steps = 60;
 path_sgd = zeros(n_steps + 1, 2);
-loss_sgd = zeros(n_steps + 1);
+loss_sgd = zeros(1, n_steps + 1);
 path_sgd(1, 1) = theta_sgd(1);
 path_sgd(1, 2) = theta_sgd(2);
 loss_sgd(1) = loss_aniso(theta_sgd, a, b);
@@ -48,7 +48,7 @@ theta_mom = [-2.0, 4.0];
 v_mom = [0.0, 0.0];
 mu = 0.9;
 path_mom = zeros(n_steps + 1, 2);
-loss_mom = zeros(n_steps + 1);
+loss_mom = zeros(1, n_steps + 1);
 path_mom(1, 1) = theta_mom(1);
 path_mom(1, 2) = theta_mom(2);
 loss_mom(1) = loss_aniso(theta_mom, a, b);

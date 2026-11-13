@@ -128,14 +128,14 @@ function [ids, mask] = qa_example(i, vocab_chars)
   n_p = length(gpt_encode(p(i), vocab_chars));
   ids = gpt_encode(p(i) + a(i) + sprintf("%c", 10), vocab_chars);
   T = length(ids);
-  mask = zeros(T - 1);
-  mask(n_p:(T - 1)) = ones(T - n_p);
+  mask = zeros(1, T - 1);
+  mask(n_p:(T - 1)) = ones(1, T - n_p);
 end
 
 # === 3. Expose the table and check it ===
 [qa_prompts, qa_answers] = qa_table();
 n_pairs = length(qa_prompts);
-qa_len = zeros(n_pairs);
+qa_len = zeros(1, n_pairs);
 n_dropped = 0;
 for i = 1:n_pairs
   [ids, mask] = qa_example(i, vocab_chars);

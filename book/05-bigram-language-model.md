@@ -166,7 +166,8 @@ print("H(X_{t+1} | X_t) = sum_i pi_i H_i =", H_cond, "bits");
 
 <!-- rustlab:output-start -->
 ```text
-Row entropies H(P_i,:) [bits]: [1×3]  0.000000  1.000000  0.000000
+Row entropies H(P_i,:) [bits]: Matrix(1x3)
+  [0.000000, 1.000000, 0.000000]
 pi (current-token marginal)  : Matrix(1x3)
   [0.250000, 0.500000, 0.250000]
 H(X_{t+1} | X_t) = sum_i pi_i H_i = 0.5 bits
@@ -238,11 +239,11 @@ Sampling mechanism demonstration:
 
 ```rustlab
 n_generate = 12;
-generated = zeros(n_generate);
+generated = zeros(1, n_generate);
 generated(1) = 1;   % start with token a
 
 seed(7);                          % deterministic for the gallery render
-draws = rand(n_generate - 1);
+draws = rand(1, n_generate - 1);
 
 for t = 1:(n_generate - 1)
   curr = generated(t);
@@ -261,7 +262,8 @@ print("Generated text:", gen_text);
 
 <!-- rustlab:output-start -->
 ```text
-Generated ids : [1×12]  1.000000  2.000000  1.000000  2.000000  3.000000  2.000000  3.000000  2.000000  ... (12 total)
+Generated ids : Matrix(1x12)
+  [1.000000, 2.000000, 1.000000, 2.000000, 3.000000, 2.000000, 3.000000, 2.000000, ...]
 Generated text: ababcbcbabcb
 ```
 
@@ -334,7 +336,7 @@ ylim([0, 1])
 ```
 
 <!-- rustlab:output-start -->
-![plot 2](plots/05-bigram-language-model/plot-2-5b44ed93.svg)
+![plot 2](plots/05-bigram-language-model/plot-2-0f705e2d.svg)
 
 <!-- rustlab:output-end -->
 
@@ -377,13 +379,13 @@ print("mixing |lambda_2|^8    =", abs_s(2) ^ 8);
 
 <!-- rustlab:output-start -->
 ```text
-eigenvalues of P      : [1×3]  1.000000  0.000000  -1.000000
+eigenvalues of P      : [1×3]  -1.000000  1.000000  -0.000000
 stationary pi         : [1×3]  0.250000  0.500000  0.250000
 pi * P                : [1×3]  0.250000  0.500000  0.250000
 empirical unigram     : [1×3]  0.333333  0.444444  0.222222
 |eigenvalues| P_smooth: [1×3]  1.000000  0.457143  0.000000
 stationary pi (smooth): [1×3]  0.294118  0.411765  0.294118
-mixing |lambda_2|^8    = 0.0019072846188029414
+mixing |lambda_2|^8    = 0.001907284618802971
 ```
 
 <!-- rustlab:output-end -->
@@ -428,7 +430,7 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/05-bigram-language-model/plot-3-81d60efa.svg)
+![plot 3](plots/05-bigram-language-model/plot-3-0d4f3e53.svg)
 
 <!-- rustlab:output-end -->
 
@@ -456,12 +458,12 @@ ylim([0, 1.8])
 
 <!-- rustlab:output-start -->
 ```text
-entropy rate sum_i pi_i H_i = 0.5000000000000001 bits
+entropy rate sum_i pi_i H_i = 0.5 bits
 training CE (bits), raw P  = 0.5    P_smooth = 0.979679007751327
-floors: log2|V| = 1.584962500721156   H(unigram) = 1.5304930567574824   H(next|cur) = 0.5000000000000001
+floors: log2|V| = 1.584962500721156   H(unigram) = 1.5304930567574824   H(next|cur) = 0.5
 ```
 
-![plot 4](plots/05-bigram-language-model/plot-4-6f3622c5.svg)
+![plot 4](plots/05-bigram-language-model/plot-4-5d8f5f0f.svg)
 
 <!-- rustlab:output-end -->
 

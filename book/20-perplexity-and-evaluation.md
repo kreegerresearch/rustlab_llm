@@ -91,7 +91,7 @@ Sweep the probability $p$ the model puts on one class from chance ($1/K$) up to 
 ```rustlab
 K = 4;
 ps = linspace(1.0 / K, 0.999, 50);
-ppl_dist = zeros(50);  ppl_hit = zeros(50);  ppl_miss = zeros(50);
+ppl_dist = zeros(1, 50);  ppl_hit = zeros(1, 50);  ppl_miss = zeros(1, 50);
 for k = 1:50
   p = ps(k);  rest = (1 - p) / (K - 1);
   ppl_dist(k) = entropy_to_ppl([p, rest, rest, rest]);   % 2^H(q)
@@ -110,7 +110,7 @@ ylabel("PPL (log axis)")
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/20-perplexity-and-evaluation/plot-1-d668e026.svg)
+![plot 1](plots/20-perplexity-and-evaluation/plot-1-5b2960d3.svg)
 
 <!-- rustlab:output-end -->
 
@@ -164,7 +164,7 @@ The 24-parameter embedding + head model of Lesson 18, trained full-batch with Ad
 ```rustlab
 % Period-4 corpus: tokens 1-50 train (49 pairs), tokens 50-59 held out (9 pairs).
 pat = [1, 2, 3, 2];
-corpus = zeros(60);
+corpus = zeros(1, 60);
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
 end
@@ -199,7 +199,7 @@ seed(20);
 E = randn(vocab, d_emb) * 0.3;  W = randn(d_emb, vocab) * 0.3;
 n_steps = 600;  eta_max = 0.15;  eta_min = 0.015;  T_w = 60;  b1 = 0.9;  b2 = 0.999;  eps_a = 1e-8;
 mE = zeros(vocab, d_emb);  vE = mE;  mW = zeros(d_emb, vocab);  vW = mW;
-L_tr = zeros(n_steps + 1);  L_va = zeros(n_steps + 1);
+L_tr = zeros(1, n_steps + 1);  L_va = zeros(1, n_steps + 1);
 L_tr(1) = mean_loss(train_ids, E, W);  L_va(1) = mean_loss(val_ids, E, W);
 for s = 1:n_steps
   if s <= T_w                                         % warmup-cosine (Lesson 17)
@@ -227,7 +227,7 @@ print("max |E - E_lib| =", max(max(abs(E - E_lib))), "  (the loop above is train
 <!-- rustlab:output-start -->
 ```text
 initial train PPL: 2.995343312749529   held-out: 2.984295518083625   (uniform reference 3)
-final   train PPL: 1.404246324690318   held-out: 1.4697346039183148
+final   train PPL: 1.404246324690318   held-out: 1.4697346039183146
 max |E - E_lib| = 0   (the loop above is train_bigram_lm with logging)
 ```
 
@@ -248,7 +248,7 @@ ylabel("PPL")
 ```
 
 <!-- rustlab:output-start -->
-![plot 2](plots/20-perplexity-and-evaluation/plot-2-a759a79a.svg)
+![plot 2](plots/20-perplexity-and-evaluation/plot-2-cb1cf23d.svg)
 
 <!-- rustlab:output-end -->
 
@@ -292,10 +292,10 @@ print("BPE example: L = 3.0 nats/token at 4.4 char/token -> BPC =", 3.0 / (4.4 *
 <!-- rustlab:output-start -->
 ```text
 final train PPL   : 1.404246324690318    empirical train floor exp(24 ln2 / 49) = 1.404246218971659
-final held-out PPL: 1.4697346039183148    population-optimal bigram on the held-out split exp(5 ln2 / 9) = 1.4697344922755988
+final held-out PPL: 1.4697346039183146    population-optimal bigram on the held-out split exp(5 ln2 / 9) = 1.4697344922755988
 empirical held-out floor (b->c x3, b->a x2): exp(5 H(3/5, 2/5) / 9) = 1.4533850756356859
 optimal-bigram floor (population): sqrt(2) = 1.4142135623730951
-bits per character: train 0.489796026980621   held-out 0.5555556651443196   (uniform reference log2 3 = 1.584962500721156 )
+bits per character: train 0.489796026980621   held-out 0.5555556651443194   (uniform reference log2 3 = 1.584962500721156 )
 BPE example: L = 3.0 nats/token at 4.4 char/token -> BPC = 0.9836557096970205
 ```
 
@@ -317,7 +317,7 @@ ylabel("bits/char")
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/20-perplexity-and-evaluation/plot-3-cfc4553d.svg)
+![plot 3](plots/20-perplexity-and-evaluation/plot-3-11133070.svg)
 
 <!-- rustlab:output-end -->
 
@@ -363,7 +363,7 @@ print("2^(bits per predicted token) =", 2 ^ (bits_model / 19), "  = PPL on these
 
 <!-- rustlab:output-start -->
 ```text
-model code   : first token 1.584962500721156 + 19 predicted tokens 9.000002012804586 = 10.584964513525742 bits
+model code   : first token 1.584962500721156 + 19 predicted tokens 9.000002012804584 = 10.58496451352574 bits
 uniform code : 20 * log2(3) = 31.69925001442312 bits
 2^(bits per predicted token) = 1.3886512445833004   = PPL on these 20 tokens 1.3886512445833006
 ```
@@ -389,12 +389,12 @@ Two moments matter: the **mean** is the cross-entropy, and the **standard deviat
 Score the trained model on a fresh 200-token stretch of the same source (the source is periodic, so this is unseen text with the same statistics) and plot the per-token bits:
 
 ```rustlab
-held = zeros(200);
+held = zeros(1, 200);
 for i = 1:200
   held(i) = pat(mod(i - 1, 4) + 1);
 end
 N = 199;
-losses = zeros(N);                           % self-information, bits
+losses = zeros(1, N);                           % self-information, bits
 for t = 1:N
   q = softmax(E(held(t), :) * W);
   losses(t) = -log2(q(held(t + 1)));
@@ -411,11 +411,11 @@ ylabel("count")
 
 <!-- rustlab:output-start -->
 ```text
-mean(losses) = 0.4974875458681023 bits = cross-entropy;  PPL = 2^mean = 1.4117528520362579
-std(losses)  = 0.5012547386712848 bits = sqrt(varentropy);   median = 0.00000009139767019031646
+mean(losses) = 0.4974875458681027 bits = cross-entropy;  PPL = 2^mean = 1.411752852036258
+std(losses)  = 0.5012547386712853 bits = sqrt(varentropy);   median = 0.00000009139767019031646
 ```
 
-![plot 4](plots/20-perplexity-and-evaluation/plot-4-82b76de3.svg)
+![plot 4](plots/20-perplexity-and-evaluation/plot-4-0009f57d.svg)
 
 <!-- rustlab:output-end -->
 
@@ -447,7 +447,7 @@ print("parmap mean loss:", loss_par, "nats   serial:", loss_ser, "   diff:", abs
 <summary>Parallel evaluation with parmap</summary>
 
 ```text
-parmap mean loss: 0.3448320897821623 nats   serial: 0.3448320897821623    diff: 0
+parmap mean loss: 0.34483208978216184 nats   serial: 0.3448320897821617    diff: 0.00000000000000016653345369377348
 ```
 
 </details>
@@ -478,8 +478,8 @@ print("PPL per character:", 2 ^ (bits_file / N_char), "   PPL per 2-char token:"
 
 <!-- rustlab:output-start -->
 ```text
-file length      : 99.00002162775236 bits for 199 characters  ->  BPC = 0.4974875458681023
-PPL per character: 1.4117528520362579    PPL per 2-char token: 1.993046115232508    BPC unchanged
+file length      : 99.00002162775243 bits for 199 characters  ->  BPC = 0.4974875458681027
+PPL per character: 1.411752852036258    PPL per 2-char token: 1.9930461152325092    BPC unchanged
 ```
 
 <!-- rustlab:output-end -->
@@ -495,7 +495,7 @@ print("tokens for +/-1% PPL: this model", ceil((1.96 * sigma_nats / 0.01) ^ 2), 
 
 <!-- rustlab:output-start -->
 ```text
-CE = 0.4974875458681023 +/- 0.06964469238042602 bits (95%)  ->  PPL in [ 1.3452206714890358 , 1.4815755938588044 ]
+CE = 0.4974875458681027 +/- 0.06964469238042609 bits (95%)  ->  PPL in [ 1.3452206714890362 , 1.4815755938588049 ]
 tokens for +/-1% PPL: this model 4638    a real LM with sigma = 2.5 nats: 240100
 ```
 

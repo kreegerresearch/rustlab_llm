@@ -117,7 +117,7 @@ nm    = 60;
 
 % Plain SGD
 th_s   = [-2.0, 4.0];
-loss_s = zeros(nm + 1);
+loss_s = zeros(1, nm + 1);
 loss_s(1) = loss20(th_s);
 for k = 1:nm
   th_s = th_s - eta_m * grad20(th_s);
@@ -127,7 +127,7 @@ end
 % SGD + heavy-ball momentum:  u <- mu u + g,   theta <- theta - eta u
 th_m   = [-2.0, 4.0];
 u_hb   = [0.0, 0.0];
-loss_v = zeros(nm + 1);
+loss_v = zeros(1, nm + 1);
 loss_v(1) = loss20(th_m);
 for k = 1:nm
   u_hb = mu * u_hb + grad20(th_m);
@@ -164,10 +164,10 @@ SGD      final loss: 2.3950431305925957
 Momentum final loss: 0.05334797454199918
 SGD / momentum ratio: 44.8947340766809
 heavy-ball poles for a = 20: [1×2]  0.850000+0.421307j  0.850000-0.421307j   |z| = 0.9486832980505138  = sqrt(mu)
-pole angle 26.36558508168206 deg -> period 13.654163140499248 steps in theta_1, 6.827081570249624 in the loss
+pole angle 26.36558508168205 deg -> period 13.654163140499254 steps in theta_1, 6.827081570249627 in the loss
 ```
 
-![plot 1](plots/16-adamw-optimizer/plot-1-1f638a06.svg)
+![plot 1](plots/16-adamw-optimizer/plot-1-360e81f4.svg)
 
 <!-- rustlab:output-end -->
 
@@ -223,7 +223,7 @@ print("Adam final theta:", theta_adam);
 
 <!-- rustlab:output-start -->
 ```text
-Adam final loss: 0.01694228895693814
+Adam final loss: 0.016942288956938115
 Adam final theta: [1×2]  0.005759  0.165078
 ```
 
@@ -343,7 +343,7 @@ legend("SGD", "Adam", "AdamW")
 
 <!-- rustlab:output-start -->
 ```text
-final ||theta||   Adam: 0.1651787934911096    AdamW: 0.023991551004220756
+final ||theta||   Adam: 0.16517879349110953    AdamW: 0.023991551004220735
 ```
 
 ![plot 2](plots/16-adamw-optimizer/plot-2-96b03921.svg)
@@ -408,7 +408,7 @@ with a single pole at $z = \beta$, DC gain $H(1) = 1$, impulse response $(1-\bet
 betas = [0.9, 0.99, 0.999];
 n_h = 10000;  n_f = 2048;                          % impulse-response taps, frequency points
 ks = 0:(n_h - 1);  t_st = 1:1000;
-H_db = zeros(3, n_f - 1);  f3 = zeros(3);
+H_db = zeros(3, n_f - 1);  f3 = zeros(1, 3);
 for i = 1:3
   b = betas(i);
   R = freqz((1 - b) * b .^ ks, n_f, 1.0);          % row 1: f in cycles/step; row 2: H(f)
@@ -448,19 +448,19 @@ legend("beta = 0.9", "beta = 0.99", "beta = 0.999")
 <!-- rustlab:output-start -->
 ```text
 beta = 0.900: DC gain 1.0000, -3 dB at 1.7e-02 cycles/step (predicted 1.6e-02), tau = 10 steps
-beta = 0.990: DC gain 1.0000, -3 dB at 1.6e-03 cycles/step (predicted 1.6e-03), tau = 100 steps
-beta = 0.999: DC gain 1.0000, -3 dB at 1.8e-04 cycles/step (predicted 1.6e-04), tau = 1000 steps
-heavy ball u = 0.9 u + g: DC gain 10.000000000000004  = 1/(1 - mu)
+beta = 0.990: DC gain 1.0000, -3 dB at 1.7e-03 cycles/step (predicted 1.6e-03), tau = 100 steps
+beta = 0.999: DC gain 1.0000, -3 dB at 2.4e-04 cycles/step (predicted 1.6e-04), tau = 1000 steps
+heavy ball u = 0.9 u + g: DC gain 10  = 1/(1 - mu)
 ```
 
-![plot 4](plots/16-adamw-optimizer/plot-4-289f3af0.svg)
+![plot 4](plots/16-adamw-optimizer/plot-4-63c3949c.svg)
 
 <!-- rustlab:output-end -->
 
 > [!TIP]
 > Left: each factor of 10 in $1-\beta$ slides the corner one decade to the left; all three curves share the same $-20$ dB/decade slope and unit DC gain. Right: the step response of $\beta_2 = 0.999$ is still at $0.095$ after 100 steps — that deficit is the $\sim 10\times$ bias correction.
 
-The measured corners sit at $0.0168$, $0.00165$ and $0.000183$ cycles per step for $\beta = 0.9, 0.99, 0.999$ — the predicted $(1-\beta)/2\pi$ to the resolution of the frequency grid. In words: $\beta_1 = 0.9$ passes gradient components that persist for more than about ten steps and attenuates anything faster, which is exactly the "cancel the sign-flipping steep axis, keep the consistent flat axis" behaviour of the momentum demo.
+The measured corners sit at $0.0168$, $0.00171$ and $0.000244$ cycles per step for $\beta = 0.9, 0.99, 0.999$ — the predicted $(1-\beta)/2\pi$ to the resolution of the frequency grid. In words: $\beta_1 = 0.9$ passes gradient components that persist for more than about ten steps and attenuates anything faster, which is exactly the "cancel the sign-flipping steep axis, keep the consistent flat axis" behaviour of the momentum demo.
 
 ### Systems
 
@@ -507,7 +507,7 @@ g_1 = [1×2]  -400.000000  4.000000  ->  m_hat_1 ./ sqrt(v_hat_1) = [1×2]  -1.0
 AdamW leak pole 1 - eta lambda at (0.1, 0.1): 0.99   time constant 1/(eta lambda) = 99.99999999999999 steps
 ```
 
-![plot 5](plots/16-adamw-optimizer/plot-5-8fa5fada.svg)
+![plot 5](plots/16-adamw-optimizer/plot-5-7050b0ff.svg)
 
 <!-- rustlab:output-end -->
 
@@ -526,7 +526,7 @@ sigma = 0.5;  beta2_llm = 0.95;  n_i = 600;
 th_i = [-2.0, 4.0];  m_i = [0.0, 0.0];  v_i = [0.0, 0.0];
 G = zeros(n_i, 2);  S = zeros(n_i, 2);
 for k = 1:n_i
-  g = grad(th_i) + sigma * randn(2);              % score sample = true gradient + sensor noise
+  g = grad(th_i) + sigma * randn(1, 2);              % score sample = true gradient + sensor noise
   m_i = beta1 * m_i + (1 - beta1) * g;
   v_i = beta2_llm * v_i + (1 - beta2_llm) * (g .* g);
   m_hat = m_i / (1 - beta1 ^ k);
@@ -549,11 +549,12 @@ print("sqrt(v_hat) ratio, coord 1 : 2   :", sqrt(v_hat(1) / v_hat(2)), "   Hessi
 
 <!-- rustlab:output-start -->
 ```text
-v_hat at t = 600                 : [1×2]  3.321424  0.285148
+v_hat at t = 600                 : Matrix(1x2)
+  [3.321424, 0.285148]
 mean g^2 over steps 401-600      : [1×2]  2.839760  0.279113
   = mean(g)^2 + var(g)           : [1×2]  0.000091  0.000020  +  [1×2]  2.853939  0.280495    (sigma^2 = 0.25 )
 rms of m_hat ./ sqrt(v_hat)      : [1×2]  0.094679  0.238139    white-noise prediction sqrt((1-b1)/(1+b1)) = 0.22941573387056174
-sqrt(v_hat) ratio, coord 1 : 2   : 3.4129295220721456    Hessian ratio a/b = 200
+sqrt(v_hat) ratio, coord 1 : 2   : 3.412929522072145    Hessian ratio a/b = 200
 ```
 
 <!-- rustlab:output-end -->

@@ -24,7 +24,7 @@ n_merges = length(merge_a);
 # === Apply one merge to a sequence ===
 function new_seq = apply_merge(seq, ma, mb, new_id)
   L = length(seq);
-  buf = zeros(L);
+  buf = zeros(1, L);
   k = 1;
   i = 1;
   while i <= L
@@ -95,7 +95,7 @@ print("Saved bpe_encoded_lens.svg");
 % In a real BPE deployment this would be 10000s of words; here we collapse
 % to a small representative distribution.
 buckets = {"1", "2", "3", "4-5", "6+"};
-hist_counts = zeros(5);
+hist_counts = zeros(1, 5);
 for v = [length(enc_A), length(enc_B), length(enc_C)]
   if v == 1
     hist_counts(1) = hist_counts(1) + 1;

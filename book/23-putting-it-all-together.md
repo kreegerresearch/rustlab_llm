@@ -83,7 +83,7 @@ n_base_chars = 10;
 phrase = "the cat sat on the mat ";
 n_reps = 4;
 L_total = length(phrase) * n_reps;
-char_seq = zeros(L_total);
+char_seq = zeros(1, L_total);
 k = 1;
 for r = 1:n_reps
   for i = 1:length(phrase)
@@ -181,14 +181,14 @@ T_max = T + 16;     % PE table large enough for any generation prefix
 
 E = randn(vocab, d_model) * 0.3;
 PE = sinusoidal_pe(T_max, d_model);
-gamma1 = ones(d_model);   beta1 = zeros(d_model);
-gamma2 = ones(d_model);   beta2 = zeros(d_model);
+gamma1 = ones(1, d_model);   beta1 = zeros(1, d_model);
+gamma2 = ones(1, d_model);   beta2 = zeros(1, d_model);
 Wq = randn(d_model, d_model) * 0.3;
 Wk = randn(d_model, d_model) * 0.3;
 Wv = randn(d_model, d_model) * 0.3;
 Wo = randn(d_model, d_model) * 0.3;
-W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
-W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(1, d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(1, d_model);
 W_U = randn(d_model, vocab) * 0.3;
 P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
@@ -198,15 +198,15 @@ print("vocab:", vocab, "  d_model:", d_model, "  d_ff:", d_ff, "  params:", n_pa
 n_pairs = T - 1;
 n_params_16 = vocab * 16 + 4 * 16 + 4 * 16 * 16 + 2 * 16 * 32 + 32 + 16 + 16 * vocab;
 print("prediction pairs:", n_pairs, "  tokens per parameter:", n_pairs / n_params, "  (params at d = 16:", n_params_16, ")");
-mask_train = ones(T - 1);
+mask_train = ones(1, T - 1);
 n_train = 600;  T_w = 60;  eta_max = 0.05;  eta_min = 0.005;
 bet1 = 0.9;  bet2 = 0.999;  eps_a = 1e-8;
 [M, V] = adamw_init(P);
 
-loss_curve = zeros(n_train + 1);
-ppl_curve  = zeros(n_train + 1);
-gnorm      = zeros(n_train + 1);
-lr_curve   = zeros(n_train + 1);
+loss_curve = zeros(1, n_train + 1);
+ppl_curve  = zeros(1, n_train + 1);
+gnorm      = zeros(1, n_train + 1);
+lr_curve   = zeros(1, n_train + 1);
 loss_curve(1) = mean_loss(1, n_pairs, tokens, P);
 ppl_curve(1) = exp(loss_curve(1));
 P_ck0 = P;
@@ -237,7 +237,7 @@ print("Final   L =", loss_curve(n_train + 1), "  PPL =", ppl_curve(n_train + 1))
 vocab: 18   d_model: 4   d_ff: 8   params: 300
 prediction pairs: 31   tokens per parameter: 0.10333333333333333   (params at d = 16: 2736 )
 Initial L = 2.8724045210395035   PPL = 17.67947780822632   (log(vocab) = 2.8903717578961645 is the uniform baseline)
-Final   L = 0.00008169636170878258   PPL = 1.0000816996989474
+Final   L = 0.00008169636170878974   PPL = 1.0000816996989474
 ```
 
 <!-- rustlab:output-end -->
@@ -308,8 +308,8 @@ print("A(10,5) =", A_trained(10, 5), "  A(16,13) =", A_trained(16, 13), "  A(24,
 
 <!-- rustlab:output-start -->
 ```text
-A(6,5) = 0.9798972921054377   A(7,6) = 0.8336696829349758   A(8,7) = 0.4099164748366176   (first period: previous token)
-A(10,5) = 0.9998303683483063   A(16,13) = 0.9999120643848796   A(24,21) = 0.9988899602393031   (later 'at ' rows: an 'o' column)
+A(6,5) = 0.9798972921061128   A(7,6) = 0.8336696829356084   A(8,7) = 0.4099164748365148   (first period: previous token)
+A(10,5) = 0.9998303683483105   A(16,13) = 0.9999120643848809   A(24,21) = 0.998889960239308   (later 'at ' rows: an 'o' column)
 ```
 
 ![plot 1](plots/23-putting-it-all-together/plot-1-42aa66d7.svg)
@@ -334,7 +334,7 @@ function H_mean = attn_frame(P_ck, label, tokens, mask_train)
   H_mean = mean(row_entropies_bits(ca.A));    % how spread out the rows are, in bits
 end
 figure();
-H_ck = zeros(4);
+H_ck = zeros(1, 4);
 H_ck(1) = attn_frame(P_ck0, "step 0: '" + s_ck0 + "'", tokens, mask_train);
 H_ck(2) = attn_frame(P_ck1, "step 100: '" + s_ck1 + "'", tokens, mask_train);
 H_ck(3) = attn_frame(P_ck2, "step 300: '" + s_ck2 + "'", tokens, mask_train);
@@ -346,7 +346,8 @@ print("mean attention-row entropy at steps 0/100/300/600 (bits):", H_ck, "  unif
 
 <!-- rustlab:output-start -->
 ```text
-mean attention-row entropy at steps 0/100/300/600 (bits): [1×4]  3.668621  1.314890  1.215535  1.203905   uniform prefix average: 3.6769769891362594
+mean attention-row entropy at steps 0/100/300/600 (bits): Matrix(1x4)
+  [3.668621, 1.314890, 1.215535, 1.203905]   uniform prefix average: 3.6769769891362594
 ```
 
 ![animation 2](plots/23-putting-it-all-together/anim-2-29489099.gif)
@@ -384,7 +385,7 @@ xlabel("step"); ylabel("eta")
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/23-putting-it-all-together/plot-3-24087f28.svg)
+![plot 3](plots/23-putting-it-all-together/plot-3-d52cab56.svg)
 
 <!-- rustlab:output-end -->
 
@@ -428,7 +429,7 @@ function L_final = train_variant(P_start, ids, mask, n_steps, attn_on, T_w, eta_
 end
 
 P_nope = P_ck0;  P_nope.PE = zeros(T_max, d_model);
-ppl_abl = zeros(4);
+ppl_abl = zeros(1, 4);
 ppl_abl(1) = exp(train_variant(P_ck0, tokens, mask_train, n_train, 1, T_w, eta_max, eta_min));
 ppl_abl(2) = exp(train_variant(P_ck0, tokens, mask_train, n_train, 0, T_w, eta_max, eta_min));
 ppl_abl(3) = exp(train_variant(P_nope, tokens, mask_train, n_train, 1, T_w, eta_max, eta_min));
@@ -442,8 +443,8 @@ print("attention off and PE off PPL =", ppl_abl(4), "  (bigram floor", ppl_floor
 <!-- rustlab:output-start -->
 ```text
 full model               PPL = 1.0000816996989474
-attention off            PPL = 1.0031483814068165
-PE off                   PPL = 1.0008450741508512
+attention off            PPL = 1.0031483814154676
+PE off                   PPL = 1.000838141101644
 attention off and PE off PPL = 1.4722596713107259   (bigram floor 1.4722551822198788 )
 ```
 
@@ -489,7 +490,7 @@ stem(1:t_q, taps)
 title("Attention row t = 8: FIR taps over the prefix")
 xlabel("key position i"); ylabel("A(8, i)")
 subplot(1, 2, 2)
-stem(1:t_q, ones(t_q) / t_q)
+stem(1:t_q, ones(1, t_q) / t_q)
 title("Lesson 07 uniform average: 1/t taps")
 xlabel("key position i"); ylabel("W_avg(8, i)")
 H_row = entropy_bits(taps);
@@ -501,19 +502,19 @@ print("max |attn_out(8,:) - taps * V(1:8,:)| =", max(abs(attn_final(8, :) - taps
 
 <!-- rustlab:output-start -->
 ```text
-taps at the odd positions (the c, s, o, the m): 0.30437623338571773 0.09544201725566862 0.18701674985444552 0.4099164748366176
-row entropy = 1.8582075883327531 bits  -> effective taps 2^H = 3.625569396063929   (uniform: 3 bits, 8 taps)
-max |attn_out(8,:) - taps * V(1:8,:)| = 0.00000000000000005551115123125783
+taps at the odd positions (the c, s, o, the m): 0.30437623338539926 0.09544201725513833 0.18701674985540487 0.4099164748365148
+row entropy = 1.8582075883325158 bits  -> effective taps 2^H = 3.6255693960633324   (uniform: 3 bits, 8 taps)
+max |attn_out(8,:) - taps * V(1:8,:)| = 0
 ```
 
-![plot 4](plots/23-putting-it-all-together/plot-4-dcbe9872.svg)
+![plot 4](plots/23-putting-it-all-together/plot-4-3b18fced.svg)
 
 <!-- rustlab:output-end -->
 
 > [!TIP]
 > The left stem is the filter the model learned for this query: nearly all of its weight on the odd positions — the content tokens `"the c"`, `"s"`, `"o"`, `"the m"` — and almost none on the `"at "` tokens between them. The right stem is the filter Lesson 07 used for every query.
 
-The row has $1.86$ bits of entropy, an effective length of $3.6$ taps out of 8, against 3 bits (8 taps) for the uniform average; and the impulse-response identity holds to $6e-17$. A different query gets a different tap vector — that is what "time-varying" means here, and it is the whole difference between Lesson 07 and Lesson 08.
+The row has $1.86$ bits of entropy, an effective length of $3.6$ taps out of 8, against 3 bits (8 taps) for the uniform average; and the impulse-response identity holds to $0e+00$. A different query gets a different tap vector — that is what "time-varying" means here, and it is the whole difference between Lesson 07 and Lesson 08.
 
 ### Systems
 
@@ -546,8 +547,8 @@ legend("loss", "end of warm-up", "start of tail", "bigram floor")
 <!-- rustlab:output-start -->
 ```text
 bigram floor crossed at step 53
-exponential phase (steps 60-150): e-folding time = 13.875578341845374 steps
-tail: log-slope ratio (200-300 vs 500-600) = 8.037978735593212    eta ratio = 6.003463198762087
+exponential phase (steps 60-150): e-folding time = 13.875578341835654 steps
+tail: log-slope ratio (200-300 vs 500-600) = 8.037978735597042    eta ratio = 6.003463198762086
 ```
 
 ![plot 5](plots/23-putting-it-all-together/plot-5-ca3a043b.svg)
@@ -580,7 +581,7 @@ print("corpus, fixed-length code:", bits_corpus, "bits   model parameters:", bit
 H(next | cur)        = 0.38679536276834264 nats  (= optimal-bigram CE 0.38679536276834264 )
 H(next | cur, prev)  = 0 nats
 I(next ; prev | cur) = 0.38679536276834264 nats = 0.5580277517047355 bits per pair
-corpus, fixed-length code: 133.437600046154 bits   model parameters: 19200 bits   corpus under the model: 0.0036537510127738803 bits
+corpus, fixed-length code: 133.437600046154 bits   model parameters: 19200 bits   corpus under the model: 0.0036537510127742008 bits
 ```
 
 <!-- rustlab:output-end -->

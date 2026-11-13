@@ -1,0 +1,766 @@
+{
+ "label": "iter01b",
+ "note": "lib/gpt.rlab adopts 0.3.10: gelu_grad builtin; vectorised gpt_sinusoidal_pe (bit-identical, ~100x faster), which gpt_unflatten calls every step",
+ "env": {
+  "date": "2026-10-18T19:58:56",
+  "machine": "arm64",
+  "os": "macOS-26.6.2-arm64-arm-64bit",
+  "rustlab_version": "rustlab 0.3.10",
+  "rustlab_binary": "/Users/mike/.local/bin/rustlab",
+  "rustlab_binary_mtime": "2026-10-18T19:56:48",
+  "rustlab_source": {
+   "sha": "1ebb762",
+   "dirty": false,
+   "subject": "Perf flywheel iteration 01: real matmul, nested profiler, parmap and elementwise copies (0.3.10) (#77)"
+  },
+  "cpu": "Apple M4 Max",
+  "cores": "14"
+ },
+ "bench": {
+  "prim.matmul_129x128x384": {
+   "ms": 0.264417,
+   "rate": 47.9592,
+   "unit": "GFLOP/s"
+  },
+  "prim.matmul_129x128x512": {
+   "ms": 0.352125,
+   "rate": 48.0179,
+   "unit": "GFLOP/s"
+  },
+  "prim.matmul_129x512x128": {
+   "ms": 0.368792,
+   "rate": 45.8478,
+   "unit": "GFLOP/s"
+  },
+  "prim.matmul_transA_512x129x128": {
+   "ms": 0.361291,
+   "rate": 46.7996,
+   "unit": "GFLOP/s"
+  },
+  "prim.matmul_129x128x77": {
+   "ms": 0.06575,
+   "rate": 38.6745,
+   "unit": "GFLOP/s"
+  },
+  "prim.matmul_512x512x512": {
+   "ms": 4.889667,
+   "rate": 54.8985,
+   "unit": "GFLOP/s"
+  },
+  "prim.attn_scores_129x32x129": {
+   "ms": 0.02975,
+   "rate": 35.7991,
+   "unit": "GFLOP/s"
+  },
+  "prim.ewise_129x512": {
+   "ms": 0.108292,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.tanh_129x512": {
+   "ms": 0.236625,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.gelu_builtin_129x512": {
+   "ms": 0.328542,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.gelu_grad_lib_129x512": {
+   "ms": 0.391292,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.softmax_129x129": {
+   "ms": 0.057542,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.layernorm_lib_129x128": {
+   "ms": 0.163417,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.transpose_129x512": {
+   "ms": 0.02625,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.slice_cols_128x32": {
+   "ms": 0.002084,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.slice_rows_128x384": {
+   "ms": 0.014084,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.region_write_128x384": {
+   "ms": 0.086625,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.broadcast_rows_129x128": {
+   "ms": 0.012667,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.scatter_add_loop_129": {
+   "ms": 0.229833,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "prim.scalar_loop_1e5": {
+   "ms": 12.956,
+   "rate": 7.71843,
+   "unit": "Miter/s"
+  },
+  "model.params": {
+   "ms": 811008.0,
+   "rate": 0.0,
+   "unit": "count"
+  },
+  "flat.axpy_811k": {
+   "ms": 0.333459,
+   "rate": 2432.11,
+   "unit": "Melem/s"
+  },
+  "flat.sumsq_811k": {
+   "ms": 1.425083,
+   "rate": 569.095,
+   "unit": "Melem/s"
+  },
+  "flat.clip_811k": {
+   "ms": 2.29675,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "flat.adamw_811k": {
+   "ms": 4.508333,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "flat.batch_reduce_8x811k": {
+   "ms": 2.329667,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "flat.unflatten_811k": {
+   "ms": 4.641,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "flat.flatten_811k": {
+   "ms": 3.923708,
+   "rate": 0.0,
+   "unit": "-"
+  },
+  "model.forward": {
+   "ms": 14.721084,
+   "rate": 8695.01,
+   "unit": "tok/s"
+  },
+  "model.backward": {
+   "ms": 21.69025,
+   "rate": 5901.27,
+   "unit": "tok/s"
+  },
+  "model.grad_flat": {
+   "ms": 43.543625,
+   "rate": 2939.58,
+   "unit": "tok/s"
+  },
+  "model.generate_20_greedy": {
+   "ms": 78.408292,
+   "rate": 255.075,
+   "unit": "tok/s"
+  },
+  "par.grad_flat_B1": {
+   "ms": 45.335959,
+   "rate": 2823.37,
+   "unit": "tok/s"
+  },
+  "par.grad_flat_B8": {
+   "ms": 80.833,
+   "rate": 12668.1,
+   "unit": "tok/s"
+  },
+  "par.grad_flat_B14": {
+   "ms": 124.711,
+   "rate": 14369.2,
+   "unit": "tok/s"
+  },
+  "e2e.train_step_B8": {
+   "ms": 102.734917,
+   "rate": 9967.4,
+   "unit": "tok/s"
+  }
+ },
+ "gate": {
+  "gradcheck": 7.78781e-08,
+  "loss_01": 3.4558110963968014,
+  "loss_02": 3.0924931481735167,
+  "loss_03": 2.7909170625592505,
+  "loss_04": 2.5465266262524846,
+  "loss_05": 2.4054969443695975,
+  "loss_06": 2.361983654083206,
+  "loss_07": 2.3618479329424886,
+  "loss_08": 2.3028472739244914,
+  "loss_09": 2.3166138469853745,
+  "loss_10": 2.3150760263337626,
+  "loss_11": 2.3031788132334707,
+  "loss_12": 2.197640382660071,
+  "loss_13": 2.225888438470505,
+  "loss_14": 2.1868481451715676,
+  "loss_15": 2.092854629986503,
+  "loss_16": 2.093261764294868,
+  "loss_17": 2.0487210221320034,
+  "loss_18": 2.141263172909153,
+  "loss_19": 2.286578347402672,
+  "loss_20": 2.1734707956641843,
+  "loss_21": 2.1030860767735042,
+  "loss_22": 2.117535182548156,
+  "loss_23": 2.1453967682290513,
+  "loss_24": 1.9829784011632348,
+  "loss_25": 1.9442799795204144,
+  "final_theta_norm": 17.501884984444885
+ },
+ "profile": [
+  {
+   "fn": "parmap:gpt_grad_flat",
+   "calls": 8,
+   "total_ms": 564.147,
+   "self_ms": 87.335,
+   "in_kb": 32.12,
+   "out_kb": 101376.12
+  },
+  {
+   "fn": "[top-level]",
+   "calls": 1,
+   "total_ms": 246.6,
+   "self_ms": 7.335,
+   "in_kb": 0.0,
+   "out_kb": 0.0
+  },
+  {
+   "fn": "parmap:gpt_backward",
+   "calls": 8,
+   "total_ms": 244.208,
+   "self_ms": 94.267,
+   "in_kb": 1257.75,
+   "out_kb": 0.0
+  },
+  {
+   "fn": "parmap:gpt_forward",
+   "calls": 8,
+   "total_ms": 175.33,
+   "self_ms": 68.175,
+   "in_kb": 32.12,
+   "out_kb": 1241.69
+  },
+  {
+   "fn": "parmap:[matmul]",
+   "calls": 1176,
+   "total_ms": 150.05,
+   "self_ms": 150.05,
+   "in_kb": 0.0,
+   "out_kb": 0.0
+  },
+  {
+   "fn": "gpt_grad_flat",
+   "calls": 3,
+   "total_ms": 131.725,
+   "self_ms": 10.13,
+   "in_kb": 12.05,
+   "out_kb": 38016.05
+  },
+  {
+   "fn": "parmap",
+   "calls": 1,
+   "total_ms": 83.213,
+   "self_ms": 83.213,
+   "in_kb": 0.12,
+   "out_kb": 101376.12
+  },
+  {
+   "fn": "gpt_backward",
+   "calls": 3,
+   "total_ms": 67.329,
+   "self_ms": 21.506,
+   "in_kb": 471.66,
+   "out_kb": 0.0
+  },
+  {
+   "fn": "parmap:gpt_flatten",
+   "calls": 8,
+   "total_ms": 53.523,
+   "self_ms": 35.135,
+   "in_kb": 0.0,
+   "out_kb": 101376.0
+  },
+  {
+   "fn": "[matmul]",
+   "calls": 441,
+   "total_ms": 48.916,
+   "self_ms": 48.916,
+   "in_kb": 0.0,
+   "out_kb": 0.0
+  },
+  {
+   "fn": "gpt_forward",
+   "calls": 3,
+   "total_ms": 44.551,
+   "self_ms": 14.485,
+   "in_kb": 12.05,
+   "out_kb": 465.63
+  },
+  {
+   "fn": "parmap:zeros",
+   "calls": 248,
+   "total_ms": 28.311,
+   "self_ms": 28.311,
+   "in_kb": 3.88,
+   "out_kb": 299884.62
+  },
+  {
+   "fn": "parmap:gpt_gelu_grad",
+   "calls": 32,
+   "total_ms": 18.654,
+   "self_ms": 1.367,
+   "in_kb": 33024.0,
+   "out_kb": 33024.0
+  },
+  {
+   "fn": "parmap:reshape",
+   "calls": 1008,
+   "total_ms": 18.604,
+   "self_ms": 18.604,
+   "in_kb": 103383.38,
+   "out_kb": 103367.62
+  },
+  {
+   "fn": "parmap:gelu_grad",
+   "calls": 32,
+   "total_ms": 17.288,
+   "self_ms": 17.288,
+   "in_kb": 33024.0,
+   "out_kb": 33024.0
+  },
+  {
+   "fn": "parmap:gelu",
+   "calls": 32,
+   "total_ms": 16.142,
+   "self_ms": 16.142,
+   "in_kb": 33024.0,
+   "out_kb": 33024.0
+  },
+  {
+   "fn": "parmap:gpt_ln_bwd",
+   "calls": 72,
+   "total_ms": 16.033,
+   "self_ms": 11.187,
+   "in_kb": 37441.12,
+   "out_kb": 18864.0
+  },
+  {
+   "fn": "reshape",
+   "calls": 428,
+   "total_ms": 14.561,
+   "self_ms": 14.561,
+   "in_kb": 89445.55,
+   "out_kb": 89438.86
+  },
+  {
+   "fn": "parmap:gpt_ln_fwd",
+   "calls": 72,
+   "total_ms": 14.08,
+   "self_ms": 9.753,
+   "in_kb": 18864.0,
+   "out_kb": 37297.12
+  },
+  {
+   "fn": "gpt_unflatten",
+   "calls": 3,
+   "total_ms": 13.048,
+   "self_ms": 3.816,
+   "in_kb": 38016.0,
+   "out_kb": 0.0
+  },
+  {
+   "fn": "gpt_flatten",
+   "calls": 4,
+   "total_ms": 12.488,
+   "self_ms": 6.904,
+   "in_kb": 0.0,
+   "out_kb": 50688.0
+  },
+  {
+   "fn": "parmap:softmax",
+   "calls": 144,
+   "total_ms": 8.2,
+   "self_ms": 8.2,
+   "in_kb": 35746.0,
+   "out_kb": 35746.0
+  },
+  {
+   "fn": "gpt_init",
+   "calls": 1,
+   "total_ms": 7.483,
+   "self_ms": 0.623,
+   "in_kb": 0.01,
+   "out_kb": 0.0
+  },
+  {
+   "fn": "randn",
+   "calls": 6,
+   "total_ms": 6.705,
+   "self_ms": 6.705,
+   "in_kb": 0.09,
+   "out_kb": 12596.0
+  },
+  {
+   "fn": "parmap:outer",
+   "calls": 896,
+   "total_ms": 6.674,
+   "self_ms": 6.674,
+   "in_kb": 3792.0,
+   "out_kb": 256194.0
+  },
+  {
+   "fn": "gpt_gelu_grad",
+   "calls": 12,
+   "total_ms": 6.224,
+   "self_ms": 0.262,
+   "in_kb": 12384.0,
+   "out_kb": 12384.0
+  },
+  {
+   "fn": "gelu_grad",
+   "calls": 12,
+   "total_ms": 5.963,
+   "self_ms": 5.963,
+   "in_kb": 12384.0,
+   "out_kb": 12384.0
+  },
+  {
+   "fn": "gelu",
+   "calls": 12,
+   "total_ms": 5.514,
+   "self_ms": 5.514,
+   "in_kb": 12384.0,
+   "out_kb": 12384.0
+  },
+  {
+   "fn": "parmap:gpt_cols",
+   "calls": 488,
+   "total_ms": 5.133,
+   "self_ms": 1.401,
+   "in_kb": 987.44,
+   "out_kb": 126162.0
+  },
+  {
+   "fn": "parmap:gpt_rows",
+   "calls": 408,
+   "total_ms": 4.941,
+   "self_ms": 1.185,
+   "in_kb": 1011.19,
+   "out_kb": 130032.0
+  },
+  {
+   "fn": "gpt_ln_bwd",
+   "calls": 27,
+   "total_ms": 4.82,
+   "self_ms": 3.406,
+   "in_kb": 14040.42,
+   "out_kb": 7074.0
+  },
+  {
+   "fn": "parmap:sum",
+   "calls": 624,
+   "total_ms": 4.498,
+   "self_ms": 4.498,
+   "in_kb": 186022.88,
+   "out_kb": 1446.5
+  },
+  {
+   "fn": "gpt_ln_fwd",
+   "calls": 27,
+   "total_ms": 4.011,
+   "self_ms": 2.822,
+   "in_kb": 7074.0,
+   "out_kb": 13986.42
+  },
+  {
+   "fn": "parmap:gpt_dlogits",
+   "calls": 8,
+   "total_ms": 3.751,
+   "self_ms": 3.384,
+   "in_kb": 1273.81,
+   "out_kb": 1241.62
+  },
+  {
+   "fn": "softmax",
+   "calls": 54,
+   "total_ms": 2.426,
+   "self_ms": 2.426,
+   "in_kb": 13404.75,
+   "out_kb": 13404.75
+  },
+  {
+   "fn": "zeros",
+   "calls": 102,
+   "total_ms": 2.36,
+   "self_ms": 2.36,
+   "in_kb": 1.59,
+   "out_kb": 113546.73
+  },
+  {
+   "fn": "outer",
+   "calls": 340,
+   "total_ms": 2.025,
+   "self_ms": 2.025,
+   "in_kb": 1434.06,
+   "out_kb": 96588.75
+  },
+  {
+   "fn": "sum",
+   "calls": 234,
+   "total_ms": 1.436,
+   "self_ms": 1.436,
+   "in_kb": 69758.58,
+   "out_kb": 542.44
+  },
+  {
+   "fn": "gpt_cols",
+   "calls": 183,
+   "total_ms": 1.404,
+   "self_ms": 0.334,
+   "in_kb": 370.29,
+   "out_kb": 47310.75
+  },
+  {
+   "fn": "gpt_rows",
+   "calls": 153,
+   "total_ms": 1.388,
+   "self_ms": 0.28,
+   "in_kb": 379.2,
+   "out_kb": 48762.0
+  },
+  {
+   "fn": "gpt_dlogits",
+   "calls": 3,
+   "total_ms": 0.979,
+   "self_ms": 0.872,
+   "in_kb": 477.68,
+   "out_kb": 465.61
+  },
+  {
+   "fn": "gpt_sinusoidal_pe",
+   "calls": 4,
+   "total_ms": 0.455,
+   "self_ms": 0.204,
+   "in_kb": 0.06,
+   "out_kb": 1032.0
+  },
+  {
+   "fn": "parmap:ones",
+   "calls": 896,
+   "total_ms": 0.372,
+   "self_ms": 0.372,
+   "in_kb": 7.0,
+   "out_kb": 1800.38
+  },
+  {
+   "fn": "parmap:size",
+   "calls": 304,
+   "total_ms": 0.206,
+   "self_ms": 0.206,
+   "in_kb": 76787.25,
+   "out_kb": 9.5
+  },
+  {
+   "fn": "parmap:cumsum",
+   "calls": 8,
+   "total_ms": 0.142,
+   "self_ms": 0.142,
+   "in_kb": 2080.19,
+   "out_kb": 2080.12
+  },
+  {
+   "fn": "parmap:numel",
+   "calls": 112,
+   "total_ms": 0.122,
+   "self_ms": 0.122,
+   "in_kb": 101376.0,
+   "out_kb": 0.88
+  },
+  {
+   "fn": "parmap:length",
+   "calls": 904,
+   "total_ms": 0.109,
+   "self_ms": 0.109,
+   "in_kb": 2007.75,
+   "out_kb": 7.06
+  },
+  {
+   "fn": "sin",
+   "calls": 4,
+   "total_ms": 0.106,
+   "self_ms": 0.106,
+   "in_kb": 516.0,
+   "out_kb": 516.0
+  },
+  {
+   "fn": "cos",
+   "calls": 4,
+   "total_ms": 0.103,
+   "self_ms": 0.103,
+   "in_kb": 516.0,
+   "out_kb": 516.0
+  },
+  {
+   "fn": "parmap:struct",
+   "calls": 16,
+   "total_ms": 0.085,
+   "self_ms": 0.085,
+   "in_kb": 274332.88,
+   "out_kb": 0.0
+  },
+  {
+   "fn": "parmap:log",
+   "calls": 1024,
+   "total_ms": 0.08,
+   "self_ms": 0.08,
+   "in_kb": 8.0,
+   "out_kb": 8.0
+  },
+  {
+   "fn": "ones",
+   "calls": 340,
+   "total_ms": 0.071,
+   "self_ms": 0.071,
+   "in_kb": 2.67,
+   "out_kb": 695.14
+  },
+  {
+   "fn": "parmap:sqrt",
+   "calls": 88,
+   "total_ms": 0.051,
+   "self_ms": 0.051,
+   "in_kb": 145.25,
+   "out_kb": 145.25
+  },
+  {
+   "fn": "cumsum",
+   "calls": 3,
+   "total_ms": 0.049,
+   "self_ms": 0.049,
+   "in_kb": 780.07,
+   "out_kb": 780.05
+  },
+  {
+   "fn": "length",
+   "calls": 339,
+   "total_ms": 0.027,
+   "self_ms": 0.027,
+   "in_kb": 752.91,
+   "out_kb": 2.65
+  },
+  {
+   "fn": "struct",
+   "calls": 11,
+   "total_ms": 0.027,
+   "self_ms": 0.027,
+   "in_kb": 154594.88,
+   "out_kb": 0.0
+  },
+  {
+   "fn": "parmap:eye",
+   "calls": 8,
+   "total_ms": 0.027,
+   "self_ms": 0.027,
+   "in_kb": 0.06,
+   "out_kb": 2080.12
+  },
+  {
+   "fn": "rand",
+   "calls": 4,
+   "total_ms": 0.026,
+   "self_ms": 0.026,
+   "in_kb": 0.04,
+   "out_kb": 22.17
+  },
+  {
+   "fn": "log",
+   "calls": 384,
+   "total_ms": 0.024,
+   "self_ms": 0.024,
+   "in_kb": 3.0,
+   "out_kb": 3.0
+  },
+  {
+   "fn": "size",
+   "calls": 114,
+   "total_ms": 0.022,
+   "self_ms": 0.022,
+   "in_kb": 28795.22,
+   "out_kb": 3.56
+  },
+  {
+   "fn": "sqrt",
+   "calls": 34,
+   "total_ms": 0.014,
+   "self_ms": 0.014,
+   "in_kb": 54.48,
+   "out_kb": 54.48
+  },
+  {
+   "fn": "numel",
+   "calls": 56,
+   "total_ms": 0.012,
+   "self_ms": 0.012,
+   "in_kb": 50688.0,
+   "out_kb": 0.44
+  },
+  {
+   "fn": "eye",
+   "calls": 3,
+   "total_ms": 0.009,
+   "self_ms": 0.009,
+   "in_kb": 0.02,
+   "out_kb": 780.05
+  },
+  {
+   "fn": "gpt_config",
+   "calls": 1,
+   "total_ms": 0.009,
+   "self_ms": 0.007,
+   "in_kb": 0.05,
+   "out_kb": 0.0
+  },
+  {
+   "fn": "floor",
+   "calls": 4,
+   "total_ms": 0.005,
+   "self_ms": 0.005,
+   "in_kb": 22.17,
+   "out_kb": 22.17
+  },
+  {
+   "fn": "seed",
+   "calls": 1,
+   "total_ms": 0.003,
+   "self_ms": 0.003,
+   "in_kb": 0.01,
+   "out_kb": 0.0
+  }
+ ],
+ "gate_ok": true,
+ "gate_msgs": [
+  "gradient check 7.79e-08 (limit 1e-06)",
+  "trajectory matches reference (worst rel diff 0, limit 1e-06)"
+ ],
+ "index": 2
+}

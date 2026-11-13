@@ -67,7 +67,7 @@ Q = randn(T, d_head);
 K = randn(T, d_head);
 
 n_pairs = d_head / 2;
-theta = zeros(n_pairs);
+theta = zeros(1, n_pairs);
 for k = 0:(n_pairs - 1)
   theta(k + 1) = base ^ (-2 * k / d_head);
 end
@@ -92,7 +92,7 @@ S_phasor = real(Qz_rot * Kz_rot');                  % ' conjugates: Re sum_k z_k
 function x_rot = rope_apply(x, m, theta)
   d = length(x);
   n_pairs = d / 2;
-  x_rot = zeros(d);
+  x_rot = zeros(1, d);
   for k = 1:n_pairs
     phi = m * theta(k);
     cos_p = cos(phi);
@@ -132,8 +132,10 @@ q2 = rope_apply(Q_long(3, :), 2, theta);
 k5 = rope_apply(K_long(3, :), 5, theta);
 q4 = rope_apply(Q_long(3, :), 4, theta);
 k7 = rope_apply(K_long(3, :), 7, theta);
-print("<RoPE(q, 2), RoPE(k, 5)> =", q2 * k5');
-print("<RoPE(q, 4), RoPE(k, 7)> =", q4 * k7');
+dot_25 = sum(q2 .* k5);   % 1×1 matrix product is not a scalar; the sum is
+dot_47 = sum(q4 .* k7);
+print("<RoPE(q, 2), RoPE(k, 5)> =", dot_25);
+print("<RoPE(q, 4), RoPE(k, 7)> =", dot_47);
 
 qz = Q_long(3, 1:2:end) + 1i * Q_long(3, 2:2:end);
 kz = K_long(3, 1:2:end) + 1i * K_long(3, 2:2:end);
@@ -141,7 +143,7 @@ s_het = real(sum(qz .* conj(kz) .* exp(1i * (2 - 5) * theta)));
 print("Re sum_k z_k conj(w_k) e^{j(m-n)theta_k} at m - n = -3 :", s_het);
 ```
 
-Both rotations give ${q2 * k5':%.10f}$, and the heterodyne form — which never rotates anything, it only evaluates the phase difference — gives the same number. The relative-position property is algebra, and floating-point round-off is the only thing that could separate the three.
+Both rotations give ${dot_25:%.10f}$, and the heterodyne form — which never rotates anything, it only evaluates the phase difference — gives the same number. The relative-position property is algebra, and floating-point round-off is the only thing that could separate the three.
 
 ### Example — Constant diagonals and the phasor spirals
 
@@ -165,13 +167,13 @@ imagesc(M, "viridis")
 title("<RoPE(q,m), RoPE(k,n)>: constant along diagonals")
 xlabel("key position n"); ylabel("query position m")
 subplot(1, 3, 2)
-polar(angle(qz(1)) + m_fine * theta(1), abs(qz(1)) * ones(141))
+polar(angle(qz(1)) + m_fine * theta(1), abs(qz(1)) * ones(1, 141))
 hold("on")
 scatter(abs(qz(1)) * cos(angle(qz(1)) + pos8' * theta(1)), abs(qz(1)) * sin(angle(qz(1)) + pos8' * theta(1)))
 hold("off")
 title("pair 1: z_1 e^{j m theta_1}, theta_1 = 1 rad/token, m = 0..7")
 subplot(1, 3, 3)
-polar(angle(qz(2)) + m_fine * theta(2), abs(qz(2)) * ones(141))
+polar(angle(qz(2)) + m_fine * theta(2), abs(qz(2)) * ones(1, 141))
 hold("on")
 scatter(abs(qz(2)) * cos(angle(qz(2)) + pos8' * theta(2)), abs(qz(2)) * sin(angle(qz(2)) + pos8' * theta(2)))
 hold("off")
@@ -230,8 +232,8 @@ seed(23);
 T = 5;
 d_model = 8;
 H = randn(T, d_model);
-gamma = ones(d_model);
-beta = zeros(d_model);
+gamma = ones(1, d_model);
+beta = zeros(1, d_model);
 eps = 1e-5;
 
 function H_out = rmsnorm_naive(H, gamma, eps)
@@ -241,7 +243,7 @@ function H_out = rmsnorm_naive(H, gamma, eps)
   for t = 1:T
     x = H(t, :);
     rms = sqrt(mean(x .^ 2) + eps);
-    H_out(t) = (x / rms) .* gamma;
+    H_out(t, :) = (x / rms) .* gamma;
   end
 end
 
@@ -253,7 +255,7 @@ function H_out = layernorm_naive(H, gamma, beta, eps)
     x = H(t, :);
     mu = mean(x);
     sd = sqrt(mean((x - mu) .^ 2) + eps);
-    H_out(t) = ((x - mu) / sd) .* gamma + beta;
+    H_out(t, :) = ((x - mu) / sd) .* gamma + beta;
   end
 end
 
@@ -339,9 +341,9 @@ H = randn(T, d_model);
 
 % Standard FFN (Lesson 11).
 W1s = randn(d_model, d_ff_std) * 0.3;
-b1s = randn(d_ff_std) * 0.1;
+b1s = randn(1, d_ff_std) * 0.1;
 W2s = randn(d_ff_std, d_model) * 0.3;
-b2s = randn(d_model) * 0.1;
+b2s = randn(1, d_model) * 0.1;
 H_std = (gelu(H * W1s + repmat(b1s, T, 1))) * W2s + repmat(b2s, T, 1);
 
 % SwiGLU FFN.
@@ -575,9 +577,9 @@ run "../lib/info.rlab"
 delta = -40:40;
 tones = real((ones(81, 1) * (qz .* conj(kz))) .* exp(1i * delta' * theta));   % (81, 2): one tone per pair
 s_het = sum(tones, 2)';
-s_rot = zeros(81);
+s_rot = zeros(1, 81);
 for i = 1:81
-  s_rot(i) = rope_apply(q_fixed, delta(i), theta) * rope_apply(k_fixed, 0, theta)';
+  s_rot(i) = sum(rope_apply(q_fixed, delta(i), theta) .* rope_apply(k_fixed, 0, theta));
 end
 print("max |heterodyne s(delta) - rotated dot product| over 81 offsets:", max(abs(s_het - s_rot)));
 figure();

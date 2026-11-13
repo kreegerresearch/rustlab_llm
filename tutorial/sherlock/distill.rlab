@@ -101,7 +101,7 @@ end
 # One window for parmap: teacher forward (no gradient), student forward and
 # backward.  Returns [flat grad, hard CE, mixed KD loss].
 function g = kd_grad_flat(ids, Pt, Ps, cfg_t, cfg_s, Tkd, alpha)
-  mask = ones(length(ids) - 1);
+  mask = ones(1, length(ids) - 1);
   [zt, Lt, ct] = gpt_forward(ids, mask, Pt, cfg_t);
   [zs, Ls, cs] = gpt_forward(ids, mask, Ps, cfg_s);
   G = gpt_backward(ids, kd_dlogits(ids, zs, zt, Tkd, alpha), cs, Ps, cfg_s);
@@ -112,10 +112,10 @@ end
 function [theta, h_ce, h_kd, v_step, v_loss] = train_student(ids_train, ids_val, Pt, cfg_t, cfg_s, K, alpha, tag)
   T = cfg_s.Tmax - 1;  B = K.batch;  Tkd = K.T_kd;
   theta = gpt_flatten(gpt_init(cfg_s, K.init_std), cfg_s);
-  m_adam = zeros(length(theta));  v_adam = zeros(length(theta));
+  m_adam = zeros(1, length(theta));  v_adam = zeros(1, length(theta));
   wd_mask = gpt_wd_mask(cfg_s);
-  h_ce = zeros(K.n_steps);  h_kd = zeros(K.n_steps);  v_step = [];  v_loss = [];
-  mask = ones(T);
+  h_ce = zeros(1, K.n_steps);  h_kd = zeros(1, K.n_steps);  v_step = [];  v_loss = [];
+  mask = ones(1, T);
   tic;
   for step = 1:K.n_steps
     eta_t = gpt_lr(step, K.n_steps, K.warmup, K.eta_max, K.eta_min);

@@ -98,7 +98,7 @@ sequenceDiagram
 - **Targets are on benchmark keys.** Every request names keys, for example `prim.matmul_512x512x512 ≥ 40 GFLOP/s`. A request is met when the recorded run reaches the target and the gate passes.
 - **Noise floor.** On the same binary, workloads vary by a median of 1.5 % between runs, nearly all within 10 %. Changes under 10 % count only if they repeat.
 - **No regressions.** The report flags any workload more than 10 % slower than the previous run. A flagged regression is raised in the next request file even when the headline improved.
-- **Stopping rule.** The loop pauses when a turn improves `e2e.train_step_B8` by less than 10 %, or when the goal is reached: 17,000 tokens/s for the default 811 k-parameter model on the reference machine, roughly PyTorch on the same CPU.
+- **Stopping rule.** The loop pauses when a turn improves `e2e.train_step_B8` by less than 10 %, or when the goal is reached. The first goal, 17,000 tokens/s for the default 811 k-parameter model on the reference machine (roughly PyTorch on the same CPU), was reached in iteration 02. That figure was an estimate. Measured on 2026-10-23 with `make perf-torch`, PyTorch runs the same step at 34,300–37,200 tokens/s in `float64` on the same CPU. The goal is now **35,000 tokens/s, PyTorch `float64` parity**; see `perf/iterations/03-requests.md`. Raising the goal is recorded in the request file that does it.
 
 ## Request file template (`perf/iterations/NN-requests.md`)
 
@@ -106,7 +106,7 @@ sequenceDiagram
 # Perf loop iteration NN: requests to rustlab
 
 Measured on: perf/reports/NN-label.md (rustlab X.Y.Z, source <sha>)
-Training step now: <tok/s> (e2e.train_step_B8); goal 17,000 tok/s.
+Training step now: <tok/s> (e2e.train_step_B8); goal 35,000 tok/s (PyTorch float64 on this CPU).
 
 ## Summary
 | # | Request | Share of step it attacks | Expected e2e gain | Keys and targets |
@@ -138,6 +138,14 @@ Notes: <behaviour changes, new builtins the library should adopt, caveats>
 
 | Iteration | Report | Requests | Training step |
 |---|---|---|---|
-| 00 baseline | [`perf/reports/00-baseline.md`](../perf/reports/00-baseline.md) | [`perf/iterations/01-requests.md`](../perf/iterations/01-requests.md) | 2,250 tok/s (rustlab 0.3.9) |
+| 00 baseline | [`perf/reports/00-baseline.md`](../perf/reports/00-baseline.md) | [`perf/iterations/01-requests.md`](../perf/iterations/01-requests.md) | 2,246 tok/s (rustlab 0.3.9) |
+| 01 rustlab 0.3.10 | [`perf/reports/01-iter01.md`](../perf/reports/01-iter01.md) | 01: R1, R2, R4 met, R3 partly met | 8,859 tok/s (3.94×) |
+| 01b library adoption | [`perf/reports/02-iter01b.md`](../perf/reports/02-iter01b.md) | `gelu_grad` builtin; vectorized positional encoding | 9,967 tok/s (4.44×) |
+| 03 suite v2, same binary | [`perf/reports/03-suite-v2.md`](../perf/reports/03-suite-v2.md) | [`perf/iterations/02-requests.md`](../perf/iterations/02-requests.md) | 9,542 tok/s (within noise of 01b) |
+| 04 rustlab 0.3.11 | [`perf/reports/04-iter02.md`](../perf/reports/04-iter02.md) | 02: R2, R3 met, R1 partly met, R4 designed | 17,470 tok/s (7.78×); 18,250 on a repeat |
+| 05–07 library items | [`05`](../perf/reports/05-iter02b.md), [`06`](../perf/reports/06-iter02c.md), [`07`](../perf/reports/07-iter02d.md) | Implicit expansion tried and reverted (slower in 0.3.11); vectorized `gpt_dlogits`; loss inside the flatten concatenation | 18,640–18,700 tok/s |
+| 08 suite v3, same binary | [`perf/reports/08-suite-v3.md`](../perf/reports/08-suite-v3.md) | [`perf/iterations/03-requests.md`](../perf/iterations/03-requests.md), open | 19,310 tok/s (8.60×) |
+| 09 rustlab 0.3.16, no perf changes | [`perf/reports/09-v0.3.16.md`](../perf/reports/09-v0.3.16.md) | Recorded under background load (about 10 % slow on every key). Side by side with a 0.3.11 build: the same within 1 %. 0.3.14 broke `run "../../lib/…"`; reported in 03. Iteration 03 revised after measuring PyTorch: SME matrix multiply first; goal 35,000 (PyTorch `float64`). | 18,350–18,970 tok/s; PyTorch `float64` 34,300–37,200 |
+| 10 rustlab 0.3.64 | [`perf/reports/10-v0.3.64.md`](../perf/reports/10-v0.3.64.md) | 03: R1 nearly met (matmul 130–384 GFLOP/s), R2 storage half met, R3 not met, R4 partly met. Recorded after merging the 0.3.43–0.3.63 compatibility branch. Gate PASS at 1.42e-15. Passes the 35,000 goal, so by the stopping rule the flywheel pauses here. | 36,050 tok/s (16.05×) |
 
 Update this table at the end of every turn.

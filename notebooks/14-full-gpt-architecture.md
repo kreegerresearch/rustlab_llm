@@ -142,23 +142,23 @@ for ell = 1:N_blocks
 end
 
 % Run H through the N blocks, recording the residual-stream norm after each.
-norms_l = zeros(N_blocks + 1);
-norms_l(1) = norm(H);
+norms_l = zeros(1, N_blocks + 1);
+norms_l(1) = norm(H, "fro");
 for ell = 1:N_blocks
   r  = ((ell - 1) * d_model + 1):(ell * d_model);
   rf = ((ell - 1) * d_ff + 1):(ell * d_ff);
   H = mha_block_forward(H, W_Q_all(r, :), W_K_all(r, :), W_V_all(r, :), W_O_all(r, :), ...
                         W_ff1_all(r, :), W_ff2_all(rf, :), H_heads, M_mask);
-  norms_l(ell + 1) = norm(H);
+  norms_l(ell + 1) = norm(H, "fro");
 end
 
 print("H^{(N)} shape after", N_blocks, "blocks:", size(H));
-print("|H^{(N)}|:", norm(H));
+print("|H^{(N)}|:", norm(H, "fro"));
 print("|H^{(l)}| for l = 0..N:", norms_l);
-print("sqrt(T * d_model), the norm of an (8 × 64) matrix of unit-variance entries:", sqrt(T * d_model));
+print("sqrt(T * d_model), the Frobenius norm of an (8 × 64) matrix of unit-variance entries:", sqrt(T * d_model));
 ```
 
-The shape stays $(T, d_{\text{model}}) = (8, 64)$ across all $N$ blocks — that is the entire reason the architecture is stackable. The *scale* does not stay put: $\|\mathbf{H}^{(N)}\| = 70.1$ for an $8 \times 64$ matrix, whereas unit-variance entries would give $\sqrt{512} = 22.6$. The stream grew from $\|\mathbf{H}^{(0)}\| = 16.2$ to $39.5 \to 51.5 \to 62.8 \to 70.1$ — about $4.3\times$ over four blocks, [[13-transformer-block|Lesson 13]]'s accumulation story continued. That growth is exactly why $\mathrm{LN}_f$ exists: without it the logit scale, and therefore the effective softmax temperature ([[02-probability-and-softmax|Lesson 02]]), would depend on depth and on initialisation.
+The shape stays $(T, d_{\text{model}}) = (8, 64)$ across all $N$ blocks — that is the entire reason the architecture is stackable. The magnitudes below are Frobenius (`norm(H, "fro")`), the root-sum-square of every entry, which is what $\sqrt{Td_{\text{model}}}$ estimates for unit-variance entries. An unqualified `norm(H)` is the matrix 2-norm. The *scale* does not stay put: $\|\mathbf{H}^{(N)}\| = 70.1$ for an $8 \times 64$ matrix, whereas unit-variance entries would give $\sqrt{512} = 22.6$. The stream grew from $\|\mathbf{H}^{(0)}\| = 16.2$ to $39.5 \to 51.5 \to 62.8 \to 70.1$ — about $4.3\times$ over four blocks, [[13-transformer-block|Lesson 13]]'s accumulation story continued. That growth is exactly why $\mathrm{LN}_f$ exists: without it the logit scale, and therefore the effective softmax temperature ([[02-probability-and-softmax|Lesson 02]]), would depend on depth and on initialisation.
 
 ### Example — Final LayerNorm and LM head
 
@@ -209,13 +209,13 @@ function [logits, norms] = toy_gpt_forward(ids, E_tok, PE, W_Q_all, W_K_all, W_V
   for t = 1:T
     H(t, :) = E_tok(ids(t), :) + PE(t, :);
   end
-  norms = zeros(N + 1);  norms(1) = norm(H);
+  norms = zeros(1, N + 1);  norms(1) = norm(H, "fro");
   for ell = 1:N
     r  = ((ell - 1) * d + 1):(ell * d);
     rf = ((ell - 1) * d_ff + 1):(ell * d_ff);
     H = mha_block_forward(H, W_Q_all(r, :), W_K_all(r, :), W_V_all(r, :), W_O_all(r, :) * branch_scale, ...
                           W_ff1_all(r, :), W_ff2_all(rf, :) * branch_scale, H_heads, M_mask);
-    norms(ell + 1) = norm(H);
+    norms(ell + 1) = norm(H, "fro");
   end
   logits = layernorm(H) * W_U;
 end

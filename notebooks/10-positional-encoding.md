@@ -157,9 +157,9 @@ The similarity $\mathrm{PE}_t \cdot \mathrm{PE}_{t+k}$ depends only on $k$, not 
 ```rustlab
 n_pairs = d_model_pe / 2;
 omega = 10000.0 .^ (-2 * (0:(n_pairs - 1)) / d_model_pe);   % ω_0 = 1 ... ω_15 = 1.78e-4 rad/token
-sims_short = zeros(40);                        % similarity for offsets k=0..39 starting at t=10
-sims_far   = zeros(40);                        % same offsets starting at t=20
-sims_cf    = zeros(40);                        % closed form sum_j cos(ω_j k)
+sims_short = zeros(1, 40);                        % similarity for offsets k=0..39 starting at t=10
+sims_far   = zeros(1, 40);                        % same offsets starting at t=20
+sims_cf    = zeros(1, 40);                        % closed form sum_j cos(ω_j k)
 for k = 0:39
   sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));
   sims_far(k + 1)   = sum(PE(20, :) .* PE(20 + k, :));
@@ -212,7 +212,7 @@ vocab_pe = 6;
 T_demo = 8;
 E_pe = randn(vocab_pe, d_model_pe) * 0.1;
 ids = [1, 2, 1, 2, 1, 2, 1, 2];
-X_tok = E_pe(ids, :) * sqrt(d_model_pe);        % row gather: token content only
+X_tok = E_pe(ids(:), :) * sqrt(d_model_pe);      % row gather: token content only
 X_pos = X_tok + PE(1:T_demo, :);                % content + position (matrix + matrix)
 diff_tok_only = max(abs(X_tok(1, :) - X_tok(3, :)));   % both rows are token 1
 diff_with_pe  = max(abs(X_pos(1, :) - X_pos(3, :)));
@@ -333,7 +333,7 @@ title("|DFT| of one PE column (cycles per token)")
 kk = 0:130;
 dist_pair0 = sqrt(2 - 2 * cos(omega(1) * kk));            % pair 0 only (λ = 6.3)
 dist_pair4 = sqrt(2 - 2 * cos(omega(5) * kk));            % pair 4 only (λ = 62.8)
-dist_all   = zeros(length(kk));
+dist_all   = zeros(1, length(kk));
 for i = 1:length(kk)
   dist_all(i) = sqrt(sum(2 - 2 * cos(omega * kk(i))));    % all 16 pairs
 end
@@ -407,7 +407,7 @@ A $\mathbf{W}_Q/\mathbf{W}_K$ pair can therefore implement "attend 3 back" as a 
 
 ```rustlab
 bits_needed = log2(T_seq);
-var_pair = zeros(n_pairs);
+var_pair = zeros(1, n_pairs);
 for k = 1:n_pairs
   var_pair(k) = std(PE(:, 2 * k - 1))^2;                    % variance of the sin column down the 64 rows
 end

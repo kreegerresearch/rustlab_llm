@@ -30,23 +30,23 @@ d_ff = 8;
 T_max = 16;
 pat = [1, 2, 2];
 T_pre = 12;
-ids_pre = zeros(T_pre);
+ids_pre = zeros(1, T_pre);
 for i = 1:T_pre
   ids_pre(i) = pat(mod(i - 1, 3) + 1);
 end
-mask_pre = ones(T_pre - 1);
+mask_pre = ones(1, T_pre - 1);
 
 # === 2. Trainable parameters ===
 E = randn(vocab, d_model) * 0.3;
 PE = sinusoidal_pe(T_max, d_model);
-gamma1 = ones(d_model);   beta1 = zeros(d_model);
-gamma2 = ones(d_model);   beta2 = zeros(d_model);
+gamma1 = ones(1, d_model);   beta1 = zeros(1, d_model);
+gamma2 = ones(1, d_model);   beta2 = zeros(1, d_model);
 Wq = randn(d_model, d_model) * 0.3;
 Wk = randn(d_model, d_model) * 0.3;
 Wv = randn(d_model, d_model) * 0.3;
 Wo = randn(d_model, d_model) * 0.3;
-W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
-W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(1, d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(1, d_model);
 W_U = randn(d_model, vocab) * 0.3;
 P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
@@ -76,7 +76,7 @@ function dl = dpo_dlogits(ids, resp_start, resp_end, logits, vocab, sign, weight
   dl = zeros(T, vocab);
   for t = (resp_start - 1):(resp_end - 1)
     p = softmax(logits(t, :));
-    e_y = zeros(vocab); e_y(ids(t + 1)) = 1.0;
+    e_y = zeros(1, vocab); e_y(ids(t + 1)) = 1.0;
     dl(t, :) = sign * weight * (p - e_y);
   end
 end
@@ -119,7 +119,7 @@ n_prefs = size(chosen)(1);
 # Both responses occupy positions 4..5 (predicted from positions 3..4).
 resp_start = 4;
 resp_end   = 5;
-zero_mask = zeros(size(chosen)(2) - 1);   # logits only, no loss accumulation
+zero_mask = zeros(1, size(chosen)(2) - 1);   # logits only, no loss accumulation
 
 beta_dpo = 0.5;             # KL temperature: smaller = looser to reference
 
@@ -127,8 +127,8 @@ beta_dpo = 0.5;             # KL temperature: smaller = looser to reference
 [M, V] = adamw_init(P);
 n_dpo = 200;
 eta_dpo = 0.005;
-dpo_loss_curve = zeros(n_dpo + 1);
-abb_loss_curve = zeros(n_dpo + 1);
+dpo_loss_curve = zeros(1, n_dpo + 1);
+abb_loss_curve = zeros(1, n_dpo + 1);
 
 # Initial logging.
 L0_dpo = 0.0;

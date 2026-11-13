@@ -21,7 +21,7 @@ print("benchmark of lib/gpt.rlab   logical CPUs:", nproc());
 # One window: forward, backward, flatten, each timed separately.
 function [t_f, t_b, t_fl] = time_one(ids, P, cfg)
   T = length(ids) - 1;
-  mask = ones(T);
+  mask = ones(1, T);
   tic; [lo, L, cache] = gpt_forward(ids, mask, P, cfg); t_f = toc;
   tic; G = gpt_backward(ids, gpt_dlogits(ids, mask, lo, cache.total), cache, P, cfg); t_b = toc;
   tic; g = gpt_flatten(G, cfg); t_fl = toc;
@@ -31,7 +31,7 @@ end
 function W = random_windows(B, T, V)
   W = zeros(B, T + 1);
   for b = 1:B
-    W(b, :) = randi(V, T + 1);
+    W(b, :) = randi(V, 1, T + 1);
   end
 end
 
@@ -46,8 +46,8 @@ end
 cfgs = [64, 2, 4, 256, 64; 128, 4, 4, 512, 128; 192, 6, 6, 768, 128; 256, 8, 8, 1024, 128];
 n_cfg = size(cfgs)(1);
 B_par = 8;
-sw_params = zeros(n_cfg);  sw_tps = zeros(n_cfg);  sw_par = zeros(n_cfg);
-sw_f = zeros(n_cfg);  sw_b = zeros(n_cfg);  sw_fl = zeros(n_cfg);
+sw_params = zeros(1, n_cfg);  sw_tps = zeros(1, n_cfg);  sw_par = zeros(1, n_cfg);
+sw_f = zeros(1, n_cfg);  sw_b = zeros(1, n_cfg);  sw_fl = zeros(1, n_cfg);
 print("");
 print("--- 2. model-size sweep: one window of T tokens, times are means over reps ---");
 print("| d | L | H | d_ff | T | params | fwd ms | bwd ms | flat ms | serial tok/s | parmap(8) tok/s | GFLOP/s (6NT) |");
@@ -58,7 +58,7 @@ for i = 1:n_cfg
     d = cfgs(i, 1);  Lyr = cfgs(i, 2);  H = cfgs(i, 3);  dff = cfgs(i, 4);  T = cfgs(i, 5);
     cfg = gpt_config(V, d, Lyr, H, dff, T + 1);
     P = gpt_init(cfg, 0.02);
-    ids = randi(V, T + 1);
+    ids = randi(V, 1, T + 1);
     [t_f, t_b, t_fl] = time_one(ids, P, cfg);          # first pass, also the 5 s guard
     reps = 1;
     par_tps = 0;
@@ -69,7 +69,7 @@ for i = 1:n_cfg
       end
       reps = 4;
       W = random_windows(B_par, T, V);
-      mask = ones(T);
+      mask = ones(1, T);
       tic;
       Gm = parmap(@(b) gpt_grad_flat(W(b, :), mask, P, cfg), 1:B_par);
       par_tps = B_par * T / toc;
@@ -93,7 +93,7 @@ end
 function [L, cache, tm] = timed_forward(ids, mask, P, cfg)
   d = cfg.d;  Lyr = cfg.L;  H = cfg.H;  dk = cfg.dk;  dff = cfg.dff;  V = cfg.V;
   T = length(ids);
-  tm = zeros(16);
+  tm = zeros(1, 16);
   tic;
   E = P.E;  PE = P.PE;
   Wqkv = P.Wqkv;  Wo = P.Wo;  W1 = P.W1;  b1 = P.b1;  W2 = P.W2;  b2 = P.b2;
@@ -105,7 +105,7 @@ function [L, cache, tm] = timed_forward(ids, mask, P, cfg)
   Hmid_all = zeros(Lyr * T, d);  xn2_all = zeros(Lyr * T, d);  sig2_all = zeros(Lyr * T, 1);
   pre_all = zeros(Lyr * T, dff);  hid_all = zeros(Lyr * T, dff);
   tm(1) = tm(1) + toc;                                   # 1 unpack + cache allocation
-  tic;  X = E(ids, :) + PE(1:T, :);  tm(2) = tm(2) + toc; # 2 embedding gather
+  tic;  X = E(ids(:), :) + PE(1:T, :);  tm(2) = tm(2) + toc; # 2 embedding gather
   for l = 1:Lyr
     r = ((l - 1) * T + 1):(l * T);
     w = ((l - 1) * d + 1):(l * d);
@@ -157,7 +157,7 @@ end
 function [G, tm] = timed_backward(ids, mask, cache, P, cfg)
   d = cfg.d;  Lyr = cfg.L;  H = cfg.H;  dk = cfg.dk;  dff = cfg.dff;  V = cfg.V;
   T = cache.T;
-  tm = zeros(14);
+  tm = zeros(1, 14);
   tic;  dlogits = gpt_dlogits(ids, mask, cache.logits, cache.total);  tm(1) = tm(1) + toc;  # 1 dlogits loop
   tic;
   Wqkv = P.Wqkv;  Wo = P.Wo;  W1 = P.W1;  W2 = P.W2;
@@ -224,10 +224,10 @@ end
 d0 = 128;  L0 = 4;  H0 = 4;  dff0 = 512;  T0 = 128;
 cfg0 = gpt_config(V, d0, L0, H0, dff0, T0 + 1);
 P0 = gpt_init(cfg0, 0.02);
-ids0 = randi(V, T0 + 1);
-mask0 = ones(T0);
+ids0 = randi(V, 1, T0 + 1);
+mask0 = ones(1, T0);
 n_rep = 5;
-tmf = zeros(16);  tmb = zeros(14);
+tmf = zeros(1, 16);  tmb = zeros(1, 14);
 for r = 1:n_rep
   [L, cache, a] = timed_forward(ids0, mask0, P0, cfg0);
   [G, b] = timed_backward(ids0, mask0, cache, P0, cfg0);
@@ -288,14 +288,14 @@ Xa = randn(T0, d0);  Xb = randn(T0, dff0);  Wa = randn(d0, dff0);  Wsq = randn(5
 Qh = randn(T0, 32);  Kh = randn(T0, 32);  Vh = randn(T0, 32);
 Mc = -1.0e9 * (1 - cumsum(eye(T0), 1));
 tic;  for k = 1:n_call;  Y = layernorm(Xa);  end;  t_ln = toc / n_call;
-tic;  for k = 1:n_call;  Y = gpt_ln_fwd(Xa, ones(d0), zeros(d0));  end;  t_ln2 = toc / n_call;
+tic;  for k = 1:n_call;  Y = gpt_ln_fwd(Xa, ones(1, d0), zeros(1, d0));  end;  t_ln2 = toc / n_call;
 tic;  for k = 1:n_call;  Y = softmax(Xa);  end;  t_sm = toc / n_call;
 tic;  for k = 1:n_call;  Y = gelu(Xb);  end;  t_ge = toc / n_call;
 tic;  for k = 1:n_call;  Y = Xa * Wa;  end;  t_m1 = toc / n_call;
 tic;  for k = 1:n_call;  Y = Wsq * Wsq;  end;  t_m2 = toc / n_call;
 tic;  for k = 1:n_call;  A = softmax(Qh * Kh' / sqrt(32) + Mc);  O = A * Vh;  end;  t_att = toc / n_call;
 Ea = randn(V, d0);
-tic;  for k = 1:n_call;  Y = Ea(ids0, :);  end;  t_gat = toc / n_call;
+tic;  for k = 1:n_call;  Y = Ea(ids0(:), :);  end;  t_gat = toc / n_call;
 dXa = randn(T0 + 1, d0);
 tic;
 for k = 1:n_call
@@ -305,7 +305,7 @@ for k = 1:n_call
   end
 end
 t_sc = toc / n_call;
-th = zeros(n_p0 + 1);
+th = zeros(1, n_p0 + 1);
 tic;  for k = 1:n_call;  s = 0;  for t = 1:1000;  s = s + t;  end;  end;  t_loop = toc / n_call / 1000;
 print("");
 print("--- primitives at the tutorial's shapes (mean of", n_call, "calls) ---");
@@ -325,7 +325,7 @@ print(sprintf("| scalar loop iteration | | %.5f | (%.2f us) |", 1000 * t_loop, 1
 # === 4. parmap scaling over the batch (default model) ===
 Bs = [1, 2, 4, 8, 14];
 n_B = length(Bs);
-par_tps = zeros(n_B);
+par_tps = zeros(1, n_B);
 t_serial = sw_f(2) + sw_b(2) + sw_fl(2);
 serial_tps = T0 / t_serial;
 print("");
@@ -350,7 +350,7 @@ end
 
 # Per-step work outside the windows (train.rlab pays this once per step).
 theta = gpt_flatten(P0, cfg0);
-m_a = zeros(length(theta));  v_a = zeros(length(theta));
+m_a = zeros(1, length(theta));  v_a = zeros(1, length(theta));
 wdm = gpt_wd_mask(cfg0);
 W8 = random_windows(8, T0, V);
 Gm = parmap(@(b) gpt_grad_flat(W8(b, :), mask0, P0, cfg0), 1:8);

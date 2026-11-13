@@ -55,19 +55,20 @@ function P = gpt_init(cfg, std)
              "b2", zeros(L, d), ...
              "g1", ones(L, d), "be1", zeros(L, d), ...
              "g2", ones(L, d), "be2", zeros(L, d), ...
-             "gf", ones(d), "bf", zeros(d), ...
+             "gf", ones(1, d), "bf", zeros(1, d), ...
              "W_U", randn(d, V) * std);
 end
 
 function PE = gpt_sinusoidal_pe(T_max, d)
+  # Angles (t-1)*omega_k for every position and frequency at once; sine in
+  # the odd columns, cosine in the even ones.  Bit-identical to the
+  # double loop it replaced (perf flywheel 01b), about 100x faster.
+  k = 0:(d / 2 - 1);
+  omega = 10000.0 .^ (-2 * k / d);
+  A = outer(0:(T_max - 1), omega);
   PE = zeros(T_max, d);
-  for t = 1:T_max
-    for k = 0:(d / 2 - 1)
-      omega = 10000.0 ^ (-2 * k / d);
-      PE(t, 2 * k + 1) = sin((t - 1) * omega);
-      PE(t, 2 * k + 2) = cos((t - 1) * omega);
-    end
-  end
+  PE(:, 1:2:d) = sin(A);
+  PE(:, 2:2:d) = cos(A);
 end
 
 # Number of trainable scalars (everything except PE).
@@ -81,13 +82,19 @@ end
 # Matrices are flattened column-major by reshape (the same order reshape
 # restores), which is all that matters as long as both directions agree.
 function v = gpt_flatten(S, cfg)
+  v = gpt_flatten_tail(S, []);
+end
+
+# gpt_flatten with extra values appended, in the same single concatenation
+# (gpt_grad_flat appends the loss without copying the 811 k values twice).
+function v = gpt_flatten_tail(S, tail)
   v = [reshape(S.E, 1, numel(S.E)), reshape(S.Wqkv, 1, numel(S.Wqkv)), ...
        reshape(S.Wo, 1, numel(S.Wo)), reshape(S.W1, 1, numel(S.W1)), ...
        reshape(S.b1, 1, numel(S.b1)), reshape(S.W2, 1, numel(S.W2)), ...
        reshape(S.b2, 1, numel(S.b2)), reshape(S.g1, 1, numel(S.g1)), ...
        reshape(S.be1, 1, numel(S.be1)), reshape(S.g2, 1, numel(S.g2)), ...
        reshape(S.be2, 1, numel(S.be2)), reshape(S.gf, 1, numel(S.gf)), ...
-       reshape(S.bf, 1, numel(S.bf)), reshape(S.W_U, 1, numel(S.W_U))];
+       reshape(S.bf, 1, numel(S.bf)), reshape(S.W_U, 1, numel(S.W_U)), tail];
 end
 
 # Rebuild a parameter struct from a flat vector.  PE is regenerated.
@@ -117,23 +124,23 @@ end
 # and LayerNorm gains/biases — same order as gpt_flatten.
 function m = gpt_wd_mask(cfg)
   V = cfg.V;  d = cfg.d;  L = cfg.L;  dff = cfg.dff;
-  m = [ones(V * d), ones(L * d * 3 * d), ones(L * d * d), ones(L * d * dff), zeros(L * dff), ...
-       ones(L * dff * d), zeros(L * d), zeros(L * d), zeros(L * d), zeros(L * d), zeros(L * d), ...
-       zeros(d), zeros(d), ones(d * V)];
+  m = [ones(1, V * d), ones(1, L * d * 3 * d), ones(1, L * d * d), ones(1, L * d * dff), zeros(1, L * dff), ...
+       ones(1, L * dff * d), zeros(1, L * d), zeros(1, L * d), zeros(1, L * d), zeros(1, L * d), zeros(1, L * d), ...
+       zeros(1, d), zeros(1, d), ones(1, d * V)];
 end
 
 # === Row broadcasting helper ===
 # A row slice M(l, :) and a plain vector carry no orientation in rustlab, so
 # repmat(v, T, 1) would tile them side by side.  Force a 1 x n row first.
 function R = gpt_rows(v, T)
-  R = outer(ones(T), reshape(v, 1, length(v)));
+  R = outer(ones(1, T), reshape(v, 1, length(v)));
 end
 
 # Broadcast a length-T vector (or T x 1 matrix) down the rows of a T x d
 # matrix.  reshape(v, T, 1) collapses back to a bare vector in rustlab and
 # repmat(v, 1, d) would tile it side by side, so use an outer product.
 function C = gpt_cols(v, d)
-  C = outer(reshape(v, 1, length(v)), ones(d));
+  C = outer(reshape(v, 1, length(v)), ones(1, d));
 end
 
 # === LayerNorm with affine, vectorised over rows, with backward ===
@@ -160,11 +167,11 @@ end
 
 # Derivative of the tanh-approximation GELU (matches the gelu builtin).
 function y = gpt_gelu_grad(z)
-  c = sqrt(2.0 / pi);
-  u = c * (z + 0.044715 * z .^ 3);
-  th = tanh(u);
-  du = c * (1.0 + 0.044715 * 3.0 * z .^ 2);
-  y = 0.5 * (1.0 + th) + 0.5 * z .* (1.0 - th .^ 2) .* du;
+  # d/dz gelu(z) for the tanh approximation.  The builtin (rustlab >= 0.3.10)
+  # evaluates the same formula as the expression it replaced, bit for bit:
+  #   0.5 (1 + tanh u) + 0.5 z (1 - tanh^2 u) sqrt(2/pi) (1 + 3 * 0.044715 z^2),
+  #   u = sqrt(2/pi) (z + 0.044715 z^3)
+  y = gelu_grad(z);
 end
 
 # === Forward pass for one sequence ===
@@ -186,7 +193,7 @@ function [logits, L, cache] = gpt_forward(ids, mask, P, cfg)
   Hmid_all = zeros(Lyr * T, d);  xn2_all = zeros(Lyr * T, d);  sig2_all = zeros(Lyr * T, 1);
   pre_all = zeros(Lyr * T, dff);  hid_all = zeros(Lyr * T, dff);
 
-  X = E(ids, :) + PE(1:T, :);
+  X = E(ids(:), :) + PE(1:T, :);
   for l = 1:Lyr
     r = ((l - 1) * T + 1):(l * T);          # cache rows for this layer
     w = ((l - 1) * d + 1):(l * d);          # weight rows for this layer
@@ -242,14 +249,13 @@ function dl = gpt_dlogits(ids, mask, logits, total)
   T = size(logits)(1);  V = size(logits)(2);
   dl = zeros(T, V);
   if total > 0 && T > 1
+    # softmax minus the one-hot targets, in one write: position t's target
+    # is column ids(t + 1), linear index t + (ids(t + 1) - 1) (T - 1) in
+    # column-major order.  Masked positions are multiplied by 0.
     Pm = softmax(logits(1:(T - 1), :));
-    for t = 1:(T - 1)
-      if mask(t) > 0
-        row = Pm(t, :);
-        row(ids(t + 1)) = row(ids(t + 1)) - 1.0;
-        dl(t, :) = row / total;
-      end
-    end
+    lin = (1:(T - 1)) + (ids(2:T) - 1) * (T - 1);
+    Pm(lin) = Pm(lin) - 1.0;
+    dl(1:(T - 1), :) = (Pm .* gpt_cols(double(mask(1:(T - 1)) > 0), V)) / total;
   end
 end
 
@@ -334,7 +340,7 @@ end
 # === Convenience: loss and flat gradient of one window ===
 # ids is a 1 x T window; every position counts.
 function L = gpt_loss(ids, P, cfg)
-  [lo, L, cache] = gpt_forward(ids, ones(length(ids) - 1), P, cfg);
+  [lo, L, cache] = gpt_forward(ids, ones(1, length(ids) - 1), P, cfg);
 end
 
 # Flat gradient vector (gpt_flatten order) of the mean loss on one window,
@@ -343,7 +349,7 @@ end
 function g = gpt_grad_flat(ids, mask, P, cfg)
   [lo, L, cache] = gpt_forward(ids, mask, P, cfg);
   G = gpt_backward(ids, gpt_dlogits(ids, mask, lo, cache.total), cache, P, cfg);
-  g = [gpt_flatten(G, cfg), L];
+  g = gpt_flatten_tail(G, L);
 end
 
 # === AdamW on the flat vector (Lesson 16) ===
@@ -383,7 +389,7 @@ function p = gpt_next_dist(prefix, P, cfg, tau)
     prefix = prefix((n - cfg.Tmax + 1):n);
     n = cfg.Tmax;
   end
-  [logits, L, cache] = gpt_forward(prefix, zeros(max(n - 1, 1)), P, cfg);
+  [logits, L, cache] = gpt_forward(prefix, zeros(1, max(n - 1, 1)), P, cfg);
   p = softmax(logits(n, :) / tau);
 end
 
@@ -407,7 +413,7 @@ function q = gpt_topk(p, K_top)
     [s_asc, idx] = sort(p);
     N = length(p);
     keep = idx(N:-1:(N - K_top + 1));
-    q = zeros(N);
+    q = zeros(1, N);
     mass = 0.0;
     for j = 1:K_top
       mass = mass + p(keep(j));

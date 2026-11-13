@@ -22,12 +22,12 @@ W_stack = zeros(n_layers * d, d);
 for L = 1:n_layers
   W_stack((L - 1) * d + 1:L * d, :) = randn(d, d) * (1.0 / sqrt(d));
 end
-x0 = randn(d);
+x0 = randn(1, d);
 
 # === Cumulative Jacobian products ===
 P_plain = eye(d);  P_res = eye(d);
-smax_plain = zeros(n_layers);
-smin_res   = zeros(n_layers);  smax_res = zeros(n_layers);
+smax_plain = zeros(1, n_layers);
+smin_res   = zeros(1, n_layers);  smax_res = zeros(1, n_layers);
 x_plain = x0;  x_resi = x0;
 for L = 1:n_layers
   W_L = W_stack((L - 1) * d + 1:L * d, :);

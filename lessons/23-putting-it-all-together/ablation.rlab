@@ -19,7 +19,7 @@ run "../../lib/info.rlab"
 # === 1. The capstone token sequence (capstone.rlab section 2 produces it) ===
 tokens = repmat([17, 12, 9, 12, 8, 16, 18, 12], 1, 4);   # period 8, 32 tokens
 vocab = 18;  T = length(tokens);  n_pairs = T - 1;
-mask_train = ones(T - 1);
+mask_train = ones(1, T - 1);
 
 # === 2. Step-0 initialisation, identical to capstone.rlab section 4 ===
 seed(22);
@@ -30,10 +30,10 @@ Wq = randn(d_model, d_model) * 0.3;  Wk = randn(d_model, d_model) * 0.3;
 Wv = randn(d_model, d_model) * 0.3;  Wo = randn(d_model, d_model) * 0.3;
 W1 = randn(d_model, d_ff) * 0.3;     W2 = randn(d_ff, d_model) * 0.3;
 W_U = randn(d_model, vocab) * 0.3;
-P0 = struct("E", E, "PE", PE, "gamma1", ones(d_model), "beta1", zeros(d_model), ...
-            "gamma2", ones(d_model), "beta2", zeros(d_model), ...
-            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", zeros(d_ff), ...
-            "W2", W2, "b2f", zeros(d_model), "W_U", W_U);
+P0 = struct("E", E, "PE", PE, "gamma1", ones(1, d_model), "beta1", zeros(1, d_model), ...
+            "gamma2", ones(1, d_model), "beta2", zeros(1, d_model), ...
+            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", zeros(1, d_ff), ...
+            "W2", W2, "b2f", zeros(1, d_model), "W_U", W_U);
 n_params = vocab * d_model + 4 * d_model + 4 * d_model * d_model + 2 * d_model * d_ff + d_ff + d_model + d_model * vocab;
 n_train = 600;  T_w = 60;  eta_max = 0.05;  eta_min = 0.005;
 
@@ -60,7 +60,7 @@ end
 
 # === 4. Four variants from the same snapshot ===
 P_nope = P0;  P_nope.PE = zeros(T_max, d_model);
-L_abl = zeros(4);
+L_abl = zeros(1, 4);
 L_abl(1) = train_variant(P0, tokens, mask_train, n_train, 1, T_w, eta_max, eta_min);
 L_abl(2) = train_variant(P0, tokens, mask_train, n_train, 0, T_w, eta_max, eta_min);
 L_abl(3) = train_variant(P_nope, tokens, mask_train, n_train, 1, T_w, eta_max, eta_min);

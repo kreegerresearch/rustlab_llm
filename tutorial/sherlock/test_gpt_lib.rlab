@@ -14,8 +14,8 @@ seed(7);
 cfg = gpt_config(5, 8, 2, 2, 16, 12);        # V=5, d=8, L=2, H=2, dff=16, Tmax=12
 P = gpt_init(cfg, 0.3);
 T = 7;
-ids = randi(cfg.V, T);
-mask = ones(T - 1);
+ids = randi(cfg.V, 1, T);
+mask = ones(1, T - 1);
 print("n_params:", gpt_n_params(cfg), "  flat length:", length(gpt_flatten(P, cfg)));
 
 # === 2. Flatten / unflatten round trip ===
@@ -34,7 +34,7 @@ g = gpt_flatten(G, cfg);
 eps_g = 1e-5;
 n = length(theta);
 seed(11);
-probe = randi(n, 12);
+probe = randi(n, 1, 12);
 worst = 0.0;
 for k = 1:12
   i = probe(k);
@@ -77,12 +77,12 @@ cfg_big = gpt_config(80, 128, 4, 4, 512, 128);
 Pb = gpt_init(cfg_big, 0.02);
 print("");
 print("default tutorial config: params =", gpt_n_params(cfg_big));
-ids_b = randi(80, 128);
+ids_b = randi(80, 1, 128);
 tic;
-[lo, Lb, cb] = gpt_forward(ids_b, ones(127), Pb, cfg_big);
+[lo, Lb, cb] = gpt_forward(ids_b, ones(1, 127), Pb, cfg_big);
 t_f = toc;
 tic;
-Gb = gpt_backward(ids_b, gpt_dlogits(ids_b, ones(127), lo, cb.total), cb, Pb, cfg_big);
+Gb = gpt_backward(ids_b, gpt_dlogits(ids_b, ones(1, 127), lo, cb.total), cb, Pb, cfg_big);
 t_b = toc;
 tic; gf = gpt_flatten(Gb, cfg_big); t_fl = toc;
 print("forward:", t_f, "s   backward:", t_b, "s   flatten:", t_fl, "s   -> tokens/s (serial, 127 predictions):", 127 / (t_f + t_b));
@@ -92,10 +92,10 @@ print("initial loss:", Lb, " (log V =", log(80), ")");
 B = 8;
 batch = zeros(B, 128);
 for b = 1:B
-  batch(b, :) = randi(80, 128);
+  batch(b, :) = randi(80, 1, 128);
 end
 tic;
-Gm = parmap(@(b) gpt_grad_flat(batch(b, :), ones(127), Pb, cfg_big), 1:B);
+Gm = parmap(@(b) gpt_grad_flat(batch(b, :), ones(1, 127), Pb, cfg_big), 1:B);
 t_par = toc;
 g_sum = sum(Gm(:, 1:(size(Gm)(2) - 1)), 1) / B;
 L_mean = mean(Gm(:, size(Gm)(2)));

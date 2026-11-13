@@ -37,11 +37,11 @@ function e = warmup_cosine(t, T_w, T_d, eta_p, eta_f)
   end
 end
 function [L, etas] = run_sgd(eta_of_t, n, sigma, init)
-  theta = init;  L = zeros(n + 1);  etas = zeros(n);
+  theta = init;  L = zeros(1, n + 1);  etas = zeros(1, n);
   L(1) = sloss(theta);
   for t = 1:n
     etas(t) = eta_of_t(t);
-    theta = theta - etas(t) * (sgrad(theta) + sigma * randn(2));
+    theta = theta - etas(t) * (sgrad(theta) + sigma * randn(1, 2));
     L(t + 1) = sloss(theta);
   end
 end

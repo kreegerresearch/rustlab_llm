@@ -36,7 +36,7 @@ eta_sgd = 0.009;    # just under the 2/a = 0.01 stability bound of the steep axi
 path_sgd = zeros(n_steps + 1, 2);
 path_sgd(1, 1) = theta_sgd(1); path_sgd(1, 2) = theta_sgd(2);
 for k = 1:n_steps
-  g = grad_q(theta_sgd, a, b) + sigma * randn(2);
+  g = grad_q(theta_sgd, a, b) + sigma * randn(1, 2);
   theta_sgd = theta_sgd - eta_sgd * g;
   path_sgd(k + 1, 1) = theta_sgd(1);
   path_sgd(k + 1, 2) = theta_sgd(2);
@@ -52,7 +52,7 @@ m_a = [0.0, 0.0]; v_a = [0.0, 0.0];
 path_adam = zeros(n_steps + 1, 2);
 path_adam(1, 1) = theta_adam(1); path_adam(1, 2) = theta_adam(2);
 for k = 1:n_steps
-  g = grad_q(theta_adam, a, b) + sigma * randn(2);
+  g = grad_q(theta_adam, a, b) + sigma * randn(1, 2);
   m_a = beta1 * m_a + (1 - beta1) * g;
   v_a = beta2 * v_a + (1 - beta2) * (g .* g);
   m_hat = m_a / (1 - beta1 ^ k);
@@ -69,7 +69,7 @@ m_aw = [0.0, 0.0]; v_aw = [0.0, 0.0];
 path_adamw = zeros(n_steps + 1, 2);
 path_adamw(1, 1) = theta_aw(1); path_adamw(1, 2) = theta_aw(2);
 for k = 1:n_steps
-  g = grad_q(theta_aw, a, b) + sigma * randn(2);
+  g = grad_q(theta_aw, a, b) + sigma * randn(1, 2);
   m_aw = beta1 * m_aw + (1 - beta1) * g;
   v_aw = beta2 * v_aw + (1 - beta2) * (g .* g);
   m_hat = m_aw / (1 - beta1 ^ k);

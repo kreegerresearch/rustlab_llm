@@ -53,22 +53,22 @@ T_max = 16;
 
 pat = [1, 2, 2];       % a, b, b
 T = 12;
-ids = zeros(T);
+ids = zeros(1, T);
 for i = 1:T
   ids(i) = pat(mod(i - 1, 3) + 1);
 end
-mask = ones(T - 1);    % every prediction position counts
+mask = ones(1, T - 1);    % every prediction position counts
 
 E = randn(vocab, d_model) * 0.3;
 PE = sinusoidal_pe(T_max, d_model);
-gamma1 = ones(d_model);   beta1 = zeros(d_model);
-gamma2 = ones(d_model);   beta2 = zeros(d_model);
+gamma1 = ones(1, d_model);   beta1 = zeros(1, d_model);
+gamma2 = ones(1, d_model);   beta2 = zeros(1, d_model);
 Wq = randn(d_model, d_model) * 0.3;
 Wk = randn(d_model, d_model) * 0.3;
 Wv = randn(d_model, d_model) * 0.3;
 Wo = randn(d_model, d_model) * 0.3;
-W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
-W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(1, d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(1, d_model);
 W_U = randn(d_model, vocab) * 0.3;
 P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
@@ -78,7 +78,8 @@ print("tokens:", ids);
 
 <!-- rustlab:output-start -->
 ```text
-tokens: [1×12]  1.000000  2.000000  2.000000  1.000000  2.000000  2.000000  1.000000  2.000000  ... (12 total)
+tokens: Matrix(1x12)
+  [1.000000, 2.000000, 2.000000, 1.000000, 2.000000, 2.000000, 1.000000, 2.000000, ...]
 ```
 
 <!-- rustlab:output-end -->
@@ -109,7 +110,7 @@ $$\bar{\mathbf{Z}}(t,:) = \begin{cases}(\mathbf{p}_t - \mathbf{e}_{y_t})/n & t \
 
 ```
 p = softmax(logits(t, :));
-e_y = zeros(vocab); e_y(ids(t + 1)) = 1.0;
+e_y = zeros(1, vocab); e_y(ids(t + 1)) = 1.0;
 dl(t, :) = (p - e_y) / total;          % ce_dlogits, lines 227-229
 ```
 
@@ -245,13 +246,13 @@ print("Wq(1,1):  numerical =", num_q,  " analytical =", ana_q,  " rel error =", 
 
 <!-- rustlab:output-start -->
 ```text
-W_U(1,1): numerical = -0.03485661993651856  analytical = -0.03485661995196678  rel error = 0.00000000022159663096017522
-Wq(1,1):  numerical = -0.0005294123667232142  analytical = -0.0005294123667887497  rel error = 0.00000000006189453791692076
+W_U(1,1): numerical = -0.034856619937073674  analytical = -0.03485661995196677  rel error = 0.00000000021363364729883632
+Wq(1,1):  numerical = -0.0005294123667232142  analytical = -0.0005294123667887489  rel error = 0.00000000006189382113963368
 ```
 
 <!-- rustlab:output-end -->
 
-Relative errors of $2.2e-10$ and $6.2e-11$ are exactly what a *central* difference should give here: its error is the sum of an $O(\varepsilon^2)$ truncation term and the floating-point cancellation in forming $L_+ - L_-$ (two losses that agree to ~15 digits, differenced and divided by $2\varepsilon$). Both land far below the $10^{-5}$ pass threshold, so the analytical gradient — including the path through attention — is correct.
+Relative errors of $2.1e-10$ and $6.2e-11$ are exactly what a *central* difference should give here: its error is the sum of an $O(\varepsilon^2)$ truncation term and the floating-point cancellation in forming $L_+ - L_-$ (two losses that agree to ~15 digits, differenced and divided by $2\varepsilon$). Both land far below the $10^{-5}$ pass threshold, so the analytical gradient — including the path through attention — is correct.
 
 ### Example — The ε V-curve
 
@@ -259,7 +260,7 @@ Why $\varepsilon = 10^{-4}$? Sweep it. A central difference has truncation error
 
 ```rustlab
 eps_list = logspace(-1, -9, 9);
-rel_list = zeros(9);
+rel_list = zeros(1, 9);
 for k = 1:9
   e = eps_list(k);
   Wp = P.W_U;  Wp(1, 1) = Wp(1, 1) + e;  Pp = P;  Pp.W_U = Wp;
@@ -289,15 +290,15 @@ legend("relative error", "u^(1/3)")
 eps = 1e-01   rel error = 2.24e-04
 eps = 1e-02   rel error = 2.24e-06
 eps = 1e-03   rel error = 2.24e-08
-eps = 1e-04   rel error = 2.22e-10
+eps = 1e-04   rel error = 2.14e-10
 eps = 1e-05   rel error = 8.62e-11
 eps = 1e-06   rel error = 3.92e-10
 eps = 1e-07   rel error = 2.00e-09
-eps = 1e-08   rel error = 4.58e-08
+eps = 1e-08   rel error = 1.25e-07
 eps = 1e-09   rel error = 3.38e-08
 ```
 
-![plot 1](plots/22-full-backprop-through-the-block/plot-1-2fde40f3.svg)
+![plot 1](plots/22-full-backprop-through-the-block/plot-1-42703e2c.svg)
 
 <!-- rustlab:output-end -->
 
@@ -315,7 +316,7 @@ n_train = 600;  T_w = 60;  eta_max = 0.05;  eta_min = 0.005;
 bet1 = 0.9;  bet2 = 0.999;  eps_a = 1e-8;
 [M, V] = adamw_init(P);
 
-loss_curve = zeros(n_train + 1);
+loss_curve = zeros(1, n_train + 1);
 [lo, L0, cache] = transformer_forward(ids, mask, P);
 loss_curve(1) = L0;
 for step = 1:n_train
@@ -335,7 +336,7 @@ print("Bigram floor =", L_bigram);
 
 <!-- rustlab:output-start -->
 ```text
-Step 0   L = 0.6262746329095578
+Step 0   L = 0.626274632909558
 Final    L = 0.000000003918572521921996
 Bigram floor = 0.4345778848093911
 ```
@@ -359,7 +360,7 @@ legend("train loss", "bigram floor")
 ```
 
 <!-- rustlab:output-start -->
-![plot 2](plots/22-full-backprop-through-the-block/plot-2-55bee82c.svg)
+![plot 2](plots/22-full-backprop-through-the-block/plot-2-1c9a15dc.svg)
 
 <!-- rustlab:output-end -->
 
@@ -392,7 +393,7 @@ function L_final = train_variant(P_start, ids, mask, n_steps, attn_on, T_w, eta_
 end
 
 P_nope = P0;  P_nope.PE = zeros(T_max, d_model);
-L_abl = zeros(4);
+L_abl = zeros(1, 4);
 L_abl(1) = train_variant(P0, ids, mask, n_train, 1, T_w, eta_max, eta_min);
 L_abl(2) = train_variant(P0, ids, mask, n_train, 0, T_w, eta_max, eta_min);
 L_abl(3) = train_variant(P_nope, ids, mask, n_train, 1, T_w, eta_max, eta_min);
@@ -407,7 +408,7 @@ print("attention off and PE off L =", L_abl(4), "  (bigram floor", L_bigram, ")"
 ```text
 full model               L = 0.000000003917458201133284
 attention off            L = 0.00000008155139693433182
-PE off                   L = 0.4345792351431697
+PE off                   L = 0.4345792351431696
 attention off and PE off L = 0.4345779208417609   (bigram floor 0.4345778848093911 )
 ```
 
@@ -452,13 +453,13 @@ print("dW_U = H_out' * lambda_N  max deviation    =", costate_check);
 <!-- rustlab:output-start -->
 ```text
 scaling       max |G(2 dl) - 2 G(dl)|      = 0
-superposition max |G(a + b) - G(a) - G(b)| = 0.000000000000014210854715202004
+superposition max |G(a + b) - G(a) - G(b)| = 0.000000000000012434497875801753
 dW_U = H_out' * lambda_N  max deviation    = 0
 ```
 
 <!-- rustlab:output-end -->
 
-Scaling holds exactly (deviation $0$) and superposition to $1.4e-14$ (round-off): the backward pass is a linear time-varying system run in reverse depth, driven by the terminal costate. That linearity is what makes gradient accumulation over micro-batches, gradient clipping by rescaling, and the sum over positions in every `input' * upstream` legitimate.
+Scaling holds exactly (deviation $0$) and superposition to $1.2e-14$ (round-off): the backward pass is a linear time-varying system run in reverse depth, driven by the terminal costate. That linearity is what makes gradient accumulation over micro-batches, gradient clipping by rescaling, and the sum over positions in every `input' * upstream` legitimate.
 
 ### Information
 

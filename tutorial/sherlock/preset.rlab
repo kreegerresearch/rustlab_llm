@@ -1,2 +1,19 @@
-# Preset: default — the values in config.rlab (811 k parameters, 3000
-# steps, about 20 minutes on a 14-core laptop).  Nothing to override.
+# Preset: quick — a 15-second end-to-end demo on a laptop (rustlab 0.3.64).
+# Selected with `make sherlock-quick` (copied to preset.rlab, which
+# config.rlab runs last, so these lines override the defaults).
+C.d_model    = 64;
+C.n_layer    = 2;
+C.n_head     = 4;
+C.d_ff       = 256;
+C.T          = 64;
+C.n_steps    = 400;
+C.batch      = 8;
+C.warmup     = 40;
+C.eta_max    = 3.0e-3;
+C.eta_min    = 3.0e-4;
+C.log_every  = 25;
+C.eval_every = 100;
+C.ckpt_every = 200;
+C.gen_tokens = 200;
+C.ckpt_dir   = "checkpoints-quick";   # never overwrites a long run's checkpoints
+C.sft_steps  = 800;                  # the small model needs more SFT steps to memorise the pairs

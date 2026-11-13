@@ -17,8 +17,8 @@ run "../../lib/transformer.rlab"
 # Jacobian d H_out(T,:) / d H_in(T,:) (row j = response to channel j).
 function [norms, gains] = stack_trace(H0, N, H_heads, M_mask, branch_scale)
   T = size(H0)(1);  d = size(H0)(2);  d_ff = 4 * d;  eps_fd = 1.0e-5;
-  norms = zeros(N + 1);  gains = zeros(N);
-  norms(1) = norm(H0);
+  norms = zeros(1, N + 1);  gains = zeros(1, N);
+  norms(1) = norm(H0, "fro");
   H = H0;
   for l = 1:N
     W_Q = randn(d, d) * (1.0 / sqrt(d));  W_K = randn(d, d) * (1.0 / sqrt(d));
@@ -33,7 +33,7 @@ function [norms, gains] = stack_trace(H0, N, H_heads, M_mask, branch_scale)
       J(j, :) = (H_e_out(T, :) - H_next(T, :)) / eps_fd;
     end
     gains(l) = svd(J)(1);
-    norms(l + 1) = norm(H_next);
+    norms(l + 1) = norm(H_next, "fro");
     H = H_next;
   end
 end
@@ -60,7 +60,7 @@ subplot(1, 2, 1)
 semilogy(0:8, n_u, "color", "red", "label", "branch scale 1")
 hold("on")
 semilogy(0:8, n_s, "color", "blue", "label", "branch scale 1/sqrt(2N)")
-hline(norm(H_in), "gray", "|H_0|")
+hline(norm(H_in, "fro"), "gray", "|H_0|")
 hold("off")
 title("|H_l| along an 8-block stack")
 xlabel("block l")

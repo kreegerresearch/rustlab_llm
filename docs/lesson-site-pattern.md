@@ -122,10 +122,10 @@ help: ## Show this help
 all: notebooks html ## Regenerate the rendered book/ and the interactive HTML build
 
 notebooks: ## Render book/<slug>.md from notebooks/<slug>.md
-	rustlab notebook render notebooks --format markdown --output $(abspath $(BOOK))
+	rustlab-notebook render notebooks --format markdown --output $(abspath $(BOOK)) --jail-root .
 
 html: ## Build interactive HTML at book/index.html (auto-generated entry + per-notebook html)
-	rustlab notebook render notebooks --format html --output $(abspath $(BOOK)) --title "your-course"
+	rustlab-notebook render notebooks --format html --output $(abspath $(BOOK)) --title "your-course" --jail-root .
 
 # Drift guard: re-render, then fail if book/ has uncommitted changes.
 # Wire this into CI to enforce the source-and-book-together rule.
@@ -146,9 +146,11 @@ clean: ## Delete the interactive HTML build and .rlab script artefacts
 
 ### Why this Makefile is so short
 
-`rustlab notebook render` accepts a directory of source notebooks and
+`rustlab-notebook render` (the standalone binary; `rustlab notebook` was removed) accepts a directory of source notebooks and
 renders the whole batch in one call, with two niceties that fall out of
-directory mode and let us avoid per-file pattern rules:
+directory mode and let us avoid per-file pattern rules.
+
+Pass `--jail-root .` (an ancestor of the notebooks) when a block `run`s a file outside the notebook directory, such as `../lib/transformer.rlab`. Without it, directory mode jails file I/O to the collection root and a single-file render jails it to that notebook's own folder, so the include fails with `path escapes notebook directory`.
 
 1. **The hand-written `book/README.md` is preserved.** The renderer
    skips files named `README.md` on input and never writes one on

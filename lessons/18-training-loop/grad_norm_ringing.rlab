@@ -16,7 +16,7 @@ seed(18);
 vocab = 3;  d_emb = 4;
 E0 = randn(vocab, d_emb) * 0.3;
 W0 = randn(d_emb, vocab) * 0.3;
-corpus = zeros(60);
+corpus = zeros(1, 60);
 pat = [1, 2, 3, 2];
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
@@ -26,7 +26,7 @@ n_tr = 49;  va_start = 50;  n_va = 9;
 # === Helpers: one pair, one batch, one optimiser step, the schedule ===
 function [dE, dW, L] = backward_one(x_curr, x_next, E, W, vocab, d_emb)
   h = E(x_curr, :);  pvec = softmax(h * W);  L = -log(pvec(x_next));
-  e_y = zeros(vocab);  e_y(x_next) = 1.0;
+  e_y = zeros(1, vocab);  e_y(x_next) = 1.0;
   dlogits = pvec - e_y;  dW = h' * dlogits;  dh = dlogits * W';
   dE = zeros(vocab, d_emb);
   for k = 1:d_emb
@@ -68,7 +68,7 @@ end
 function [Ltr, gn, etas, g21, n_clip] = train_run(E, W, corpus, n_tr, n_steps, eta_of_t, lambda, c_clip)
   vocab = size(E, 1);  d_emb = size(E, 2);
   mE = zeros(vocab, d_emb);  vE = mE;  mW = zeros(d_emb, vocab);  vW = mW;
-  Ltr = zeros(n_steps + 1);  gn = zeros(n_steps);  etas = zeros(n_steps);  g21 = zeros(n_steps);  n_clip = 0;
+  Ltr = zeros(1, n_steps + 1);  gn = zeros(1, n_steps);  etas = zeros(1, n_steps);  g21 = zeros(1, n_steps);  n_clip = 0;
   Ltr(1) = range_loss(1, n_tr, corpus, E, W);
   for t = 1:n_steps
     etas(t) = eta_of_t(t);

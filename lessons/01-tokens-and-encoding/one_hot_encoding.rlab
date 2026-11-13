@@ -21,7 +21,7 @@ print("Shape (rows=tokens, cols=vocab_size):", size(X));
 print("Fraction of non-zero entries (= 1/|V|):", sum(sum(X)) / (T * vocab_size));
 
 # === Verify: each row sums to 1 (exactly one active slot per token) ===
-row_sums = X * ones(vocab_size)';
+row_sums = X * ones(1, vocab_size)';
 print("Row sums (each must equal 1):");
 print(row_sums);
 

@@ -19,7 +19,7 @@ lambda = 2 * pi ./ omega;
 kk = 0:130;
 dist_pair0 = sqrt(2 - 2 * cos(omega(1) * kk));
 dist_pair4 = sqrt(2 - 2 * cos(omega(5) * kk));
-dist_all = zeros(length(kk));
+dist_all = zeros(1, length(kk));
 for i = 1:length(kk)
   dist_all(i) = sqrt(sum(2 - 2 * cos(omega * kk(i))));
 end

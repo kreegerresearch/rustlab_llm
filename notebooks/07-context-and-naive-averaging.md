@@ -258,7 +258,7 @@ print("running-mean gains 1/t:", 1 ./ (1:T), "   EMA gain 1 - gamma:", 1 - gamma
 ```rustlab
 function H = empirical_entropy_bits(labels)
   % entropy (bits) of the empirical distribution of a vector of integer labels
-  counts = zeros(max(labels));
+  counts = zeros(1, max(labels));
   for m = 1:length(labels)
     counts(labels(m)) = counts(labels(m)) + 1;
   end
