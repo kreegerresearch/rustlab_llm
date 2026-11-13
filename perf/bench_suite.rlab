@@ -301,6 +301,59 @@ ts = zeros(1, 5); for r = 1:5
 end
 perf_out("par.alloc_window_B8", ts, 0, "-");
 
+# --- Added in suite v4 (2026-11-12, after run 10): iteration 04's keys.
+# Small-array costs inside one attention head, row-block cache writes, and
+# how matmul and gelu scale when 8 parmap workers run them at once.
+QKVa = randn(129, 384);  Ma = -1.0e9 * (1 - cumsum(eye(129), 1));
+Sa = QKVa(:, 1:32) * QKVa(:, 129:160)';
+ts = zeros(1, R); for r = 1:R
+  tic; for k = 1:20
+    A = softmax(Sa);
+  end; ts(r) = toc / 20;
+end
+perf_out("prim.softmax_129x129", ts, 129 * 129 / 1e6, "Melem/s");
+ts = zeros(1, R); for r = 1:R
+  tic; for k = 1:20
+    A = softmax(QKVa(:, 1:32) * QKVa(:, 129:160)' * 0.17 + Ma);
+    O = A * QKVa(:, 257:288);
+  end; ts(r) = toc / 20;
+end
+perf_out("prim.attn_head_129x32", ts, 0, "-");
+Cache = zeros(4 * 129, 128);  Xr = randn(129, 128);
+ts = zeros(1, R); for r = 1:R
+  tic; for k = 1:20
+    Cache(130:258, :) = Xr;
+  end; ts(r) = toc / 20;
+end
+perf_out("prim.row_block_write_129x128", ts, 0, "-");
+ts = zeros(1, R); for r = 1:R
+  tic; for k = 1:20
+    Yr = Cache(130:258, :);
+  end; ts(r) = toc / 20;
+end
+perf_out("prim.row_block_read_129x128", ts, 0, "-");
+function s = mm_work20(A, Bm)
+  s = 0;
+  for j = 1:20
+    C = A * Bm;  s = s + C(1, 1);
+  end
+end
+function s = gelu_work20(X)
+  s = 0;
+  for j = 1:20
+    Y = gelu(X);  s = s + Y(1, 1);
+  end
+end
+Am = randn(129, 128);  Bmm = randn(128, 512);  Xg = randn(129, 512);
+ts = zeros(1, R); for r = 1:R
+  tic; Sm = parmap(@(i) mm_work20(Am, Bmm), 1:8); ts(r) = toc;
+end
+perf_out("par.matmul_129x128x512_B8", ts, 8 * 20 * 2 * 129 * 128 * 512 / 1e9, "GFLOP/s");
+ts = zeros(1, R); for r = 1:R
+  tic; Sg = parmap(@(i) gelu_work20(Xg), 1:8); ts(r) = toc;
+end
+perf_out("par.gelu_129x512_B8", ts, 8 * 20 * 129 * 512 / 1e6, "Melem/s");
+
 # === 5. One full training step, exactly as tutorial/sherlock/train.rlab does it (B = 8) ===
 B = 8;
 ts = zeros(1, 3); for r = 1:3
