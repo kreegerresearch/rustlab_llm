@@ -59,12 +59,12 @@ d_ff = 4 * d_model;
 H = randn(T, d_model);
 
 W1 = randn(d_model, d_ff) * sqrt(2.0 / d_model);   % He init for the GELU layer
-b1 = zeros(d_ff);
+b1 = zeros(1, d_ff);
 W2 = randn(d_ff, d_model) * sqrt(2.0 / d_ff);
-b2 = zeros(d_model);
+b2 = zeros(1, d_model);
 
 % Forward pass — broadcast biases by adding row vectors via outer with ones
-ones_T = ones(T);
+ones_T = ones(1, T);
 hidden_pre  = H * W1 + outer(ones_T, b1);
 hidden_post = gelu(hidden_pre);
 out         = hidden_post * W2 + outer(ones_T, b2);
@@ -105,8 +105,8 @@ h_step = 1e-4;
 xs_grad = -3:0.05:3;
 n_grad = length(xs_grad);
 
-dRelu = zeros(n_grad);
-dGelu = zeros(n_grad);
+dRelu = zeros(1, n_grad);
+dGelu = zeros(1, n_grad);
 for i = 1:n_grad
   x = xs_grad(i);
   dRelu(i) = (relu(x + h_step) - relu(x - h_step)) / (2.0 * h_step);
@@ -166,10 +166,10 @@ T_big = 256;
 pre_big  = reshape(randn(T_big, d_model) * W1, 1, T_big * d_ff);
 post_big = gelu(pre_big);
 
-print("fraction pre  < 0:        ", mean(pre_big < 0));
+print("fraction pre  < 0:        ", mean(double(pre_big < 0)));
 print("min post:                 ", min(post_big));
-print("fraction |pre|  < 0.05:   ", mean(abs(pre_big) < 0.05));
-print("fraction |post| < 0.05:   ", mean(abs(post_big) < 0.05));
+print("fraction |pre|  < 0.05:   ", mean(double(abs(pre_big) < 0.05)));
+print("fraction |post| < 0.05:   ", mean(double(abs(post_big) < 0.05)));
 
 figure();
 subplot(1, 2, 1)
@@ -186,7 +186,7 @@ ylabel("count")
 ```
 
 > [!TIP]
-> Left: symmetric about zero — the He-initialised projection sends signed inputs into both half-spaces (${mean(pre_big < 0) * 100:%.1f}$ % negative). Right: the entire negative half has been folded into a spike just left of zero (nothing below ${min(post_big):%.3f}$), while the positive tail is unchanged. The fraction of values within $\pm 0.05$ of zero rises from ${mean(abs(pre_big) < 0.05) * 100:%.1f}$ % to ${mean(abs(post_big) < 0.05) * 100:%.1f}$ % — that pile-up is the "sparse gate" of the Engineering Lenses below.
+> Left: symmetric about zero — the He-initialised projection sends signed inputs into both half-spaces (${mean(double(pre_big < 0)) * 100:%.1f}$ % negative). Right: the entire negative half has been folded into a spike just left of zero (nothing below ${min(post_big):%.3f}$), while the positive tail is unchanged. The fraction of values within $\pm 0.05$ of zero rises from ${mean(double(abs(pre_big) < 0.05)) * 100:%.1f}$ % to ${mean(double(abs(post_big) < 0.05)) * 100:%.1f}$ % — that pile-up is the "sparse gate" of the Engineering Lenses below.
 
 ## Why $d_{\text{ff}} = 4 \cdot d_{\text{model}}$?
 
@@ -255,12 +255,12 @@ Each of the $d_{\text{ff}}$ slots correlates the token with its key (the same do
 
 ```rustlab
 % Slot-sum identity for token 2: sum_m hidden_post(2, m) * W2(m, :) == out(2, :)
-acc = zeros(d_model);
+acc = zeros(1, d_model);
 for m = 1:d_ff
   acc = acc + hidden_post(2, m) * W2(m, :);
 end
 print("max | slot sum - out(2,:) | =", max(abs(acc - out(2, :))));
-n_open = sum(reshape(hidden_post > 0.1, 1, T * d_ff));
+n_open = sum(reshape(double(hidden_post > 0.1), 1, T * d_ff));
 print("slots with output > 0.1:", n_open, "of", T * d_ff);
 
 figure();

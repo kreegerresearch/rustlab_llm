@@ -162,11 +162,11 @@ for L = 1:n_layers
   W_stack((L - 1) * d_res + 1:L * d_res, :) = randn(d_res, d_res) * (1.0 / sqrt(d_res));
 end
 
-x0 = randn(d_res);
-mag_no_res = zeros(n_layers + 1);   % x <- f(x)
-mag_res    = zeros(n_layers + 1);   % x <- x + 0.1 f(x)
-mag_res1   = zeros(n_layers + 1);   % x <- x + 1.0 f(x)
-ratio      = zeros(n_layers);       % per-layer |x_{l+1}| / |x_l| without residual
+x0 = randn(1, d_res);
+mag_no_res = zeros(1, n_layers + 1);   % x <- f(x)
+mag_res    = zeros(1, n_layers + 1);   % x <- x + 0.1 f(x)
+mag_res1   = zeros(1, n_layers + 1);   % x <- x + 1.0 f(x)
+ratio      = zeros(1, n_layers);       % per-layer |x_{l+1}| / |x_l| without residual
 mag_no_res(1) = norm(x0);
 mag_res(1)    = norm(x0);
 mag_res1(1)   = norm(x0);
@@ -198,8 +198,8 @@ print("log2(total no-res ratio):     ", log2(mag_no_res(n_layers + 1) / mag_no_r
 <!-- rustlab:output-start -->
 ```text
 layer 0 magnitude (all): 6.008513697733318
-layer 24 magnitude: no-res 0.0000003099993792901655  h = 0.1 8.305932496635211  h = 1 32380.935903241385
-no-res per-layer ratio: min 0.38478167134158975  max 0.7948719575437854  geometric mean 0.49700192824778705
+layer 24 magnitude: no-res 0.00000030999937929016545  h = 0.1 8.305932496635211  h = 1 32380.93590324138
+no-res per-layer ratio: min 0.3847816713415898  max 0.7948719575437853  geometric mean 0.49700192824778694
 log2(total no-res ratio):      -24.2082394987112
 ```
 
@@ -253,14 +253,14 @@ seed(21);
 d_pp = 32;
 N_pp = 24;
 
-x_pre  = randn(d_pp);          % Pre-LN  residual stream
+x_pre  = randn(1, d_pp);          % Pre-LN  residual stream
 x_post = x_pre;                % Post-LN residual stream (same start)
-mag_pre  = zeros(N_pp + 1);
-mag_post = zeros(N_pp + 1);
-dc_pre   = zeros(N_pp + 1);
-ac_pre   = zeros(N_pp + 1);
-f_dc     = zeros(N_pp);        % per-layer mean of the written vector f
-f_ac2    = zeros(N_pp);        % per-layer |f - mean(f)|^2
+mag_pre  = zeros(1, N_pp + 1);
+mag_post = zeros(1, N_pp + 1);
+dc_pre   = zeros(1, N_pp + 1);
+ac_pre   = zeros(1, N_pp + 1);
+f_dc     = zeros(1, N_pp);        % per-layer mean of the written vector f
+f_ac2    = zeros(1, N_pp);        % per-layer |f - mean(f)|^2
 mag_pre(1)  = norm(x_pre);
 mag_post(1) = norm(x_post);
 dc_pre(1)   = abs(mean(x_pre)) * sqrt(d_pp);
@@ -314,15 +314,15 @@ hold("off")
 
 <!-- rustlab:output-start -->
 ```text
-Pre-LN  |x_l| at l = 0, 6, 12, 24: 5.851529867071925 13.083624478648227 23.36037580688656 43.64598330595662
+Pre-LN  |x_l| at l = 0, 6, 12, 24: 5.851529867071925 13.083624478648227 23.360375806886555 43.64598330595661
 Post-LN |x_l| at l = 0, 6, 12, 24: 5.851529867071925 5.656832157531205 5.656829454864783 5.656831684534838
 sqrt(d) reference:                  5.656854249492381
-mean per-layer DC of f:             0.2899589637432015  (E[GELU(z)] for z ~ N(0,1) is 0.282)
-Pre-LN DC part at l = 24: measured  40.36295559679738  predicted 40.36295559679739
+mean per-layer DC of f:             0.28995896374320146  (E[GELU(z)] for z ~ N(0,1) is 0.282)
+Pre-LN DC part at l = 24: measured  40.36295559679738  predicted 40.36295559679738
 Pre-LN AC part at l = 24: measured  16.607337963527048  predicted 16.893409356498978
 ```
 
-![plot 3](plots/12-layer-norm-and-residuals/plot-3-73c3d106.svg)
+![plot 3](plots/12-layer-norm-and-residuals/plot-3-e399bbf2.svg)
 
 <!-- rustlab:output-end -->
 
@@ -361,9 +361,9 @@ end
 
 <!-- rustlab:output-start -->
 ```text
-stream scale 1   var(S) raw: 1.4626773743416392  with LN: 1.3830096177029385   mean row entropy raw: 2.23764592710431  with LN: 2.2308181818295445 bits
-stream scale 4   var(S) raw: 336.5253083398504  with LN: 1.1870603793855679   mean row entropy raw: 0.07137449914127607  with LN: 2.20536292569035 bits
-stream scale 16   var(S) raw: 68783.05835029666  with LN: 1.0369532250253315   mean row entropy raw: 0.00045212888514156187  with LN: 2.2979587206130434 bits
+stream scale 1   var(S) raw: 1.46267737434164  with LN: 1.3830096177029383   mean row entropy raw: 2.23764592710431  with LN: 2.2308181818295445 bits
+stream scale 4   var(S) raw: 336.52530833985037  with LN: 1.1870603793855685   mean row entropy raw: 0.07137449914127608  with LN: 2.20536292569035 bits
+stream scale 16   var(S) raw: 68783.05835029665  with LN: 1.0369532250253317   mean row entropy raw: 0.00045212888514156187  with LN: 2.2979587206130434 bits
 ```
 
 <!-- rustlab:output-end -->
@@ -378,8 +378,8 @@ Without LN the score variance follows $s^4$ ($1 \to 256 \to 65536$ in theory) an
 
 ```rustlab
 P_plain = eye(d_res);   P_res = eye(d_res);
-smax_plain = zeros(n_layers);                   % sigma_max bounds every singular value of prod J_l
-smin_res   = zeros(n_layers);  smax_res = zeros(n_layers);
+smax_plain = zeros(1, n_layers);                   % sigma_max bounds every singular value of prod J_l
+smin_res   = zeros(1, n_layers);  smax_res = zeros(1, n_layers);
 x_plain = x0;  x_resi = x0;
 for L = 1:n_layers
   W_L = W_stack((L - 1) * d_res + 1:L * d_res, :);
@@ -410,7 +410,7 @@ hold("off")
 after 24 layers: no residual sigma_max = 0.0000004382308136725138    h = 0.1 [sigma_min, sigma_max] = 0.6391402596409398 2.1934318391319745
 ```
 
-![plot 4](plots/12-layer-norm-and-residuals/plot-4-eab93cca.svg)
+![plot 4](plots/12-layer-norm-and-residuals/plot-4-80304ecf.svg)
 
 <!-- rustlab:output-end -->
 
@@ -423,10 +423,10 @@ after 24 layers: no residual sigma_max = 0.0000004382308136725138    h = 0.1 [si
 
 ```rustlab
 d_ln = 6;
-x_ln = randn(d_ln) * 2 + 1;
+x_ln = randn(1, d_ln) * 2 + 1;
 J_ln = zeros(d_ln, d_ln);
 for j = 1:d_ln
-  e_j = zeros(d_ln);  e_j(j) = 1e-6;
+  e_j = zeros(1, d_ln);  e_j(j) = 1e-6;
   J_ln(j, :) = (layernorm(x_ln + e_j) - layernorm(x_ln - e_j)) / 2e-6;   % row j: d LN / d x_j
 end
 s_ln = svd(J_ln);
@@ -449,7 +449,7 @@ degrees of freedom discarded:  2 of 6
 ```rustlab
 seed(5);
 W_inv  = randn(d_res, d_res) / sqrt(d_res);
-x_true = randn(d_res);
+x_true = randn(1, d_res);
 lip_f  = svd(W_inv)(1) * max(gelu_grad(linspace(-5, 5, 2001)));
 y_obs  = x_true + h_step * gelu(x_true * W_inv);
 x_hat  = y_obs;

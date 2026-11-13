@@ -175,9 +175,9 @@ The similarity $\mathrm{PE}_t \cdot \mathrm{PE}_{t+k}$ depends only on $k$, not 
 ```rustlab
 n_pairs = d_model_pe / 2;
 omega = 10000.0 .^ (-2 * (0:(n_pairs - 1)) / d_model_pe);   % ω_0 = 1 ... ω_15 = 1.78e-4 rad/token
-sims_short = zeros(40);                        % similarity for offsets k=0..39 starting at t=10
-sims_far   = zeros(40);                        % same offsets starting at t=20
-sims_cf    = zeros(40);                        % closed form sum_j cos(ω_j k)
+sims_short = zeros(1, 40);                        % similarity for offsets k=0..39 starting at t=10
+sims_far   = zeros(1, 40);                        % same offsets starting at t=20
+sims_cf    = zeros(1, 40);                        % closed form sum_j cos(ω_j k)
 for k = 0:39
   sims_short(k + 1) = sum(PE(10, :) .* PE(10 + k, :));
   sims_far(k + 1)   = sum(PE(20, :) .* PE(20 + k, :));
@@ -205,19 +205,19 @@ ylabel("Dot product")
 
 <!-- rustlab:output-start -->
 ```text
-max |sim_t=10(k) - sim_t=20(k)| over k=0..39 = 0.000000000000005329070518200751
-max |sim(k) - sum_j cos(omega_j k)|        = 0.000000000000005329070518200751
+max |sim_t=10(k) - sim_t=20(k)| over k=0..39 = 0.000000000000003552713678800501
+max |sim(k) - sum_j cos(omega_j k)|        = 0.000000000000003552713678800501
 minimum 5.968563765195686 at k = 28 ;  pairs with cos(omega_j 39) > 0.9: 9
 ```
 
-![plot 2](plots/10-positional-encoding/plot-2-76639027.svg)
+![plot 2](plots/10-positional-encoding/plot-2-86021188.svg)
 
 <!-- rustlab:output-end -->
 
 > [!TIP]
 > The curve starts at $d/2 = 16$ and never returns there: it drops to 7.9 at $k = 16$, rebounds to 10.6 at $k = 19$, bottoms out at 6.0 at $k = 28$ and climbs again. The dashed closed form lies exactly on it.
 
-Drift across base position $t$ is $5.33e-15$ and the closed form matches to $5.3e-15$: whatever similarity we measure between two positions is a function of *only* their separation. Read the sum. 9 of the 16 cosines have $\omega_j \cdot 39 < 0.45$ rad and stay above $0.9$ across the whole plot, so they contribute a near-constant floor of about 9; the fast pairs beat against each other on top of it. There is no decay to zero and no settling — the curve is the **autocorrelation of a 16-tone signal**, and a sum of undamped cosines is itself undamped. What attention can use is that the value is a fixed function of the offset $k$ alone: with learned Q/K projections that reweight the pairs, "close" and "far" become distinguishable scores.
+Drift across base position $t$ is $3.55e-15$ and the closed form matches to $3.6e-15$: whatever similarity we measure between two positions is a function of *only* their separation. Read the sum. 9 of the 16 cosines have $\omega_j \cdot 39 < 0.45$ rad and stay above $0.9$ across the whole plot, so they contribute a near-constant floor of about 9; the fast pairs beat against each other on top of it. There is no decay to zero and no settling — the curve is the **autocorrelation of a 16-tone signal**, and a sum of undamped cosines is itself undamped. What attention can use is that the value is a fixed function of the offset $k$ alone: with learned Q/K projections that reweight the pairs, "close" and "far" become distinguishable scores.
 
 ## Adding PE to Embeddings
 
@@ -241,7 +241,7 @@ vocab_pe = 6;
 T_demo = 8;
 E_pe = randn(vocab_pe, d_model_pe) * 0.1;
 ids = [1, 2, 1, 2, 1, 2, 1, 2];
-X_tok = E_pe(ids, :) * sqrt(d_model_pe);        % row gather: token content only
+X_tok = E_pe(ids(:), :) * sqrt(d_model_pe);      % row gather: token content only
 X_pos = X_tok + PE(1:T_demo, :);                % content + position (matrix + matrix)
 diff_tok_only = max(abs(X_tok(1, :) - X_tok(3, :)));   % both rows are token 1
 diff_with_pe  = max(abs(X_pos(1, :) - X_pos(3, :)));
@@ -331,18 +331,18 @@ title("Three of the sixteen phasors, before and after a shift of 3 tokens")
 
 <!-- rustlab:output-start -->
 ```text
-max |e^{j w d} z(t) - z(t+d)| = 0.00000000000000011102230246251565
+max |e^{j w d} z(t) - z(t+d)| = 0.00000000000000015700924586837752
 PE(10, 1:2) = [1×2]  -0.544021  -0.839072   [Im, Re] of z_0(10) = -0.5440211108893698 -0.8390715290764524
 ```
 
-![plot 4](plots/10-positional-encoding/plot-4-d94025b8.svg)
+![plot 4](plots/10-positional-encoding/plot-4-213e2e4b.svg)
 
 <!-- rustlab:output-end -->
 
 > [!TIP]
 > Each pair advances by its own angle $\omega_k \delta$: the fast pair 0 swings 3 rad (almost half a turn), pair 2 about 0.95 rad, pair 4 only 0.3 rad. The same $\delta$ is read on three clocks of different rates.
 
-One complex multiply per pair reproduces the rotation identity to $1.1e-16$.
+One complex multiply per pair reproduces the rotation identity to $1.6e-16$.
 
 **Exact.** *Frequency ladder and spectrum.* The 16 rates $\omega_k = 10000^{-2k/d}$ are geometrically spaced — a straight line on a log axis, wavelengths $\lambda_k = 2\pi/\omega_k$ from $6.28$ to $35\,300$ tokens — constant-Q coverage from one token to the ten-thousand-token scale. Each column of PE is a single tone, so the DFT of a column shows one spectral line.
 
@@ -380,7 +380,7 @@ wavelengths (tokens): pair 0 = 6.283185307179586  pair 4 = 62.83185307179586  pa
 spectral lines: column 1 at f = 0.15625  (omega_0 / 2 pi = 0.15915494309189535 ),  column 9 at f = 0.015625  (omega_4 / 2 pi = 0.015915494309189534 )
 ```
 
-![plot 5](plots/10-positional-encoding/plot-5-7aed7a28.svg)
+![plot 5](plots/10-positional-encoding/plot-5-4d13b746.svg)
 
 <!-- rustlab:output-end -->
 
@@ -393,7 +393,7 @@ spectral lines: column 1 at f = 0.15625  (omega_0 / 2 pi = 0.15915494309189535 )
 kk = 0:130;
 dist_pair0 = sqrt(2 - 2 * cos(omega(1) * kk));            % pair 0 only (λ = 6.3)
 dist_pair4 = sqrt(2 - 2 * cos(omega(5) * kk));            % pair 4 only (λ = 62.8)
-dist_all   = zeros(length(kk));
+dist_all   = zeros(1, length(kk));
 for i = 1:length(kk)
   dist_all(i) = sqrt(sum(2 - 2 * cos(omega * kk(i))));    % all 16 pairs
 end
@@ -413,10 +413,10 @@ ylabel("Euclidean distance")
 
 <!-- rustlab:output-start -->
 ```text
-pair 4 alone: |PE_t - PE_{t+63}| = 0.016814494734299912    all 16 pairs: 3.782219814811988    smallest full-code distance (k = 1): 1.1716234976260362
+pair 4 alone: |PE_t - PE_{t+63}| = 0.016814494734299912    all 16 pairs: 3.782219814811987    smallest full-code distance (k = 1): 1.1716234976260362
 ```
 
-![plot 6](plots/10-positional-encoding/plot-6-d3b2a947.svg)
+![plot 6](plots/10-positional-encoding/plot-6-3ae037c7.svg)
 
 <!-- rustlab:output-end -->
 
@@ -479,12 +479,12 @@ print("numerical rank of the 61 x 32 input block:", rank_in);
 <!-- rustlab:output-start -->
 ```text
 least-squares residual of PE_t -> PE_{t+3}: 0.0000000000000043298697960381105    max |B_fit - (Phi^3)'| = 0.00000000000009738954434568292
-numerical rank of the 61 x 32 input block: 15
+numerical rank of the 61 x 32 input block: 24
 ```
 
 <!-- rustlab:output-end -->
 
-A $\mathbf{W}_Q/\mathbf{W}_K$ pair can therefore implement "attend 3 back" as a fixed linear map. One honest caveat sits in the last line: over 64 tokens the input block has numerical rank 15 — the slow columns are all $\approx \omega_k t$ and collinear — so an *unconstrained* $32 \times 32$ fit would not be unique. At short range the slow clocks carry no information; they exist for the ten-thousand-token scale.
+A $\mathbf{W}_Q/\mathbf{W}_K$ pair can therefore implement "attend 3 back" as a fixed linear map. One honest caveat sits in the last line: over 64 tokens the input block has numerical rank 24 — the slow columns are all $\approx \omega_k t$ and collinear — so an *unconstrained* $32 \times 32$ fit would not be unique. At short range the slow clocks carry no information; they exist for the ten-thousand-token scale.
 
 ### Information
 
@@ -492,7 +492,7 @@ A $\mathbf{W}_Q/\mathbf{W}_K$ pair can therefore implement "attend 3 back" as a 
 
 ```rustlab
 bits_needed = log2(T_seq);
-var_pair = zeros(n_pairs);
+var_pair = zeros(1, n_pairs);
 for k = 1:n_pairs
   var_pair(k) = std(PE(:, 2 * k - 1))^2;                    % variance of the sin column down the 64 rows
 end

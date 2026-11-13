@@ -36,14 +36,14 @@ Both fine-tuning demos start from the same place: a single-block transformer pre
 function P = init_params(vocab, d_model, d_ff, T_max)
   E = randn(vocab, d_model) * 0.3;
   PE = sinusoidal_pe(T_max, d_model);
-  gamma1 = ones(d_model);   beta1 = zeros(d_model);
-  gamma2 = ones(d_model);   beta2 = zeros(d_model);
+  gamma1 = ones(1, d_model);   beta1 = zeros(1, d_model);
+  gamma2 = ones(1, d_model);   beta2 = zeros(1, d_model);
   Wq = randn(d_model, d_model) * 0.3;
   Wk = randn(d_model, d_model) * 0.3;
   Wv = randn(d_model, d_model) * 0.3;
   Wo = randn(d_model, d_model) * 0.3;
-  W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
-  W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+  W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(1, d_ff);
+  W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(1, d_model);
   W_U = randn(d_model, vocab) * 0.3;
   P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
              "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
@@ -64,11 +64,11 @@ vocab = 3;             % a=1, b=2, sep=3
 d_model = 4;  d_ff = 8;  T_max = 16;
 pat = [1, 2, 2];
 T_pre = 12;
-ids_pre = zeros(T_pre);
+ids_pre = zeros(1, T_pre);
 for i = 1:T_pre
   ids_pre(i) = pat(mod(i - 1, 3) + 1);
 end
-mask_pre = ones(T_pre - 1);
+mask_pre = ones(1, T_pre - 1);
 ```
 
 ## Supervised Fine-Tuning (SFT)
@@ -109,7 +109,7 @@ n_sft_seq = size(sft_data)(1);
 
 n_sft = 200;
 eta_sft = 0.001;           % lower than pre-training — standard practice
-sft_loss_curve = zeros(n_sft + 1);
+sft_loss_curve = zeros(1, n_sft + 1);
 [lo, L_sft0, cache] = transformer_forward(sft_data(1, :), sft_mask, P);
 sft_loss_curve(1) = L_sft0;
 [M, V] = adamw_init(P);    % fresh optimiser state for the fine-tuning phase
@@ -158,7 +158,7 @@ function G = grad_at(ids, mask, P)
 end
 
 g_abb = flat_grad(grad_at(ids_pre, mask_pre, P_pre_sft));
-g_sft = zeros(length(g_abb));
+g_sft = zeros(1, length(g_abb));
 for s = 1:n_sft_seq
   g_sft = g_sft + flat_grad(grad_at(sft_data(s, :), sft_mask, P_pre_sft)) / n_sft_seq;
 end
@@ -171,7 +171,7 @@ print("cos(grad_abb, grad_SFT) =", cos_all, "    cos(grad_abb, sign(grad_SFT)) [
 sz = [numel(P.E), 4 * d_model, numel(P.Wq), numel(P.Wk), numel(P.Wv), numel(P.Wo), numel(P.W1), d_ff, numel(P.W2), d_model, numel(P.W_U)];
 hi = cumsum(sz);  lo_i = hi - sz + 1;
 mat_idx = [1, 3, 4, 5, 6, 7, 9, 11];
-cos_blk = zeros(8);
+cos_blk = zeros(1, 8);
 for i = 1:8
   cos_blk(i) = cos_angle(g_abb(lo_i(mat_idx(i)):hi(mat_idx(i))), g_sft(lo_i(mat_idx(i)):hi(mat_idx(i))));
 end
@@ -300,7 +300,7 @@ function dl = dpo_dlogits(ids, resp_start, resp_end, logits, vocab, sign, weight
   dl = zeros(T, vocab);
   for t = (resp_start - 1):(resp_end - 1)
     p = softmax(logits(t, :));
-    e_y = zeros(vocab); e_y(ids(t + 1)) = 1.0;
+    e_y = zeros(1, vocab); e_y(ids(t + 1)) = 1.0;
     dl(t, :) = sign * weight * (p - e_y);
   end
 end
@@ -314,12 +314,12 @@ chosen   = [1, 2, 3, 1, 1;  2, 2, 3, 1, 1;  2, 1, 3, 1, 1];
 rejected = [1, 2, 3, 2, 2;  2, 2, 3, 2, 2;  2, 1, 3, 2, 2];
 n_prefs = size(chosen)(1);
 resp_start = 4;  resp_end = 5;
-zero_mask = zeros(size(chosen)(2) - 1);   % logits only
+zero_mask = zeros(1, size(chosen)(2) - 1);   % logits only
 beta_dpo = 0.5;
 
 n_dpo = 200;  eta_dpo = 0.005;
-dpo_loss_curve = zeros(n_dpo + 1);
-abb_loss_curve = zeros(n_dpo + 1);
+dpo_loss_curve = zeros(1, n_dpo + 1);
+abb_loss_curve = zeros(1, n_dpo + 1);
 L0_dpo = 0.0;
 for s = 1:n_prefs
   [lo_w, l1, c1] = transformer_forward(chosen(s, :), zero_mask, P);
@@ -482,7 +482,7 @@ At $\beta = 0.05$ one nat of reward is worth $e^{20}$ and the tilt hands `b` the
 
 ```rustlab
 function D = mean_kl_bits(ids, P_a, P_b)
-  T = length(ids);  zm = zeros(T - 1);
+  T = length(ids);  zm = zeros(1, T - 1);
   [la, L1, c1] = transformer_forward(ids, zm, P_a);
   [lb, L2, c2] = transformer_forward(ids, zm, P_b);
   D = 0.0;

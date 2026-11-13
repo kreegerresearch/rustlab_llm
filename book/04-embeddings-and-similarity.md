@@ -365,12 +365,12 @@ end
 
 <!-- rustlab:output-start -->
 ```text
-d = 2 : mean|cos| = 0.6293227817710451   std(cos) = 0.7014465768602673   1/sqrt(d) = 0.7071067811865475
-d = 8 : mean|cos| = 0.2835495335637865   std(cos) = 0.3489459693081456   1/sqrt(d) = 0.35355339059327373
-d = 64 : mean|cos| = 0.09817975782434396   std(cos) = 0.12163438477024725   1/sqrt(d) = 0.125
+d = 2 : mean|cos| = 0.6293227817710454   std(cos) = 0.7014465768602673   1/sqrt(d) = 0.7071067811865475
+d = 8 : mean|cos| = 0.28354953356378637   std(cos) = 0.3489459693081456   1/sqrt(d) = 0.35355339059327373
+d = 64 : mean|cos| = 0.09817975782434375   std(cos) = 0.12163438477024725   1/sqrt(d) = 0.125
 ```
 
-![plot 5](plots/04-embeddings-and-similarity/plot-5-8e0e1730.svg)
+![plot 5](plots/04-embeddings-and-similarity/plot-5-98111bd0.svg)
 
 <!-- rustlab:output-end -->
 

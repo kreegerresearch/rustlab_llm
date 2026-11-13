@@ -20,7 +20,7 @@ run "../../lib/info.rlab"
 logits = [3.0, 2.5, 2.0, 1.5, 1.0, 0.5, 0.0, -0.5, -1.0, -1.5];
 seed(18);
 pat = [1, 2, 3, 2];
-corpus = zeros(60);
+corpus = zeros(1, 60);
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
 end
@@ -31,7 +31,7 @@ print("trained logits at 'b':", logits_b, " (tied pair)");
 # === 2. Entropy vs tau for both ===
 n_tau = 60;
 taus = logspace(-1.5, 2, n_tau);
-H_10 = zeros(n_tau);  H_b = zeros(n_tau);
+H_10 = zeros(1, n_tau);  H_b = zeros(1, n_tau);
 for k = 1:n_tau
   H_10(k) = entropy_bits(softmax(logits / taus(k)));
   H_b(k)  = entropy_bits(softmax(logits_b / taus(k)));

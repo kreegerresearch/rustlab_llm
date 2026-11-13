@@ -15,7 +15,7 @@ seed(18);
 vocab = 3;  d_emb = 4;
 E0 = randn(vocab, d_emb) * 0.3;
 W0 = randn(d_emb, vocab) * 0.3;
-corpus = zeros(60);
+corpus = zeros(1, 60);
 pat = [1, 2, 3, 2];
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
@@ -28,7 +28,7 @@ function [dE, dW] = batch_grad(idx, corpus, E, W)
   for k = 1:length(idx)
     curr = corpus(idx(k));  nxt = corpus(idx(k) + 1);
     h = E(curr, :);  p = softmax(h * W);
-    e_y = zeros(vocab);  e_y(nxt) = 1.0;
+    e_y = zeros(1, vocab);  e_y(nxt) = 1.0;
     dlogits = p - e_y;
     dW = dW + h' * dlogits;
     dh = dlogits * W';
@@ -43,11 +43,11 @@ end
 seed(181);
 Bs = [4, 8, 16, 49];
 [gE_full, gW_full] = batch_grad(1:n_tr, corpus, E0, W0);
-noise_pow = zeros(4);
+noise_pow = zeros(1, 4);
 for bi = 1:4
   acc = 0.0;
   for r = 1:200
-    [gEb, gWb] = batch_grad(randi(n_tr, Bs(bi)), corpus, E0, W0);
+    [gEb, gWb] = batch_grad(randi(n_tr, 1, Bs(bi)), corpus, E0, W0);
     acc = acc + sum(sum((gEb - gE_full) .^ 2)) + sum(sum((gWb - gW_full) .^ 2));
   end
   noise_pow(bi) = acc / 200;
@@ -57,9 +57,9 @@ print("noise power E||g_B - g||^2:", noise_pow);
 print("  times B (flat if ∝ 1/B) :", noise_pow .* Bs, "   signal power ||g||^2 =", sum(sum(gE_full .^ 2)) + sum(sum(gW_full .^ 2)));
 
 # === Periodogram of one entry's noise sequence, B = 8 ===
-seqn = zeros(256);
+seqn = zeros(1, 256);
 for r = 1:256
-  [gEb, gWb] = batch_grad(randi(n_tr, 8), corpus, E0, W0);
+  [gEb, gWb] = batch_grad(randi(n_tr, 1, 8), corpus, E0, W0);
   seqn(r) = gWb(2, 1) - gW_full(2, 1);
 end
 Sx = abs(fft(seqn)) .^ 2;

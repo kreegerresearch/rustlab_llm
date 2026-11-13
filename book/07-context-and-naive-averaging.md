@@ -68,7 +68,7 @@ ylim([0, 1])
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/07-context-and-naive-averaging/plot-1-19beeace.svg)
+![plot 1](plots/07-context-and-naive-averaging/plot-1-7a822ead.svg)
 
 <!-- rustlab:output-end -->
 
@@ -209,7 +209,7 @@ end
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/07-context-and-naive-averaging/plot-3-cdcc5388.svg)
+![plot 3](plots/07-context-and-naive-averaging/plot-3-126776d4.svg)
 
 <!-- rustlab:output-end -->
 
@@ -235,7 +235,7 @@ print("EMA pole z = gamma =", gamma, "  time constant =", tau_ema, "tokens");
 <!-- rustlab:output-start -->
 ```text
 W     row 6 = [1×6]  0.166667  0.166667  0.166667  0.166667  0.166667  0.166667
-W_ema row 6 = [1×6]  0.088819  0.111024  0.138780  0.173476  0.216844  0.271056   (sums to 1.0000000000000002 )
+W_ema row 6 = [1×6]  0.088819  0.111024  0.138780  0.173476  0.216844  0.271056   (sums to 1 )
 EMA pole z = gamma = 0.8   time constant = 4.481420117724551 tokens
 ```
 
@@ -271,7 +271,7 @@ legend("6-tap box", "EMA, gamma = 0.8", "-3 dB")
 box first null at 1/T = 0.16666666666666666    EMA gain at Nyquist (1-g)/(1+g) = 0.11111111111111108  measured 0.1111131276434191
 ```
 
-![plot 4](plots/07-context-and-naive-averaging/plot-4-39977063.svg)
+![plot 4](plots/07-context-and-naive-averaging/plot-4-93264c64.svg)
 
 <!-- rustlab:output-end -->
 
@@ -311,7 +311,7 @@ running-mean gains 1/t: [1×6]  1.000000  0.500000  0.333333  0.250000  0.200000
 ```rustlab
 function H = empirical_entropy_bits(labels)
   % entropy (bits) of the empirical distribution of a vector of integer labels
-  counts = zeros(max(labels));
+  counts = zeros(1, max(labels));
   for m = 1:length(labels)
     counts(labels(m)) = counts(labels(m)) + 1;
   end

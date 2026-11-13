@@ -41,13 +41,13 @@ W_ff22 = randn(d_ff, d_model) * sqrt(2.0 / d_ff);
 H1 = mha_block_forward(H_in, W_Q1, W_K1, W_V1, W_O1, W_ff11, W_ff21, H_heads, M_mask);
 H2 = mha_block_forward(H1,   W_Q2, W_K2, W_V2, W_O2, W_ff12, W_ff22, H_heads, M_mask);
 
-print("|H_in| =", norm(H_in));
-print("|H1|   =", norm(H1));
-print("|H2|   =", norm(H2));
+print("|H_in| =", norm(H_in, "fro"));
+print("|H1|   =", norm(H1, "fro"));
+print("|H2|   =", norm(H2, "fro"));
 print("Output shape after 2 blocks:", size(H2));
 
 # === Plot magnitudes ===
-mags = [norm(H_in), norm(H1), norm(H2)];
+mags = [norm(H_in, "fro"), norm(H1, "fro"), norm(H2, "fro")];
 labels = {"H_in", "H1", "H2"};
 figure();
 bar(labels, mags)

@@ -14,7 +14,7 @@ T_decay  = T_total;
 eta_max  = 6.0e-4;
 eta_min  = 6.0e-5;
 
-eta_sched = zeros(T_total + 1);
+eta_sched = zeros(1, T_total + 1);
 for t = 0:T_total
   if t < T_warmup
     eta_sched(t + 1) = eta_max * (t / T_warmup);

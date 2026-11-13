@@ -14,7 +14,7 @@ print("Corpus: '" + corpus + "'");
 print("T =", T, " |V| =", vocab_size);
 
 # === Encode: ids(t) = position of corpus(t) in the vocabulary ===
-ids = zeros(T);
+ids = zeros(1, T);
 for t = 1:T
   j = 1;
   while j < vocab_size && corpus(t) != chars(j)
@@ -35,7 +35,7 @@ print("decoded: '" + decoded + "'");
 print("round trip exact:", decoded == corpus);
 
 # === Counts and Relative Frequencies from the ids ===
-counts = zeros(vocab_size);
+counts = zeros(1, vocab_size);
 for t = 1:T
   counts(ids(t)) = counts(ids(t)) + 1;
 end

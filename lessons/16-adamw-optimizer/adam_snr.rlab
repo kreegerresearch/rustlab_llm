@@ -27,7 +27,7 @@ sigma = 0.5;  n_i = 600;
 th_i = [-2.0, 4.0];  m_i = [0.0, 0.0];  v_i = [0.0, 0.0];
 G = zeros(n_i, 2);  S = zeros(n_i, 2);
 for k = 1:n_i
-  g = grad_q(th_i) + sigma * randn(2);        # score sample = true gradient + sensor noise
+  g = grad_q(th_i) + sigma * randn(1, 2);        # score sample = true gradient + sensor noise
   m_i = beta1 * m_i + (1 - beta1) * g;
   v_i = beta2_llm * v_i + (1 - beta2_llm) * (g .* g);
   m_hat = m_i / (1 - beta1 ^ k);

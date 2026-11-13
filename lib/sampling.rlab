@@ -27,7 +27,7 @@ function q = topk_mass(p, K_top)
   [s_asc, idx_asc] = sort(p);
   desc_idx = idx_asc(K:-1:1);
   keep = desc_idx(1:K_top);
-  q = zeros(K);  mass = 0.0;
+  q = zeros(1, K);  mass = 0.0;
   for j = 1:K_top
     mass = mass + p(keep(j));
   end
@@ -48,7 +48,7 @@ function q = topp_mass(p, P)
     j = j + 1;
   end
   n_keep = j;
-  q = zeros(K);  mass = c(n_keep);
+  q = zeros(1, K);  mass = c(n_keep);
   for j = 1:n_keep
     q(desc_idx(j)) = desc_p(j) / mass;
   end

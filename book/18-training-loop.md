@@ -82,7 +82,7 @@ function [dE, dW, L] = backward_one(x_curr, x_next, E, W, vocab, d_emb)
   pvec = softmax(h * W);
   L = -log(pvec(x_next));
 
-  e_y = zeros(vocab); e_y(x_next) = 1.0;
+  e_y = zeros(1, vocab); e_y(x_next) = 1.0;
   dlogits = pvec - e_y;             % vector of length vocab
   dW = h' * dlogits;                % d_emb × vocab
   dh = dlogits * W';                % vector of length d_emb
@@ -143,7 +143,7 @@ seed(18);
 E0 = randn(vocab, d_emb) * 0.3;          % the same init as the forward-pass block
 W0 = randn(d_emb, vocab) * 0.3;
 pat = [1, 2, 3, 2];                       % a, b, c, b — period 4
-corpus = zeros(60);
+corpus = zeros(1, 60);
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
 end
@@ -187,8 +187,8 @@ end
 function [Ltr, Lva, gn, etas, g21, n_clip, E, W] = train_run(E, W, corpus, n_tr, va_start, n_va, n_steps, eta_of_t, lambda, c_clip)
   vocab = size(E, 1);  d_emb = size(E, 2);
   mE = zeros(vocab, d_emb);  vE = mE;  mW = zeros(d_emb, vocab);  vW = mW;
-  Ltr = zeros(n_steps + 1);  Lva = zeros(n_steps + 1);
-  gn = zeros(n_steps);  etas = zeros(n_steps);  g21 = zeros(n_steps);  n_clip = 0;
+  Ltr = zeros(1, n_steps + 1);  Lva = zeros(1, n_steps + 1);
+  gn = zeros(1, n_steps);  etas = zeros(1, n_steps);  g21 = zeros(1, n_steps);  n_clip = 0;
   Ltr(1) = range_loss(1, n_tr, corpus, E, W);  Lva(1) = range_loss(va_start, n_va, corpus, E, W);
   for t = 1:n_steps
     etas(t) = eta_of_t(t);                                        % gain from the schedule (L17)
@@ -283,7 +283,7 @@ legend("train", "val", "24 ln2/49", "5 ln2/9")
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/18-training-loop/plot-1-0fba48db.svg)
+![plot 1](plots/18-training-loop/plot-1-1a947e70.svg)
 
 <!-- rustlab:output-end -->
 
@@ -314,12 +314,12 @@ print("constant-eta run final train loss:", Ltr_k(n_steps + 1));
 <!-- rustlab:output-start -->
 ```text
 sign changes of dW(2,1) over steps 31-180: 58   -> mean period 5.172413793103448 steps
-||g|| over the last 60 steps: scheduled 0.000005405763360576634 to 0.0006426347189373578 ;  constant eta 0.0000719780445104057 to 0.13116536781353402
-slope of log||g|| vs log eta_t over steps 60-180: 2.6566754411482103
+||g|| over the last 60 steps: scheduled 0.000005405763360576634 to 0.0006426347189373577 ;  constant eta 0.0000719780445104057 to 0.13116536781353402
+slope of log||g|| vs log eta_t over steps 60-180: 2.6566754411482125
 constant-eta run final train loss: 0.33950891571260416
 ```
 
-![plot 2](plots/18-training-loop/plot-2-9fb4ace5.svg)
+![plot 2](plots/18-training-loop/plot-2-b2d7f4b5.svg)
 
 <!-- rustlab:output-end -->
 
@@ -359,7 +359,7 @@ overfit run: train 0.27726024453114984  (floor 2 ln2 / 5 = 0.2772588722239781 ) 
 P(. | a) after training: [1×3]  0.000000  1.000000  0.000000   ->  -log P(c | a) = 17.93340563627454 nats
 ```
 
-![plot 3](plots/18-training-loop/plot-3-d7b1d64a.svg)
+![plot 3](plots/18-training-loop/plot-3-a7e4c47d.svg)
 
 <!-- rustlab:output-end -->
 
@@ -414,7 +414,7 @@ print("final train / val with clipping:", Ltr_c(n_steps + 1), Lva_c(n_steps + 1)
 <!-- rustlab:output-start -->
 ```text
 c = 0.25: limiter fired 7 of 180 steps (steps 9 to 15 )
-final train / val with clipping: 0.33950065990698514 0.3850831237783925    without: 0.33950065992134676 0.38508017927180976
+final train / val with clipping: 0.3395006599069849 0.3850831237783922    without: 0.33950065992134676 0.38508017927180976
 ```
 
 <!-- rustlab:output-end -->
@@ -431,18 +431,18 @@ The $7$ clipped steps change the final losses in the fourth decimal or not at al
 seed(181);
 Bs = [4, 8, 16, 49];
 [gE_full, gW_full] = batch_grad(1:n_tr, corpus, E0, W0);          % exact gradient at the initial parameters
-noise_pow = zeros(4);
+noise_pow = zeros(1, 4);
 for bi = 1:4
   acc = 0.0;
   for r = 1:200
-    [gEb, gWb] = batch_grad(randi(n_tr, Bs(bi)), corpus, E0, W0); % B pair indices drawn with replacement
+    [gEb, gWb] = batch_grad(randi(n_tr, 1, Bs(bi)), corpus, E0, W0); % B pair indices drawn with replacement
     acc = acc + sum(sum((gEb - gE_full) .^ 2)) + sum(sum((gWb - gW_full) .^ 2));
   end
   noise_pow(bi) = acc / 200;
 end
-seqn = zeros(256);                                                % one entry's noise, B = 8, 256 consecutive draws
+seqn = zeros(1, 256);                                                % one entry's noise, B = 8, 256 consecutive draws
 for r = 1:256
-  [gEb, gWb] = batch_grad(randi(n_tr, 8), corpus, E0, W0);
+  [gEb, gWb] = batch_grad(randi(n_tr, 1, 8), corpus, E0, W0);
   seqn(r) = gWb(2, 1) - gW_full(2, 1);
 end
 Sx = abs(fft(seqn)) .^ 2;
@@ -471,12 +471,14 @@ legend("|X(f)|^2")
 <!-- rustlab:output-start -->
 ```text
 batch size B              : [1×4]  4.000000  8.000000  16.000000  49.000000
-noise power E||g_B - g||^2: [1×4]  0.069803  0.032976  0.017940  0.005242
-  times B (flat if ∝ 1/B) : [1×4]  0.279211  0.263812  0.287038  0.256874    signal power ||g||^2 = 0.03376214611186769
-periodogram mean, lowest quarter vs highest quarter of the band: 0.2514514737601742 0.2713041797275828
+noise power E||g_B - g||^2: Matrix(1x4)
+  [0.069803, 0.032976, 0.017940, 0.005242]
+  times B (flat if ∝ 1/B) : Matrix(1x4)
+  [0.279211, 0.263812, 0.287038, 0.256874]    signal power ||g||^2 = 0.03376214611186769
+periodogram mean, lowest quarter vs highest quarter of the band: 0.25145147376017424 0.2713041797275828
 ```
 
-![plot 4](plots/18-training-loop/plot-4-0e37e9c9.svg)
+![plot 4](plots/18-training-loop/plot-4-02cc42ff.svg)
 
 <!-- rustlab:output-end -->
 

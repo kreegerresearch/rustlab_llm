@@ -21,13 +21,13 @@ function [logits, norms] = toy_gpt_forward(ids, E_tok, PE, W_Q_all, W_K_all, W_V
   for t = 1:T
     H(t, :) = E_tok(ids(t), :) + PE(t, :);
   end
-  norms = zeros(N + 1);  norms(1) = norm(H);
+  norms = zeros(1, N + 1);  norms(1) = norm(H, "fro");
   for ell = 1:N
     r  = ((ell - 1) * d + 1):(ell * d);
     rf = ((ell - 1) * d_ff + 1):(ell * d_ff);
     H = mha_block_forward(H, W_Q_all(r, :), W_K_all(r, :), W_V_all(r, :), W_O_all(r, :) * branch_scale, ...
                           W_ff1_all(r, :), W_ff2_all(rf, :) * branch_scale, H_heads, M_mask);
-    norms(ell + 1) = norm(H);
+    norms(ell + 1) = norm(H, "fro");
   end
   logits = layernorm(H) * W_U;
 end

@@ -277,13 +277,13 @@ Rustlab is a scientific computing CLI (`../rustlab`) with a MATLAB-like scriptin
 
 **Statistics:** `sum`, `prod`, `cumsum`, `min`, `max`, `argmin`, `argmax`, `mean`, `median`, `std`, `sort`, `trapz`, `hist(v,n)`, `all`, `any`
 
-**ML / Activations:** `softmax(v)` / `softmax(M)` (row-wise, 0.3.3+), `relu(v)`, `gelu(v)`, `layernorm(v)` / `layernorm(M)` (row-wise) / `layernorm(v, eps)`
+**ML / Activations:** `softmax(v)` / `softmax(M)` (row-wise, 0.3.3+), `relu(v)`, `gelu(v)`, `gelu_grad(v)` (0.3.10+), `layernorm(v)` / `layernorm(M)` (row-wise) / `layernorm(v, eps)`
 
-**Array construction:** `zeros(n)` / `zeros(m,n)`, `ones(n)` / `ones(m,n)`, `eye(n)`, `linspace(a,b,n)`, `logspace(a,b,n)`, `rand()` (0.3.4+, scalar in [0,1)) / `rand(n)`, `randn(n)` / `randn(m,n)`, `randi(imax,n)`, `randi([lo,hi],n)`
+**Array construction:** `zeros(n)` / `ones(n)` / `rand(n)` / `randn(n)` / `randi(imax, n)` are **n×n** (rustlab 0.3.26, MATLAB). A row is `zeros(1, n)`, `ones(1, n)`, `rand(1, n)`, `randn(1, n)`, `randi(imax, 1, n)`; a column is `zeros(n, 1)`. `zeros(m, n)` is m×n. `zeros(1, n)` is a 1×n matrix, not a bare vector; `length` of it is `n` (`max(size)`). `rand()` and `randi(imax)` stay scalars. `eye(n)`, `linspace(a,b,n)`, `logspace(a,b,n)`.
 
 **Array inspection:** `len(v)`, `length(v)`, `numel(x)`, `size(x)`
 
-**Matrix ops:** `reshape(A,m,n)`, `repmat(A,m,n)`, `transpose(A)`, `diag(v)` / `diag(M)`, `outer(a,b)`, `kron(A,B)`, `inv(M)`, `linsolve(A,b)`, `det(M)`, `trace(M)`, `rank(M)`, `eig(M)`, `svd(A)`, `expm(M)`, `norm(v)` / `norm(v,p)`, `dot(u,v)`, `cross(u,v)`, `meshgrid(x,y)`, `roots(p)`
+**Matrix ops:** `reshape(A,m,n)`, `repmat(A,m,n)`, `transpose(A)`, `diag(v)` / `diag(M)`, `outer(a,b)`, `kron(A,B)`, `inv(M)`, `linsolve(A,b)`, `det(M)`, `trace(M)`, `rank(M)`, `eig(M)`, `svd(A)`, `expm(M)`, `norm(v)` (vector 2-norm) / `norm(M)` (matrix 2-norm, largest singular value, since 0.3.40) / `norm(M, "fro")` (Frobenius) / `norm(M, p)`, `dot(u,v)`, `cross(u,v)`, `meshgrid(x,y)`, `roots(p)`
 
 **Concatenation:** `horzcat(A,B,...)` / `[A, B]`, `vertcat(A,B,...)` / `[A; B]`
 
@@ -432,6 +432,18 @@ The 0.3.6 `cache` statement had reserved the lowercase identifier; 0.3.7 made it
 
 ### ⚠️ Same-version behaviour drift: the 2026-07-11 binary still reports 0.3.6
 The July rebuild changed observable behaviour without a version bump: the `cache` reservation above, floating-point last-digit changes in reductions, and heatmap NaN handling (NaN cells now gray, colorbar excludes non-finite). `make notebooks-check` diffs against books rendered by the June build will show those deltas. When the drift guard fires with no source change, suspect a binary update — check the binary's mtime — and re-render. Details: `docs/rustlab-issues-2026-07-12.md` §5.
+
+### ⚠️ BREAKING (rustlab 0.3.26): `zeros(n)` / `ones(n)` / `rand(n)` / `randn(n)` / `randi(imax, n)` are n×n
+A single size used to allocate a length-n vector. It now allocates an n×n matrix (MATLAB). A length-n row is `zeros(1, n)`, `randn(1, n)`, `randi(imax, 1, n)`; a column is `zeros(n, 1)`. `rand()` and `randi(imax)` stay scalars. `zeros(1, n)` is a 1×n matrix, not a bare vector; `length` is `max(size)`, so `length(zeros(1, n))` is still `n`, and `sort` / `cumsum` / `diag` / `outer` treat a 1×n or n×1 as a vector. New code that wants a sequence must pass the row count. In 0.3.26–0.3.43 a 1×n matrix was not a subscript (`invalid index type: matrix`). From 0.3.44 a 1×n or n×1 index is accepted again, and a 1×1 matrix is accepted where a scalar is. The curriculum still writes `ids(:)` (a vector) and `sum(q .* k)` (a scalar dot product). The legacy row write `M(t) = row` accepts a vector and rejects a 1×n matrix; write `M(t, :) = row`.
+
+### ⚠️ BREAKING (rustlab 0.3.56): array comparisons are logical, not 0/1 doubles
+`class([1, 2] > 0)` is `"logical"`. Arithmetic promotes a logical array to double 0/1 (`mask + 0`, and `1 - mask`), and `sum(mask)` counts the trues. `mean`, `reshape`, and `heatmap` do not: they error with `unsupported type logical` or `expected matrix, got logical`. Write `double(mask)` first. `double` of a 1×n logical is a vector, not a 1×n matrix; `double` of a wider logical matrix stays a matrix. `parmap` does not pack a logical array returned from a worker.
+
+### ⚠️ BREAKING (rustlab 0.3.40): `norm(M)` is the matrix 2-norm
+With no second argument, `norm` of a matrix is the largest singular value, the same number as `norm(M, 2)`. It used to be Frobenius. A vector is unchanged (and a 1×n or n×1 matrix matches that Euclidean length). The entrywise magnitude the lessons compare with $\sqrt{Td}$ is `norm(M, "fro")`.
+
+### ⚠️ BREAKING (rustlab 0.3.21): `eig` order and eigenvector signs
+Eigenvalues of a real symmetric or Hermitian matrix come back in ascending order. General (non-symmetric) eigenvalues, and `roots`, can also change order. Eigenvector signs are not stable across versions: compare `A*V - V*D`, or pick a column with `argmax` / `argmin` on the eigenvalues, rather than indexing `V(:, 1)` or `lam(1)` for a particular mode.
 
 ### ⚠️ BREAKING (rustlab 0.3.0): `M(scalar)` is now a linear-index element, not a row
 **Hit during the 0.3.0 audit.** Previously `M(2)` returned the second *row* of a matrix; in 0.3.0 it returns the second column-major *linear element* (matches `find(M)`'s 1-based linear indices and is consistent with vector indexing).

@@ -84,7 +84,7 @@ n_samples = 5000;
 dks = [4, 64, 512];
 for kk = 1:3
   dk_v = dks(kk);
-  dots_v = zeros(n_samples);
+  dots_v = zeros(1, n_samples);
   for s = 1:n_samples
     q_v = randn(1, dk_v);
     k_v = randn(1, dk_v);
@@ -98,9 +98,9 @@ end
 
 <!-- rustlab:output-start -->
 ```text
-d_k = 4   Var(q.k) = 3.9421480253630032   Var(q.k) / d_k = 0.9855370063407508
-d_k = 64   Var(q.k) = 64.25729915186785   Var(q.k) / d_k = 1.0040202992479352
-d_k = 512   Var(q.k) = 528.3374583922757   Var(q.k) / d_k = 1.0319090984224135
+d_k = 4   Var(q.k) = 3.942148025363009   Var(q.k) / d_k = 0.9855370063407523
+d_k = 64   Var(q.k) = 64.25729915186767   Var(q.k) / d_k = 1.0040202992479323
+d_k = 512   Var(q.k) = 528.3374583922747   Var(q.k) / d_k = 1.0319090984224115
 ```
 
 <!-- rustlab:output-end -->
@@ -125,8 +125,8 @@ print("scaled:   max A =", max(A_scaled_v),   "  H(A) =", H_scaled_v, "bits   (u
 
 <!-- rustlab:output-start -->
 ```text
-unscaled: max A = 0.9999999999999583   H(A) = 0.000000000001914218322257698 bits
-scaled:   max A = 0.5235101584047486   H(A) = 2.1887527342740865 bits   (uniform over 8 = 3 bits)
+unscaled: max A = 0.9999999999999583   H(A) = 0.0000000000019142183222577494 bits
+scaled:   max A = 0.5235101584047482   H(A) = 2.1887527342740873 bits   (uniform over 8 = 3 bits)
 ```
 
 <!-- rustlab:output-end -->
@@ -183,7 +183,7 @@ Matrix(5x5)
 <!-- rustlab:output-end -->
 
 ```rustlab
-row_sums = zeros(T);
+row_sums = zeros(1, T);
 for t = 1:T
   row_sums(t) = sum(A(t, :));
 end
@@ -203,7 +203,8 @@ print("largest upper-triangle entry =", max_upper);
 
 <!-- rustlab:output-start -->
 ```text
-A(1,1) = 1    row sums = [1×5]  1.000000  1.000000  1.000000  1.000000  1.000000
+A(1,1) = 1    row sums = Matrix(1x5)
+  [1.000000, 1.000000, 1.000000, 1.000000, 1.000000]
 largest upper-triangle entry = 0
 ```
 
@@ -217,7 +218,7 @@ Both axes are **token positions**: rows are the query positions $t$ (which token
 
 ```rustlab
 positions = {"t1", "t2", "t3", "t4", "t5"};
-M_ind = (M < 0);   % 1 where the causal mask blocks attention, 0 elsewhere
+M_ind = double(M < 0);   % 1 where the causal mask blocks attention, 0 elsewhere. Comparisons are logical (0.3.56); heatmap wants doubles.
 
 figure();
 subplot(1, 3, 1)
@@ -442,8 +443,8 @@ print("rank(S2) =", rank(S2), "  rank(Q2) =", rank(Q2), "  rank(K2) =", rank(K2)
 
 <!-- rustlab:output-start -->
 ```text
-rank(S)  = 2   rank(Q)  = 2   rank(K)  = 4   d_k = 4
-rank(S2) = 2   rank(Q2) = 2   rank(K2) = 4
+rank(S)  = 3   rank(Q)  = 2   rank(K)  = 4   d_k = 4
+rank(S2) = 4   rank(Q2) = 2   rank(K2) = 4
 ```
 
 <!-- rustlab:output-end -->
@@ -487,7 +488,7 @@ print("H(A_t) at c = 0.1, 1, 3:", H_c01, H_c1, H_c3, "bits   (log2 8 =", log2(T_
 H(A_t) at c = 0.1, 1, 3: 2.995300634107477 2.2559471769069237 0.1687290966557756 bits   (log2 8 = 3 )
 ```
 
-![animation 3](plots/08-scaled-dot-product-attention/anim-3-7b9d7afc.gif)
+![animation 3](plots/08-scaled-dot-product-attention/anim-3-469f832f.gif)
 
 <!-- rustlab:output-end -->
 

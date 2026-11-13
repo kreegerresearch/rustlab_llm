@@ -86,7 +86,7 @@ Sweep the probability $p$ the model puts on one class from chance ($1/K$) up to 
 ```rustlab
 K = 4;
 ps = linspace(1.0 / K, 0.999, 50);
-ppl_dist = zeros(50);  ppl_hit = zeros(50);  ppl_miss = zeros(50);
+ppl_dist = zeros(1, 50);  ppl_hit = zeros(1, 50);  ppl_miss = zeros(1, 50);
 for k = 1:50
   p = ps(k);  rest = (1 - p) / (K - 1);
   ppl_dist(k) = entropy_to_ppl([p, rest, rest, rest]);   % 2^H(q)
@@ -147,7 +147,7 @@ The 24-parameter embedding + head model of Lesson 18, trained full-batch with Ad
 ```rustlab
 % Period-4 corpus: tokens 1-50 train (49 pairs), tokens 50-59 held out (9 pairs).
 pat = [1, 2, 3, 2];
-corpus = zeros(60);
+corpus = zeros(1, 60);
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
 end
@@ -182,7 +182,7 @@ seed(20);
 E = randn(vocab, d_emb) * 0.3;  W = randn(d_emb, vocab) * 0.3;
 n_steps = 600;  eta_max = 0.15;  eta_min = 0.015;  T_w = 60;  b1 = 0.9;  b2 = 0.999;  eps_a = 1e-8;
 mE = zeros(vocab, d_emb);  vE = mE;  mW = zeros(d_emb, vocab);  vW = mW;
-L_tr = zeros(n_steps + 1);  L_va = zeros(n_steps + 1);
+L_tr = zeros(1, n_steps + 1);  L_va = zeros(1, n_steps + 1);
 L_tr(1) = mean_loss(train_ids, E, W);  L_va(1) = mean_loss(val_ids, E, W);
 for s = 1:n_steps
   if s <= T_w                                         % warmup-cosine (Lesson 17)
@@ -332,12 +332,12 @@ Two moments matter: the **mean** is the cross-entropy, and the **standard deviat
 Score the trained model on a fresh 200-token stretch of the same source (the source is periodic, so this is unseen text with the same statistics) and plot the per-token bits:
 
 ```rustlab
-held = zeros(200);
+held = zeros(1, 200);
 for i = 1:200
   held(i) = pat(mod(i - 1, 4) + 1);
 end
 N = 199;
-losses = zeros(N);                           % self-information, bits
+losses = zeros(1, N);                           % self-information, bits
 for t = 1:N
   q = softmax(E(held(t), :) * W);
   losses(t) = -log2(q(held(t + 1)));

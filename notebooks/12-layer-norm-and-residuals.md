@@ -133,11 +133,11 @@ for L = 1:n_layers
   W_stack((L - 1) * d_res + 1:L * d_res, :) = randn(d_res, d_res) * (1.0 / sqrt(d_res));
 end
 
-x0 = randn(d_res);
-mag_no_res = zeros(n_layers + 1);   % x <- f(x)
-mag_res    = zeros(n_layers + 1);   % x <- x + 0.1 f(x)
-mag_res1   = zeros(n_layers + 1);   % x <- x + 1.0 f(x)
-ratio      = zeros(n_layers);       % per-layer |x_{l+1}| / |x_l| without residual
+x0 = randn(1, d_res);
+mag_no_res = zeros(1, n_layers + 1);   % x <- f(x)
+mag_res    = zeros(1, n_layers + 1);   % x <- x + 0.1 f(x)
+mag_res1   = zeros(1, n_layers + 1);   % x <- x + 1.0 f(x)
+ratio      = zeros(1, n_layers);       % per-layer |x_{l+1}| / |x_l| without residual
 mag_no_res(1) = norm(x0);
 mag_res(1)    = norm(x0);
 mag_res1(1)   = norm(x0);
@@ -209,14 +209,14 @@ seed(21);
 d_pp = 32;
 N_pp = 24;
 
-x_pre  = randn(d_pp);          % Pre-LN  residual stream
+x_pre  = randn(1, d_pp);          % Pre-LN  residual stream
 x_post = x_pre;                % Post-LN residual stream (same start)
-mag_pre  = zeros(N_pp + 1);
-mag_post = zeros(N_pp + 1);
-dc_pre   = zeros(N_pp + 1);
-ac_pre   = zeros(N_pp + 1);
-f_dc     = zeros(N_pp);        % per-layer mean of the written vector f
-f_ac2    = zeros(N_pp);        % per-layer |f - mean(f)|^2
+mag_pre  = zeros(1, N_pp + 1);
+mag_post = zeros(1, N_pp + 1);
+dc_pre   = zeros(1, N_pp + 1);
+ac_pre   = zeros(1, N_pp + 1);
+f_dc     = zeros(1, N_pp);        % per-layer mean of the written vector f
+f_ac2    = zeros(1, N_pp);        % per-layer |f - mean(f)|^2
 mag_pre(1)  = norm(x_pre);
 mag_post(1) = norm(x_post);
 dc_pre(1)   = abs(mean(x_pre)) * sqrt(d_pp);
@@ -317,8 +317,8 @@ Without LN the score variance follows $s^4$ ($1 \to 256 \to 65536$ in theory) an
 
 ```rustlab
 P_plain = eye(d_res);   P_res = eye(d_res);
-smax_plain = zeros(n_layers);                   % sigma_max bounds every singular value of prod J_l
-smin_res   = zeros(n_layers);  smax_res = zeros(n_layers);
+smax_plain = zeros(1, n_layers);                   % sigma_max bounds every singular value of prod J_l
+smin_res   = zeros(1, n_layers);  smax_res = zeros(1, n_layers);
 x_plain = x0;  x_resi = x0;
 for L = 1:n_layers
   W_L = W_stack((L - 1) * d_res + 1:L * d_res, :);
@@ -353,10 +353,10 @@ hold("off")
 
 ```rustlab
 d_ln = 6;
-x_ln = randn(d_ln) * 2 + 1;
+x_ln = randn(1, d_ln) * 2 + 1;
 J_ln = zeros(d_ln, d_ln);
 for j = 1:d_ln
-  e_j = zeros(d_ln);  e_j(j) = 1e-6;
+  e_j = zeros(1, d_ln);  e_j(j) = 1e-6;
   J_ln(j, :) = (layernorm(x_ln + e_j) - layernorm(x_ln - e_j)) / 2e-6;   % row j: d LN / d x_j
 end
 s_ln = svd(J_ln);
@@ -370,7 +370,7 @@ print("degrees of freedom discarded: ", sum(s_ln < 1e-3), "of", d_ln);
 ```rustlab
 seed(5);
 W_inv  = randn(d_res, d_res) / sqrt(d_res);
-x_true = randn(d_res);
+x_true = randn(1, d_res);
 lip_f  = svd(W_inv)(1) * max(gelu_grad(linspace(-5, 5, 2001)));
 y_obs  = x_true + h_step * gelu(x_true * W_inv);
 x_hat  = y_obs;

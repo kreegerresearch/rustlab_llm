@@ -78,22 +78,22 @@ T_max = 16;
 
 pat = [1, 2, 2];       % a, b, b
 T = 12;
-ids = zeros(T);
+ids = zeros(1, T);
 for i = 1:T
   ids(i) = pat(mod(i - 1, 3) + 1);
 end
-mask = ones(T - 1);    % every prediction position counts
+mask = ones(1, T - 1);    % every prediction position counts
 
 E = randn(vocab, d_model) * 0.3;
 PE = sinusoidal_pe(T_max, d_model);
-gamma1 = ones(d_model);   beta1 = zeros(d_model);
-gamma2 = ones(d_model);   beta2 = zeros(d_model);
+gamma1 = ones(1, d_model);   beta1 = zeros(1, d_model);
+gamma2 = ones(1, d_model);   beta2 = zeros(1, d_model);
 Wq = randn(d_model, d_model) * 0.3;
 Wk = randn(d_model, d_model) * 0.3;
 Wv = randn(d_model, d_model) * 0.3;
 Wo = randn(d_model, d_model) * 0.3;
-W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(d_ff);
-W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(d_model);
+W1 = randn(d_model, d_ff) * 0.3;  b1f = zeros(1, d_ff);
+W2 = randn(d_ff, d_model) * 0.3;  b2f = zeros(1, d_model);
 W_U = randn(d_model, vocab) * 0.3;
 P = struct("E", E, "PE", PE, "gamma1", gamma1, "beta1", beta1, "gamma2", gamma2, "beta2", beta2, ...
            "Wq", Wq, "Wk", Wk, "Wv", Wv, "Wo", Wo, "W1", W1, "b1f", b1f, "W2", W2, "b2f", b2f, "W_U", W_U);
@@ -127,7 +127,7 @@ $$\bar{\mathbf{Z}}(t,:) = \begin{cases}(\mathbf{p}_t - \mathbf{e}_{y_t})/n & t \
 
 ```
 p = softmax(logits(t, :));
-e_y = zeros(vocab); e_y(ids(t + 1)) = 1.0;
+e_y = zeros(1, vocab); e_y(ids(t + 1)) = 1.0;
 dl(t, :) = (p - e_y) / total;          % ce_dlogits, lines 227-229
 ```
 
@@ -269,7 +269,7 @@ Why $\varepsilon = 10^{-4}$? Sweep it. A central difference has truncation error
 
 ```rustlab
 eps_list = logspace(-1, -9, 9);
-rel_list = zeros(9);
+rel_list = zeros(1, 9);
 for k = 1:9
   e = eps_list(k);
   Wp = P.W_U;  Wp(1, 1) = Wp(1, 1) + e;  Pp = P;  Pp.W_U = Wp;
@@ -308,7 +308,7 @@ n_train = 600;  T_w = 60;  eta_max = 0.05;  eta_min = 0.005;
 bet1 = 0.9;  bet2 = 0.999;  eps_a = 1e-8;
 [M, V] = adamw_init(P);
 
-loss_curve = zeros(n_train + 1);
+loss_curve = zeros(1, n_train + 1);
 [lo, L0, cache] = transformer_forward(ids, mask, P);
 loss_curve(1) = L0;
 for step = 1:n_train
@@ -371,7 +371,7 @@ function L_final = train_variant(P_start, ids, mask, n_steps, attn_on, T_w, eta_
 end
 
 P_nope = P0;  P_nope.PE = zeros(T_max, d_model);
-L_abl = zeros(4);
+L_abl = zeros(1, 4);
 L_abl(1) = train_variant(P0, ids, mask, n_train, 1, T_w, eta_max, eta_min);
 L_abl(2) = train_variant(P0, ids, mask, n_train, 0, T_w, eta_max, eta_min);
 L_abl(3) = train_variant(P_nope, ids, mask, n_train, 1, T_w, eta_max, eta_min);

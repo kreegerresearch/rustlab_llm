@@ -10,7 +10,7 @@
 vocab_size = 7;
 ids = [7, 5, 1, 2, 3, 1, 5, 6, 1, 4, 5, 7, 1, 7, 5, 1, 2, 3];
 T = length(ids);
-counts = zeros(vocab_size);
+counts = zeros(1, vocab_size);
 for t = 1:T
   counts(ids(t)) = counts(ids(t)) + 1;
 end

@@ -124,7 +124,7 @@ The loss is also **convex in $\mathbf{z}$**: $-z_c$ is linear, and $\mathrm{LSE}
 z3 = [1.0, 2.0, 0.0];             % logits: the distractor (class 2) currently wins
 c3 = 1;                           % correct class
 p3 = softmax(z3);
-y3 = zeros(3); y3(c3) = 1.0;
+y3 = zeros(1, 3); y3(c3) = 1.0;
 g3 = p3 - y3;                     % dL/dz
 L3 = -z3(c3) + log(sum(exp(z3))); % the LSE form of the loss
 print("p_hat      =", p3);

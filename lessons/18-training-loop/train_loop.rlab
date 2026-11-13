@@ -31,7 +31,7 @@ W = randn(d_emb, vocab) * 0.3;
 # val near train, with a small gap from finite-sample weighting of the only
 # uncertain transition (current-token b -> {a, c}).
 function tokens = build_seq(n)
-  tokens = zeros(n);
+  tokens = zeros(1, n);
   pat = [1, 2, 3, 2];     % a, b, c, b — period 4
   for i = 1:n
     tokens(i) = pat(mod(i - 1, 4) + 1);
@@ -50,7 +50,7 @@ function [dE, dW, L] = step_grad(curr, nxt, E, W, vocab, d_emb)
   p = softmax(h_m * W);              % vector of length vocab
   L = -log(p(nxt));
 
-  e_y = zeros(vocab); e_y(nxt) = 1.0;
+  e_y = zeros(1, vocab); e_y(nxt) = 1.0;
   dlogits = p - e_y;                  % vector
   dW = h_m' * dlogits;                % d_emb × vocab
   dh = dlogits * W';                  % vector of length d_emb
@@ -91,10 +91,10 @@ m_W = zeros(d_emb, vocab);
 v_W = zeros(d_emb, vocab);
 
 # Diagnostic buffers
-loss_train_curve = zeros(n_train + 1);
-loss_val_curve   = zeros(n_train + 1);
-grad_norm_curve  = zeros(n_train + 1);
-lr_curve         = zeros(n_train + 1);
+loss_train_curve = zeros(1, n_train + 1);
+loss_val_curve   = zeros(1, n_train + 1);
+grad_norm_curve  = zeros(1, n_train + 1);
+lr_curve         = zeros(1, n_train + 1);
 
 loss_train_curve(1) = mean_loss(1,  n_train_pairs, corpus, E, W);
 loss_val_curve(1)   = mean_loss(50, n_val_pairs,   corpus, E, W);

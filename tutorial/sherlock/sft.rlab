@@ -153,14 +153,14 @@ if C_sft.replay
 end
 n_qa = B - n_rep;
 print("batch:", n_qa, "QA examples +", n_rep, "replay windows   steps:", C_sft.n_steps, "  eta:", C_sft.eta);
-m_adam = zeros(length(theta));  v_adam = zeros(length(theta));      # fresh optimiser state
+m_adam = zeros(1, length(theta));  v_adam = zeros(1, length(theta));      # fresh optimiser state
 wd_mask = gpt_wd_mask(cfg);
-hist_sft = zeros(C_sft.n_steps);  hist_rep = zeros(C_sft.n_steps);
+hist_sft = zeros(1, C_sft.n_steps);  hist_rep = zeros(1, C_sft.n_steps);
 ptr = 0;
 tic;
 for step = 1:C_sft.n_steps
   P = gpt_unflatten(theta, cfg);
-  BW = zeros(B, L_max);  BM = zeros(B, L_max - 1);  BL = zeros(B);
+  BW = zeros(B, L_max);  BM = zeros(B, L_max - 1);  BL = zeros(1, B);
   for b = 1:n_qa                                   # round-robin through the pairs
     i = mod(ptr, n_pairs) + 1;  ptr = ptr + 1;
     BW(b, :) = QW(i, :);  BM(b, :) = QM(i, :);  BL(b) = qa_len(i);
@@ -168,7 +168,7 @@ for step = 1:C_sft.n_steps
   if n_rep > 0
     W = sample_windows(ids_train, n_rep, T);
     for b = 1:n_rep
-      BW(n_qa + b, 1:(T + 1)) = W(b, :);  BM(n_qa + b, 1:T) = ones(T);  BL(n_qa + b) = T + 1;
+      BW(n_qa + b, 1:(T + 1)) = W(b, :);  BM(n_qa + b, 1:T) = ones(1, T);  BL(n_qa + b) = T + 1;
     end
   end
   # Each worker returns the mean loss over its own scored positions, so a

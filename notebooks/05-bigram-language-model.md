@@ -180,11 +180,11 @@ print("  u=0.7 -> sum(CDF < 0.7) + 1 =", sum(cdf_b < 0.7) + 1, "  (expect 3 = c)
 
 ```rustlab
 n_generate = 12;
-generated = zeros(n_generate);
+generated = zeros(1, n_generate);
 generated(1) = 1;   % start with token a
 
 seed(7);                          % deterministic for the gallery render
-draws = rand(n_generate - 1);
+draws = rand(1, n_generate - 1);
 
 for t = 1:(n_generate - 1)
   curr = generated(t);

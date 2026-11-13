@@ -14,11 +14,11 @@
 seed(21);
 d = 32;
 N = 24;
-x_pre  = randn(d);
+x_pre  = randn(1, d);
 x_post = x_pre;
-mag_pre  = zeros(N + 1);  mag_post = zeros(N + 1);
-dc_pre   = zeros(N + 1);  ac_pre   = zeros(N + 1);
-f_dc     = zeros(N);      f_ac2    = zeros(N);
+mag_pre  = zeros(1, N + 1);  mag_post = zeros(1, N + 1);
+dc_pre   = zeros(1, N + 1);  ac_pre   = zeros(1, N + 1);
+f_dc     = zeros(1, N);      f_ac2    = zeros(1, N);
 mag_pre(1) = norm(x_pre);  mag_post(1) = norm(x_post);
 dc_pre(1)  = abs(mean(x_pre)) * sqrt(d);
 ac_pre(1)  = norm(x_pre - mean(x_pre));

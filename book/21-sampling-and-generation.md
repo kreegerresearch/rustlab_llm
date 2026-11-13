@@ -46,7 +46,7 @@ vocab = 3;
 d_emb = 4;
 
 pat = [1, 2, 3, 2];
-corpus = zeros(60);
+corpus = zeros(1, 60);
 for i = 1:60
   corpus(i) = pat(mod(i - 1, 4) + 1);
 end
@@ -71,7 +71,7 @@ After training, the bigram structure is exact: `P(b|a) ≈ P(b|c) ≈ 1` and `P(
 
 ```rustlab
 function seq = greedy_generate(x0, n_new, E, W)
-  seq = zeros(n_new + 1);
+  seq = zeros(1, n_new + 1);
   seq(1) = x0;
   for t = 1:n_new
     p = softmax(E(seq(t), :) * W);
@@ -197,8 +197,9 @@ print("mass kept before renormalising:", sum(sort(p_base)(8:10)), "  support:", 
 
 <!-- rustlab:output-start -->
 ```text
-top-K=3: [1×10]  0.506480  0.307196  0.186324  0.000000  0.000000  0.000000  0.000000  0.000000  ... (10 total)
-mass kept before renormalising: 0.7821398567522391   support: 3
+top-K=3: Matrix(1x10)
+  [0.506480, 0.307196, 0.186324, 0.000000, 0.000000, 0.000000, 0.000000, 0.000000, ...]
+mass kept before renormalising: 0.782139856752239   support: 3
 ```
 
 <!-- rustlab:output-end -->
@@ -245,7 +246,7 @@ xlabel("token"); ylabel("probability"); ylim([0, 1])
 ```
 
 <!-- rustlab:output-start -->
-![plot 1](plots/21-sampling-and-generation/plot-1-6c11ff5c.svg)
+![plot 1](plots/21-sampling-and-generation/plot-1-a51ae130.svg)
 
 <!-- rustlab:output-end -->
 
@@ -256,7 +257,7 @@ A useful summary number is the **entropy** of each transformed distribution: hig
 
 ```rustlab
 function q = greedy_dist(z)
-  q = zeros(length(z));
+  q = zeros(1, length(z));
   q(argmax(z)) = 1.0;
 end
 print("H greedy   :", entropy_nats(greedy_dist(logits)), "nats  ", entropy_bits(greedy_dist(logits)), "bits");
@@ -300,7 +301,7 @@ saveanim("temperature_sweep.gif", 8)
 ```
 
 <!-- rustlab:output-start -->
-![animation 2](plots/21-sampling-and-generation/anim-2-6a1dacd6.gif)
+![animation 2](plots/21-sampling-and-generation/anim-2-09550359.gif)
 
 <!-- rustlab:output-end -->
 
@@ -315,7 +316,7 @@ Run the trained Lesson 18 model under three temperatures and observe what change
 % sample_categorical(p) is the inverse-CDF draw from lib/sampling.rlab: walk
 % the cumulative distribution until it crosses r ~ U[0, 1).
 function seq = temperature_generate(x0, n_new, E, W, tau)
-  seq = zeros(n_new + 1);
+  seq = zeros(1, n_new + 1);
   seq(1) = x0;
   for t = 1:n_new
     p = softmax(E(seq(t), :) * W / tau);
@@ -444,7 +445,7 @@ tokens = [1, 4, 2, 5, 3, 6, 2, 1];               % pretend the sampler already c
 X = E_tok(tokens, :) + E_pos;                     % T x d_head: token + position (Lesson 10)
 
 K_cache = zeros(0, d_head);  V_cache = zeros(0, d_head);
-max_diff = 0.0;  naive_flops = zeros(T);  cached_flops = zeros(T);
+max_diff = 0.0;  naive_flops = zeros(1, T);  cached_flops = zeros(1, T);
 for t = 1:T
   % naive: recompute Q, K, V for the whole prefix, mask, take the last row
   Xt = X(1:t, :);
@@ -474,7 +475,8 @@ print("cache at t = 8: K and V each", size(K_cache)(1), "x", d_head, " ->", 2 * 
 <!-- rustlab:output-start -->
 ```text
 max | naive_out - cached_out | over 8 steps = 0   (round-off: same arithmetic, different order)
-per-step FLOP ratio naive / cached: [1×8]  1.000000  2.000000  3.000000  4.000000  5.000000  6.000000  7.000000  8.000000
+per-step FLOP ratio naive / cached: Matrix(1x8)
+  [1.000000, 2.000000, 3.000000, 4.000000, 5.000000, 6.000000, 7.000000, 8.000000]
 cumulative FLOPs at T=8 — naive: 3564   cached: 708   ratio: 5.033898305084746
 cache at t = 8: K and V each 8 x 4  -> 64 numbers of state
 ```
@@ -544,7 +546,7 @@ The penalty over a 4-token window breaks the tie at `b` whenever the window hold
 ```rustlab
 n_tau = 60;
 taus_s = logspace(-1.5, 2, n_tau);
-H_10 = zeros(n_tau);  H_b = zeros(n_tau);
+H_10 = zeros(1, n_tau);  H_b = zeros(1, n_tau);
 for k = 1:n_tau
   H_10(k) = entropy_bits(softmax(logits / taus_s(k)));
   H_b(k)  = entropy_bits(softmax(logits_b / taus_s(k)));
@@ -575,7 +577,7 @@ ylabel("H [bits]")
 dH/dln(tau) at tau=1: 0.808682795298767 nats   Var_q(z) = 0.8086827002533895
 ```
 
-![plot 3](plots/21-sampling-and-generation/plot-3-ae9f5772.svg)
+![plot 3](plots/21-sampling-and-generation/plot-3-ff65cd5b.svg)
 
 <!-- rustlab:output-end -->
 
@@ -602,7 +604,7 @@ function nxt = argmax_step(x, E, W)
   nxt = argmax(softmax(E(x, :) * W));
 end
 for s = 1:3
-  orbit = zeros(9);  orbit(1) = s;
+  orbit = zeros(1, 9);  orbit(1) = s;
   for t = 1:8
     orbit(t + 1) = argmax_step(orbit(t), E, W);
   end

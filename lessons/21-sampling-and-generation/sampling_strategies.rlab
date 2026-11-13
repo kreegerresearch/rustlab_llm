@@ -27,7 +27,7 @@ print("argmax:", argmax(logits), "  p_max:", p_base(argmax(logits)));
 # === Greedy ===
 function q = greedy_dist(z)
   K = length(z);
-  q = zeros(K);
+  q = zeros(1, K);
   q(argmax(z)) = 1.0;
 end
 

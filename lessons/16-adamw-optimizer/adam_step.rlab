@@ -28,7 +28,7 @@ n_steps = 60;
 theta = [-2.0, 4.0];
 m = [0.0, 0.0];
 v = [0.0, 0.0];
-loss_curve = zeros(n_steps + 1);
+loss_curve = zeros(1, n_steps + 1);
 loss_curve(1) = loss_aniso2(theta, a, b);
 
 # === First step in detail to show bias correction ===

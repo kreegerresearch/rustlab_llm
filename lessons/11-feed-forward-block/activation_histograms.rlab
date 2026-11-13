@@ -22,10 +22,10 @@ post_big = gelu(pre_big);
 
 # === Summary statistics ===
 print("draws:                  ", length(pre_big));
-print("fraction pre  < 0:      ", mean(pre_big < 0));
+print("fraction pre  < 0:      ", mean(double(pre_big < 0)));
 print("min post:               ", min(post_big));
-print("fraction |pre|  < 0.05: ", mean(abs(pre_big) < 0.05));
-print("fraction |post| < 0.05: ", mean(abs(post_big) < 0.05));
+print("fraction |pre|  < 0.05: ", mean(double(abs(pre_big) < 0.05)));
+print("fraction |post| < 0.05: ", mean(double(abs(post_big) < 0.05)));
 
 # === Histograms side by side ===
 figure();
