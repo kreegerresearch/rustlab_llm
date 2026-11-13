@@ -239,4 +239,27 @@ Measured as run 10, [`perf/reports/10-v0.3.64.md`](../reports/10-v0.3.64.md), on
 
 **Real tutorial:** `make sherlock` took 2 min 3 s for every stage. Pre-training took 88 s at 34,871 tok/s and reached the same 2.203 held-out bits/char. SFT scored 40 / 46 (42 on 0.3.11), the known last-digit sensitivity. `make sherlock-quick` took 15 s.
 
-**Run 03b library items:** not done yet. The batched-step prototype is now the most interesting one, because `parmap` efficiency fell to 42 % once the matrix unit was shared.
+**Run 03b library items:** the batched step is done (below, not adopted). The gradient-reduce and unflatten items are still open.
+
+### Run 03b: the batched step (2026-11-12, rustlab 0.3.64; not adopted)
+
+`perf/batch_step.rlab` stacks the B windows into one (B T) × d forward and backward (`gpt_grad_batch`). Embedding, LayerNorm, the QKV / Wo / FFN / LM-head products and the loss run once over all B T rows. Attention loops over (window, head). The embedding gradient is one one-hot product. `perf/batch_check.rlab` compares it with the `parmap` path on the bench model (d 128, 4 layers, 4 heads, T 129, B 8).
+
+**Correct:** the mean gradient matches `parmap` to 2.4e-15 of its largest entry, and the loss to 8.9e-16, both unmasked and with a random SFT-style mask.
+
+**Slower at every grouping** (median of 7, same machine and binary):
+
+| Layout | ms | tok/s |
+|---|---:|---:|
+| `parmap` × 8 windows (`gpt_grad_flat`, today) | 21.4 | 47,800 |
+| `parmap` × 8 groups of 1 (`gpt_grad_batch`) | 26.7 | 38,400 |
+| `parmap` × 4 groups of 2 | 33.9 | 30,200 |
+| `parmap` × 2 groups of 4 | 54.0 | 18,900 |
+| one stream of 8 | 99.3 | 10,300 |
+
+**Why** (`rustlab run --profile`, one stream, 95 ms a call; per-primitive probes in [`04-requests.md`](04-requests.md)):
+- **One SME unit instead of two.** The stacked products run at 300–350 GFLOP/s on one thread. Eight `parmap` workers reach 604–666 GFLOP/s summed, because the chip has an SME unit per performance cluster.
+- **Small-array costs paid serially.** An attention head takes 92 µs, of which the two products are 22 µs. `softmax` 129 × 129 is 37 µs and scale-and-mask 13.5 µs. The stream runs 32 of these per layer, forward and backward, one after another.
+- Large element-wise work is not the problem. `gelu(X) .* X + X` on 1032 × 512 takes 0.47 ms, against 1.44 ms for 8 separate 129-row calls.
+
+So on 0.3.64, stacking windows trades two matrix units and 8-way parallel small work for taller products, and it loses. `pagemtimes` alone would not change that. A batched step is worth re-measuring only if one large product can use both SME units.  `lib/gpt.rlab` is unchanged.

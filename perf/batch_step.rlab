@@ -1,0 +1,177 @@
+# Library: batch_step.rlab (perf flywheel run 03b prototype; not used for training)
+# System:  The GPT training gradient with the B windows of a step stacked into
+#          one (B T) x d forward and backward, instead of one window per
+#          parmap worker.  Load after lib/gpt.rlab.
+# Result:  correct (matches the parmap mean to ~2e-15) but slower on rustlab
+#          0.3.64 at every grouping; see perf/iterations/03-requests.md, run 03b.
+#          perf/batch_check.rlab reproduces the comparison.
+
+# === Batched step: B windows stacked into one (B T) x d forward and backward ===
+# W: B x T token windows; mask: 1 x (T-1), shared by every window.  Returns
+# the same vector as the parmap path,
+#   [sum over b of gpt_grad_flat(W(b, :), mask, P, cfg)(1:end-1) / B, mean loss],
+# up to summation order.  Every position-wise operation (embedding, LayerNorm,
+# the QKV / Wo / FFN / LM-head products) runs once over all B T rows, so each
+# product is B times taller; only attention loops, over (window, head), since
+# a window attends to itself alone.  Perf flywheel run 03b.
+function g = gpt_grad_batch(W, mask, P, cfg)
+  [logits, L, cache] = gpt_forward_batch(W, mask, P, cfg);
+  G = gpt_backward_batch(gpt_dlogits_batch(W, mask, logits), cache, P, cfg);
+  g = gpt_flatten_tail(G, L);
+end
+
+function [logits, L, cache] = gpt_forward_batch(W, mask, P, cfg)
+  d = cfg.d;  Lyr = cfg.L;  H = cfg.H;  dk = cfg.dk;  dff = cfg.dff;  V = cfg.V;
+  B = size(W)(1);  T = size(W)(2);  N = B * T;
+  E = P.E;  Wqkv = P.Wqkv;  Wo = P.Wo;  W1 = P.W1;  b1 = P.b1;  W2 = P.W2;  b2 = P.b2;
+  g1 = P.g1;  be1 = P.be1;  g2 = P.g2;  be2 = P.be2;
+  scale = 1.0 / sqrt(dk);
+  M = -1.0e9 * (1 - cumsum(eye(T), 1));     # additive causal mask, one window
+
+  # Window b owns rows (b-1)*T+1 .. b*T; layer l's caches are rows (l-1)*N+1 .. l*N.
+  Hin_all = zeros(Lyr * N, d);  xn1_all = zeros(Lyr * N, d);  sig1_all = zeros(Lyr * N, 1);
+  QKV_all = zeros(Lyr * N, 3 * d);  A_all = zeros(Lyr * H * N, T);  cat_all = zeros(Lyr * N, d);
+  xn2_all = zeros(Lyr * N, d);  sig2_all = zeros(Lyr * N, 1);
+  pre_all = zeros(Lyr * N, dff);  hid_all = zeros(Lyr * N, dff);
+
+  ids = reshape(W', 1, N);                  # window-major: W(1, :), then W(2, :), ...
+  X = E(ids, :) + repmat(P.PE(1:T, :), B, 1);
+  for l = 1:Lyr
+    r = ((l - 1) * N + 1):(l * N);
+    w = ((l - 1) * d + 1):(l * d);
+    Hin_all(r, :) = X;
+    [Xn1, xn1, sig1] = gpt_ln_fwd(X, g1(l, :), be1(l, :));
+    xn1_all(r, :) = xn1;  sig1_all(r, 1) = sig1;
+    QKV = Xn1 * Wqkv(w, :);
+    QKV_all(r, :) = QKV;
+    cat_h = zeros(N, d);
+    for b = 1:B
+      rb = ((b - 1) * T + 1):(b * T);
+      for h = 1:H
+        c = ((h - 1) * dk + 1):(h * dk);
+        A = softmax(QKV(rb, c) * QKV(rb, d + c)' * scale + M);
+        a0 = (((l - 1) * H + (h - 1)) * N) + (b - 1) * T;
+        A_all((a0 + 1):(a0 + T), :) = A;
+        cat_h(rb, c) = A * QKV(rb, 2 * d + c);
+      end
+    end
+    cat_all(r, :) = cat_h;
+    Hmid = X + cat_h * Wo(w, :);
+    [Xn2, xn2, sig2] = gpt_ln_fwd(Hmid, g2(l, :), be2(l, :));
+    xn2_all(r, :) = xn2;  sig2_all(r, 1) = sig2;
+    pre = Xn2 * W1(w, :) + gpt_rows(b1(l, :), N);
+    hid = gelu(pre);
+    pre_all(r, :) = pre;  hid_all(r, :) = hid;
+    wf = ((l - 1) * dff + 1):(l * dff);
+    X = Hmid + hid * W2(wf, :) + gpt_rows(b2(l, :), N);
+  end
+  [Hf, xnf, sigf] = gpt_ln_fwd(X, P.gf, P.bf);
+  logits = Hf * P.W_U;
+
+  # Mean over windows of each window's masked mean cross-entropy.  Row t of
+  # window b predicts W(b, t + 1); a window's last row predicts nothing.
+  L = 0.0;
+  total = sum(double(mask(1:(T - 1)) > 0));
+  if total > 0 && T > 1
+    Pall = softmax(logits);
+    for b = 1:B
+      rows = ((b - 1) * T + 1):(b * T - 1);
+      lin = rows + (W(b, 2:T) - 1) * N;
+      L = L - sum(log(Pall(lin)) .* double(mask(1:(T - 1)) > 0));
+    end
+    L = L / (total * B);
+  end
+  cache = struct("B", B, "T", T, "ids", ids, "Hin_all", Hin_all, "xn1_all", xn1_all, ...
+                 "sig1_all", sig1_all, "QKV_all", QKV_all, "A_all", A_all, "cat_all", cat_all, ...
+                 "xn2_all", xn2_all, "sig2_all", sig2_all, "pre_all", pre_all, "hid_all", hid_all, ...
+                 "Hf", Hf, "xnf", xnf, "sigf", sigf);
+end
+
+# Upstream gradient at the stacked logits for the mean over windows of the
+# masked mean cross-entropy: gpt_dlogits of each window, divided by B.
+function dl = gpt_dlogits_batch(W, mask, logits)
+  B = size(W)(1);  T = size(W)(2);  N = B * T;  V = size(logits)(2);
+  dl = zeros(N, V);
+  total = sum(double(mask(1:(T - 1)) > 0));
+  if total > 0 && T > 1
+    Pall = softmax(logits);
+    keep = zeros(1, N);                     # 1 on rows that predict a counted target
+    for b = 1:B
+      rows = ((b - 1) * T + 1):(b * T - 1);
+      lin = rows + (W(b, 2:T) - 1) * N;
+      Pall(lin) = Pall(lin) - 1.0;
+      keep(rows) = double(mask(1:(T - 1)) > 0);
+    end
+    dl = (Pall .* gpt_cols(keep, V)) / (total * B);
+  end
+end
+
+function G = gpt_backward_batch(dlogits, cache, P, cfg)
+  d = cfg.d;  Lyr = cfg.L;  H = cfg.H;  dk = cfg.dk;  dff = cfg.dff;  V = cfg.V;
+  B = cache.B;  T = cache.T;  N = B * T;
+  Wqkv = P.Wqkv;  Wo = P.Wo;  W1 = P.W1;  W2 = P.W2;
+  g1 = P.g1;  g2 = P.g2;  be1 = P.be1;  be2 = P.be2;
+  xn1_all = cache.xn1_all;  sig1_all = cache.sig1_all;  QKV_all = cache.QKV_all;
+  A_all = cache.A_all;  cat_all = cache.cat_all;  xn2_all = cache.xn2_all;
+  sig2_all = cache.sig2_all;  pre_all = cache.pre_all;  hid_all = cache.hid_all;
+  scale = 1.0 / sqrt(dk);
+
+  dWqkv = zeros(Lyr * d, 3 * d);  dWo = zeros(Lyr * d, d);
+  dW1 = zeros(Lyr * d, dff);  db1 = zeros(Lyr, dff);  dW2 = zeros(Lyr * dff, d);  db2 = zeros(Lyr, d);
+  dg1 = zeros(Lyr, d);  dbe1 = zeros(Lyr, d);  dg2 = zeros(Lyr, d);  dbe2 = zeros(Lyr, d);
+
+  dW_U = cache.Hf' * dlogits;
+  dHf = dlogits * P.W_U';
+  [dX, dgf, dbf] = gpt_ln_bwd(dHf, cache.xnf, cache.sigf, P.gf);
+
+  for l = Lyr:-1:1
+    r = ((l - 1) * N + 1):(l * N);
+    w = ((l - 1) * d + 1):(l * d);
+    wf = ((l - 1) * dff + 1):(l * dff);
+    hid = hid_all(r, :);  pre = pre_all(r, :);  xn2 = xn2_all(r, :);  sig2 = sig2_all(r, 1);
+    Xn2 = xn2 .* gpt_rows(g2(l, :), N) + gpt_rows(be2(l, :), N);
+
+    dHmid = dX;
+    dW2(wf, :) = hid' * dX;
+    db2(l, :) = sum(dX, 1);
+    dpre = (dX * W2(wf, :)') .* gpt_gelu_grad(pre);
+    dW1(w, :) = Xn2' * dpre;
+    db1(l, :) = sum(dpre, 1);
+    [dH2, dgam2, dbet2] = gpt_ln_bwd(dpre * W1(w, :)', xn2, sig2, g2(l, :));
+    dg2(l, :) = dgam2;  dbe2(l, :) = dbet2;
+    dHmid = dHmid + dH2;
+
+    dWo(w, :) = cat_all(r, :)' * dHmid;
+    dcat = dHmid * Wo(w, :)';
+    QKV = QKV_all(r, :);
+    dQKV = zeros(N, 3 * d);
+    for b = 1:B
+      rb = ((b - 1) * T + 1):(b * T);
+      for h = 1:H
+        c = ((h - 1) * dk + 1):(h * dk);
+        Q = QKV(rb, c);  K = QKV(rb, d + c);
+        a0 = (((l - 1) * H + (h - 1)) * N) + (b - 1) * T;
+        A = A_all((a0 + 1):(a0 + T), :);
+        dO = dcat(rb, c);
+        dA = dO * QKV(rb, 2 * d + c)';
+        dS = A .* (dA - gpt_cols(sum(A .* dA, 2), T));
+        dQKV(rb, c) = dS * K * scale;
+        dQKV(rb, d + c) = dS' * Q * scale;
+        dQKV(rb, 2 * d + c) = A' * dO;
+      end
+    end
+    xn1 = xn1_all(r, :);  sig1 = sig1_all(r, 1);
+    Xn1 = xn1 .* gpt_rows(g1(l, :), N) + gpt_rows(be1(l, :), N);
+    dWqkv(w, :) = Xn1' * dQKV;
+    [dH1, dgam1, dbet1] = gpt_ln_bwd(dQKV * Wqkv(w, :)', xn1, sig1, g1(l, :));
+    dg1(l, :) = dgam1;  dbe1(l, :) = dbet1;
+    dX = dHmid + dH1;
+  end
+
+  # Embedding scatter-add as one product: a one-hot N x V selector, transposed.
+  Oh = zeros(N, V);
+  Oh((1:N) + (cache.ids - 1) * N) = 1.0;
+  dE = Oh' * dX;
+  G = struct("E", dE, "Wqkv", dWqkv, "Wo", dWo, "W1", dW1, "b1", db1, "W2", dW2, "b2", db2, ...
+             "g1", dg1, "be1", dbe1, "g2", dg2, "be2", dbe2, "gf", dgf, "bf", dbf, "W_U", dW_U);
+end
