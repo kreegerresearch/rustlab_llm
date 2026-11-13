@@ -1,0 +1,47 @@
+# Run 03b prototype check: gpt_grad_batch against the parmap path.
+run "../lib/gpt.rlab"
+run "batch_step.rlab"
+seed(7);
+cfg = gpt_config(77, 128, 4, 4, 512, 129);
+P = gpt_init(cfg, 0.02);
+# Perturb gains and biases so their gradients are not trivially symmetric.
+P.b1 = randn(4, 512) * 0.02;  P.g1 = 1 + randn(4, 128) * 0.1;  P.bf = randn(1, 128) * 0.02;
+B = 8;
+W = floor(rand(B, 129) * 77) + 1;
+for kc = 1:2
+  if kc == 1
+    mask = ones(1, 128);
+  else
+    mask = double(rand(1, 128) > 0.3);       # a masked case, as SFT uses
+  end
+  Gs = parmap(@(b) gpt_grad_flat(W(b, :), mask, P, cfg), 1:B);
+  n = size(Gs)(2) - 1;
+  g_par = sum(Gs(:, 1:n), 1) / B;  L_par = mean(Gs(:, n + 1));
+  gb = gpt_grad_batch(W, mask, P, cfg);
+  g_bat = gb(1:n);  L_bat = gb(n + 1);
+  rel = max(abs(g_bat - g_par)) / max(abs(g_par));
+  print(sprintf("case %d: n = %d, |dL| = %.3e, max |dg| / max |g| = %.3e", kc, n, abs(L_bat - L_par), rel));
+end
+
+mask = ones(1, 128);
+R = 7;
+tp = zeros(1, R);  tb = zeros(1, R);
+for r = 1:R
+  tic; Gs = parmap(@(b) gpt_grad_flat(W(b, :), mask, P, cfg), 1:B); n = size(Gs)(2) - 1; g1 = sum(Gs(:, 1:n), 1) / B; tp(r) = toc;
+  tic; g2 = gpt_grad_batch(W, mask, P, cfg); tb(r) = toc;
+end
+print(sprintf("parmap B=8: median %.2f ms (%.0f tok/s)", median(tp) * 1e3, B * 128 / median(tp)));
+print(sprintf("batched B=8: median %.2f ms (%.0f tok/s)", median(tb) * 1e3, B * 128 / median(tb)));
+
+# Hybrid: parmap over K groups of B/K stacked windows.
+for K = [8, 4, 2]
+  Bk = B / K;
+  th = zeros(1, R);
+  for r = 1:R
+    tic;
+    Gk = parmap(@(k) gpt_grad_batch(W(((k - 1) * Bk + 1):(k * Bk), :), mask, P, cfg), 1:K);
+    gh = sum(Gk(:, 1:n), 1) / K;
+    th(r) = toc;
+  end
+  print(sprintf("parmap of %d groups x %d windows: median %.2f ms (%.0f tok/s), max |dg| / max |g| vs parmap = %.3e", K, Bk, median(th) * 1e3, B * 128 / median(th), max(abs(gh - g1)) / max(abs(g1))));
+end

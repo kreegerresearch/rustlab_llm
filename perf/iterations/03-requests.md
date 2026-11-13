@@ -239,4 +239,27 @@ Measured as run 10, [`perf/reports/10-v0.3.64.md`](../reports/10-v0.3.64.md), on
 
 **Real tutorial:** `make sherlock` took 2 min 3 s for every stage. Pre-training took 88 s at 34,871 tok/s and reached the same 2.203 held-out bits/char. SFT scored 40 / 46 (42 on 0.3.11), the known last-digit sensitivity. `make sherlock-quick` took 15 s.
 
-**Run 03b library items:** not done yet. The batched-step prototype is now the most interesting one, because `parmap` efficiency fell to 42 % once the matrix unit was shared.
+**Run 03b library items:** the batched step is done (below, not adopted). The gradient-reduce and unflatten items are still open.
+
+### Run 03b: the batched step (2026-11-12, rustlab 0.3.64; not adopted)
+
+`perf/batch_step.rlab` stacks the B windows into one (B T) × d forward and backward (`gpt_grad_batch`). Embedding, LayerNorm, the QKV / Wo / FFN / LM-head products and the loss run once over all B T rows. Attention loops over (window, head). The embedding gradient is one one-hot product. `perf/batch_check.rlab` compares it with the `parmap` path on the bench model (d 128, 4 layers, 4 heads, T 129, B 8).
+
+**Correct:** the mean gradient matches `parmap` to 2.4e-15 of its largest entry, and the loss to 8.9e-16, both unmasked and with a random SFT-style mask.
+
+**Slower at every grouping** (median of 7, same machine and binary):
+
+| Layout | ms | tok/s |
+|---|---:|---:|
+| `parmap` × 8 windows (`gpt_grad_flat`, today) | 21.4 | 47,800 |
+| `parmap` × 8 groups of 1 (`gpt_grad_batch`) | 26.7 | 38,400 |
+| `parmap` × 4 groups of 2 | 33.9 | 30,200 |
+| `parmap` × 2 groups of 4 | 54.0 | 18,900 |
+| one stream of 8 | 99.3 | 10,300 |
+
+**Why** (`rustlab run --profile`, one stream, 95 ms a call):
+- 768 of the 820 products per call are the 129 × 32 × 129 attention products, at about 40 µs each: about 30 ms of overhead, not arithmetic. In the `parmap` path, 8 workers share them.
+- LayerNorm, softmax, GELU and the broadcasts take about 35 ms. Per element they cost the same on 1,032 rows as on 129, because rustlab runs them on one core at any size.
+- The stacked products got taller as intended, but they were only a few ms of the step.
+
+So on 0.3.64, stacking windows turns parallel work into serial work, and the matrix unit is not the limit. A batched step would need two rustlab features: a batched multiply (`pagemtimes`, Deferred) for the per-(window, head) attention products, and threaded element-wise operations on large arrays. Rank them in iteration 04 against this prototype. `lib/gpt.rlab` is unchanged.

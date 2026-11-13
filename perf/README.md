@@ -90,6 +90,7 @@ PyTorch's CPU build multiplies matrices through Apple Accelerate on the M4's mat
 | `bench_suite.rlab` | The fixed workloads (`PERF` lines). |
 | `gate.rlab` | The correctness gate (`GATE` lines). |
 | `profile_step.rlab` | The workload run under `--profile`. |
+| `batch_step.rlab`, `batch_check.rlab` | Run 03b prototype: the batched training gradient, and its check and timing against the `parmap` path (`cd perf && rustlab run batch_check.rlab`). Not used by training. |
 | `run.py` | Runs all three, records, compares, and writes the report. Exits non-zero if the gate fails. |
 | `history/NN-label.json` | Raw record of each turn, including the environment and rustlab revision. |
 | `reports/NN-label.md` | Human-readable comparison for each turn. |
