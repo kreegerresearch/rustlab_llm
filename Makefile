@@ -19,7 +19,7 @@ Q ?= Who is the woman?
 .PHONY: help all notebooks notebooks-check html validate clean \
 	sherlock sherlock-quick sherlock-doctor sherlock-data sherlock-train sherlock-generate \
 	sherlock-sft sherlock-distill sherlock-ask sherlock-status sherlock-report sherlock-preset \
-	sherlock-bench sherlock-test sherlock-clean perf perf-check perf-gate
+	sherlock-bench sherlock-test sherlock-clean perf perf-check perf-gate perf-torch
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
@@ -56,17 +56,18 @@ define sherlock_stage
 	cd $(SHERLOCK) && set -o pipefail && rustlab run $(1).rlab --plot none 2>&1 | tee $(1).log
 endef
 
-sherlock: sherlock-doctor sherlock-data sherlock-train sherlock-generate sherlock-sft sherlock-distill sherlock-report ## Sherlock: run every stage with the selected preset (default: ~7 min on rustlab 0.3.10), then write report.md
+sherlock: sherlock-doctor sherlock-data sherlock-train sherlock-generate sherlock-sft sherlock-distill sherlock-report ## Sherlock: run every stage with the selected preset (default: ~4 min on rustlab 0.3.11), then write report.md
 	@echo; echo "all stages done -> $(SHERLOCK)/report.md   (ask it something: make sherlock-ask Q=\"Who is the woman?\")"
 
-sherlock-quick: ## Sherlock: everything with the 30-second preset (small model, 400 steps, checkpoints-quick/)
+sherlock-quick: ## Sherlock: everything with the 20-second preset (small model, 400 steps, checkpoints-quick/)
 	@$(MAKE) --no-print-directory sherlock-preset PRESET=quick
 	@$(MAKE) --no-print-directory sherlock
 
-sherlock-doctor: ## Sherlock: check rustlab >= 0.3.10, python3, the corpus and the prepared data
+sherlock-doctor: ## Sherlock: check rustlab >= 0.3.11, python3, the corpus and the prepared data
 	@command -v rustlab >/dev/null || { echo "rustlab is not on PATH (https://github.com/kreegerresearch/rustlab)"; exit 1; }
 	@v=$$(rustlab --version | awk '{print $$2}'); printf 'rustlab %s ' "$$v"; \
-	  [ "$$(printf '%s\n0.3.10\n' "$$v" | sort -V | head -1)" = "0.3.10" ] && echo "(ok, >= 0.3.10)" || { echo "(too old: need >= 0.3.10)"; exit 1; }
+	  [ "$$(printf '%s\n0.3.11\n' "$$v" | sort -V | head -1)" = "0.3.11" ] && echo "(ok, >= 0.3.11)" || { echo "(too old: need >= 0.3.11)"; exit 1; }
+	@cd $(SHERLOCK) && rustlab run doctor_probe.rlab --plot none >/dev/null 2>&1 && echo "lib/gpt.rlab loads from the stage scripts" || { echo "rustlab cannot load ../../lib/gpt.rlab: rustlab 0.3.14-0.3.16 have a run-path bug (see AGENTS.md); use 0.3.11-0.3.13 or a fixed build"; exit 1; }
 	@command -v python3 >/dev/null && echo "python3 ok (used once, by prepare_corpus.py)" || { echo "python3 is missing"; exit 1; }
 	@test -f $(SHERLOCK)/data/adventures.txt && echo "corpus ok: $(SHERLOCK)/data/adventures.txt" || { echo "corpus missing: $(SHERLOCK)/data/adventures.txt"; exit 1; }
 	@test -f $(SHERLOCK)/data/ids.csv && echo "prepared data ok" || echo "prepared data missing (make sherlock-data writes it)"
@@ -76,7 +77,7 @@ sherlock-doctor: ## Sherlock: check rustlab >= 0.3.10, python3, the corpus and t
 sherlock-data: ## Sherlock step 0: python3 prepare_corpus.py -> data/ids.csv + data/vocab.rlab (about a second)
 	cd $(SHERLOCK) && python3 prepare_corpus.py data/adventures.txt
 
-sherlock-train: ## Sherlock step 1: pre-train the character GPT (config.rlab + preset; ~5 min at the defaults on rustlab 0.3.10) -> train.log
+sherlock-train: ## Sherlock step 1: pre-train the character GPT (config.rlab + preset; ~3 min at the defaults on rustlab 0.3.11) -> train.log
 	@mkdir -p $(SHERLOCK)/checkpoints $(SHERLOCK)/checkpoints-quick
 	$(call sherlock_stage,train)
 
@@ -132,6 +133,9 @@ perf: ## Perf flywheel: measure, gate, record perf/history + perf/reports (make 
 
 perf-check: ## Perf flywheel: measure and compare against the last recorded run without recording
 	python3 perf/run.py --label check --dry-run
+
+perf-torch: ## Perf flywheel: the same training step in PyTorch on this machine (needs uv; torch is fetched into uv's cache, not installed)
+	uv run --with torch --with numpy python perf/torch_twin.py
 
 perf-gate: ## Perf flywheel: correctness gate only (gradient check + fixed-seed training trajectory)
 	python3 perf/run.py --gate-only

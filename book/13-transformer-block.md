@@ -473,9 +473,9 @@ ylabel("sigma_max")
 
 <!-- rustlab:output-start -->
 ```text
-N = 2  |H_N|/|H_0|: unscaled 2.110514497741098  scaled 1.2876085953458334   max sigma_max(J): unscaled 2.1436353496367158  scaled 1.6271641931427017
-N = 4  |H_N|/|H_0|: unscaled 3.4271154139164315  scaled 1.3965030076089215   max sigma_max(J): unscaled 2.1436353496367158  scaled 1.4986869084529262
-N = 8  |H_N|/|H_0|: unscaled 4.259092877559233  scaled 1.2613544565561314   max sigma_max(J): unscaled 2.1436353496367158  scaled 1.3894371112628576
+N = 2  |H_N|/|H_0|: unscaled 2.110514497741098  scaled 1.2876085953458334   max sigma_max(J): unscaled 2.143635349636716  scaled 1.6271641931427019
+N = 4  |H_N|/|H_0|: unscaled 3.4271154139164315  scaled 1.3965030076089215   max sigma_max(J): unscaled 2.143635349636716  scaled 1.4986869084529262
+N = 8  |H_N|/|H_0|: unscaled 4.259092877559233  scaled 1.2613544565561314   max sigma_max(J): unscaled 2.143635349636716  scaled 1.3894371112628576
 ```
 
 ![plot 3](plots/13-transformer-block/plot-3-506537b9.svg)

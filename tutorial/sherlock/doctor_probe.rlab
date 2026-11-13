@@ -1,0 +1,8 @@
+# Script:  doctor_probe.rlab
+# Purpose: make sherlock-doctor's check that this rustlab can load the
+#          shared library the way every stage does (run "../../lib/...").
+#          rustlab 0.3.14-0.3.16 cannot: their run statement changes into
+#          the script's folder and then reopens the relative path.
+run "../../lib/gpt.rlab"
+cfg = gpt_config(77, 16, 1, 2, 32, 8);
+disp(gpt_n_params(cfg));

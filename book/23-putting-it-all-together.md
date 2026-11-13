@@ -237,7 +237,7 @@ print("Final   L =", loss_curve(n_train + 1), "  PPL =", ppl_curve(n_train + 1))
 vocab: 18   d_model: 4   d_ff: 8   params: 300
 prediction pairs: 31   tokens per parameter: 0.10333333333333333   (params at d = 16: 2736 )
 Initial L = 2.8724045210395035   PPL = 17.67947780822632   (log(vocab) = 2.8903717578961645 is the uniform baseline)
-Final   L = 0.00008169636170878258   PPL = 1.0000816996989474
+Final   L = 0.00008169636170961313   PPL = 1.0000816996989483
 ```
 
 <!-- rustlab:output-end -->
@@ -308,8 +308,8 @@ print("A(10,5) =", A_trained(10, 5), "  A(16,13) =", A_trained(16, 13), "  A(24,
 
 <!-- rustlab:output-start -->
 ```text
-A(6,5) = 0.9798972921054377   A(7,6) = 0.8336696829349758   A(8,7) = 0.4099164748366176   (first period: previous token)
-A(10,5) = 0.9998303683483063   A(16,13) = 0.9999120643848796   A(24,21) = 0.9988899602393031   (later 'at ' rows: an 'o' column)
+A(6,5) = 0.9798972920749894   A(7,6) = 0.8336696829057975   A(8,7) = 0.40991647484130067   (first period: previous token)
+A(10,5) = 0.9998303683481369   A(16,13) = 0.9999120643848172   A(24,21) = 0.9988899602390975   (later 'at ' rows: an 'o' column)
 ```
 
 ![plot 1](plots/23-putting-it-all-together/plot-1-42aa66d7.svg)
@@ -441,10 +441,10 @@ print("attention off and PE off PPL =", ppl_abl(4), "  (bigram floor", ppl_floor
 
 <!-- rustlab:output-start -->
 ```text
-full model               PPL = 1.0000816996989474
-attention off            PPL = 1.0031483814068165
-PE off                   PPL = 1.0008450741508512
-attention off and PE off PPL = 1.4722596713107259   (bigram floor 1.4722551822198788 )
+full model               PPL = 1.0000816996989483
+attention off            PPL = 1.0031483814036768
+PE off                   PPL = 1.0008446140220197
+attention off and PE off PPL = 1.4722596713107257   (bigram floor 1.4722551822198788 )
 ```
 
 <!-- rustlab:output-end -->
@@ -501,8 +501,8 @@ print("max |attn_out(8,:) - taps * V(1:8,:)| =", max(abs(attn_final(8, :) - taps
 
 <!-- rustlab:output-start -->
 ```text
-taps at the odd positions (the c, s, o, the m): 0.30437623338571773 0.09544201725566862 0.18701674985444552 0.4099164748366176
-row entropy = 1.8582075883327531 bits  -> effective taps 2^H = 3.625569396063929   (uniform: 3 bits, 8 taps)
+taps at the odd positions (the c, s, o, the m): 0.30437623340080344 0.09544201728035631 0.18701674980967 0.40991647484130067
+row entropy = 1.8582075883433802 bits  -> effective taps 2^H = 3.6255693960906354   (uniform: 3 bits, 8 taps)
 max |attn_out(8,:) - taps * V(1:8,:)| = 0
 ```
 
@@ -546,8 +546,8 @@ legend("loss", "end of warm-up", "start of tail", "bigram floor")
 <!-- rustlab:output-start -->
 ```text
 bigram floor crossed at step 53
-exponential phase (steps 60-150): e-folding time = 13.875578341845374 steps
-tail: log-slope ratio (200-300 vs 500-600) = 8.037978735593212    eta ratio = 6.003463198762087
+exponential phase (steps 60-150): e-folding time = 13.875578342299184 steps
+tail: log-slope ratio (200-300 vs 500-600) = 8.03797873620252    eta ratio = 6.003463198762087
 ```
 
 ![plot 5](plots/23-putting-it-all-together/plot-5-ca3a043b.svg)
@@ -580,7 +580,7 @@ print("corpus, fixed-length code:", bits_corpus, "bits   model parameters:", bit
 H(next | cur)        = 0.38679536276834264 nats  (= optimal-bigram CE 0.38679536276834264 )
 H(next | cur, prev)  = 0 nats
 I(next ; prev | cur) = 0.38679536276834264 nats = 0.5580277517047355 bits per pair
-corpus, fixed-length code: 133.437600046154 bits   model parameters: 19200 bits   corpus under the model: 0.0036537510127738803 bits
+corpus, fixed-length code: 133.437600046154 bits   model parameters: 19200 bits   corpus under the model: 0.003653751012811026 bits
 ```
 
 <!-- rustlab:output-end -->

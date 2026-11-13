@@ -323,14 +323,14 @@ print("AGC gain 1/RMS on row 1:  unshifted", 1 / sqrt(mean(H(1, :) .^ 2)), "  sh
 <!-- rustlab:output-start -->
 ```text
 zero-mean inputs: max | RMSNorm - LayerNorm | = 0.00000000000000011102230246251565
-shifted row 1 LayerNorm: [1×8]  -0.505944  0.876319  -0.524532  1.694489  0.203441  0.545740  -1.804077  -0.485436   mean = -0.00000000000000008326672684688674
-shifted row 1 RMSNorm:  [1×8]  0.663821  1.287935  0.655428  1.657353  0.984120  1.138673  0.077692  0.673080   mean = 0.8922626945950174
+shifted row 1 LayerNorm: [1×8]  -0.505944  0.876319  -0.524532  1.694489  0.203441  0.545740  -1.804077  -0.485436   mean = -0.0000000000000000485722573273506
+shifted row 1 RMSNorm:  [1×8]  0.663821  1.287935  0.655428  1.657353  0.984120  1.138673  0.077692  0.673080   mean = 0.8922626945950173
 AGC gain 1/RMS on row 1:  unshifted 1.0772841442504095   shifted 0.500129270430723
 ```
 
 <!-- rustlab:output-end -->
 
-The first comparison gives $1.1e-16$ — floating-point round-off. On the shifted row LayerNorm's output has mean $-8.3e-17$ (the DC is blocked) while RMSNorm's has mean $0.89$: the offset came through, scaled by a gain that fell from $1.08$ to $0.50$ because the DC also counts as power.
+The first comparison gives $1.1e-16$ — floating-point round-off. On the shifted row LayerNorm's output has mean $-4.9e-17$ (the DC is blocked) while RMSNorm's has mean $0.89$: the offset came through, scaled by a gain that fell from $1.08$ to $0.50$ because the DC also counts as power.
 
 ```rustlab
 figure();
@@ -745,7 +745,7 @@ xlabel("frequency bin"); ylabel("amplitude")
 <!-- rustlab:output-start -->
 ```text
 pure product  — amplitude at bins 5, 15, 25, 35, 45: 0.00000000000000003855076336535854 0.5000000000000002 0.5000000000000004 0.00000000000000004203848670399389 0.0000000000000000302517240521295
-SiLU(u) .* v  — amplitude at bins 5, 15, 25, 35, 45: 0.11778570696201043 0.25 0.2500000000000002 0.057737830547187646 0.05773783054718766
+SiLU(u) .* v  — amplitude at bins 5, 15, 25, 35, 45: 0.11778570696201043 0.25 0.2500000000000002 0.05773783054718765 0.05773783054718766
 ```
 
 ![plot 6](plots/24-modern-architectural-variants/plot-6-3a05161a.svg)
@@ -782,7 +782,7 @@ xlabel("concurrent sequences B"); ylabel("tokens / s per sequence (upper bound)"
 
 <!-- rustlab:output-start -->
 ```text
-per-sequence tok/s bound at B = 1:   MHA 20.746266557854206   GQA 23.478397546321705   MQA 23.871357867548976
+per-sequence tok/s bound at B = 1:   MHA 20.746266557854202   GQA 23.478397546321705   MQA 23.871357867548976
 per-sequence tok/s bound at B = 32:  MHA 4.049832194528451   GQA 14.829613544726106   MQA 22.22407706801918
 batch at which the MHA cache equals the weights: 6.51925802230835   GQA: 52.1540641784668
 ```

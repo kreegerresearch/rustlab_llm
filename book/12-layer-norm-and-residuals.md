@@ -361,9 +361,9 @@ end
 
 <!-- rustlab:output-start -->
 ```text
-stream scale 1   var(S) raw: 1.4626773743416388  with LN: 1.3830096177029378   mean row entropy raw: 2.2376459271043103  with LN: 2.2308181818295445 bits
-stream scale 4   var(S) raw: 336.52530833985026  with LN: 1.1870603793855679   mean row entropy raw: 0.07137449914127612  with LN: 2.205362925690351 bits
-stream scale 16   var(S) raw: 68783.05835029663  with LN: 1.0369532250253308   mean row entropy raw: 0.00045212888514156187  with LN: 2.297958720613044 bits
+stream scale 1   var(S) raw: 1.4626773743416392  with LN: 1.3830096177029385   mean row entropy raw: 2.23764592710431  with LN: 2.2308181818295445 bits
+stream scale 4   var(S) raw: 336.5253083398504  with LN: 1.1870603793855679   mean row entropy raw: 0.07137449914127607  with LN: 2.20536292569035 bits
+stream scale 16   var(S) raw: 68783.05835029666  with LN: 1.0369532250253315   mean row entropy raw: 0.00045212888514156187  with LN: 2.2979587206130434 bits
 ```
 
 <!-- rustlab:output-end -->
@@ -462,8 +462,8 @@ print("recovery error |x_hat - x|:", norm(x_hat - x_true));
 
 <!-- rustlab:output-start -->
 ```text
-h * Lip(f) <=  0.21578136552789187  (h = 0.1)   vs 2.1578136552789187  (h = 1)
-recovery error |x_hat - x|: 0.00000000000000012432126078351885
+h * Lip(f) <=  0.21578136552789196  (h = 0.1)   vs 2.1578136552789196  (h = 1)
+recovery error |x_hat - x|: 0.0000000000000001114593582288106
 ```
 
 <!-- rustlab:output-end -->

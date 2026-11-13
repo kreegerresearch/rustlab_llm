@@ -90,11 +90,30 @@ These are not requests to rustlab. They are this side's share of the remaining c
 | `f32` mode | Needs real storage (R4) first, and its own gate tolerance. |
 | BLAS or Accelerate | Declined by rustlab, whose rules forbid FFI in core numerics. |
 
-## Outcome (filled in after verification)
+## Outcome (verified 2026-10-20)
 
-| # | Status | Measured | Note |
+rustlab answered with 0.3.11 (`78b6c49`, rustlab PR #79). Its response note is `../rustlab/dev/plans/closed/perf_flywheel_iter02.md`. Measured here as run 04, [`perf/reports/04-iter02.md`](../reports/04-iter02.md), with an unrecorded `perf-check` repeat. The library items followed as runs 05–07, and run 08 added suite v3 on the same binary and library. The gate passed on every run. The trajectory's worst relative difference is 2.03e-16 instead of exactly 0: 0.3.11 divides real arrays exactly, as rustlab's note announced. That is far inside the 1e-6 limit, so the reference was not regenerated.
+
+| # | Status | Measured (run 04 and the repeat) | Note |
 |---|---|---|---|
-| R1 | open | | |
-| R2 | open | | |
-| R3 | open | | |
-| R4 | open | | |
+| R1 | partly met | `flat.reshape_811k` 4.0 → 0.13–0.17 ms (target 0.5); `flat.flatten_811k` 4.0 → 0.38 ms (1.5); `flat.unflatten_811k` 4.7 → 1.46–1.55 ms (2); `par.grad_flat_B8` = 1.81–1.83 × `model.grad_flat` (1.3) | Copy-on-write arrays, single-pass `reshape`, one-row concatenation into one buffer. The parallel ratio did not move: the workers still allocate and copy about 760 MB per 8 windows. See iteration 03. |
+| R2 | met | `model.forward` 14.8 → 9.1–9.7 ms (target 10); `model.backward` 22.1 → 14.3–14.5 ms (15); `prim.scalar_loop_1e5` 13.5 → 7.5 ms (10) | rustlab's sampling profile showed the "interpreter work" was mostly what the statements do: region writes, `tanh`, copies. |
+| R3 | met | `prim.matmul_A_Bt_129x128x128` 37.6 → 42.5–47.3 GFLOP/s over runs 04–08 (target 45; the key includes a column slice); `prim.matmul_At_B_512x129x512` 54–57 (53); no `[transpose]` rows in `--profile=ops` (784 before) | Transposed views are passed to the multiply. |
+| R4 | design | `parmap` out still 101,376 KB | `../rustlab/dev/plans/real_storage.md`; first slice planned for iteration 03. |
+
+**Training step:** 9,967 → 17,470 tok/s from rustlab alone (run 04; 18,250 on the repeat), 1.75–1.83×, past the iteration's 14,000 success line and past the flywheel's 17,000 goal. After the library items and on a quieter machine, run 08 measured 19,310 tok/s (53.0 ms per step): 8.60× the 0.3.9 baseline.
+
+**Real tutorial:** the full `make sherlock` pipeline took 3 min 48 s, against 6 min 48 s on 0.3.10 and about 30 min on 0.3.9. Pre-training took 177 s at 17,377 tok/s (314 s on 0.3.10), fine-tuning 14 s (31 s), and distillation 15 s + 7 s (28 s + 13 s). Pre-training reached 2.203 held-out bits/char, the same as every earlier run. The distilled student scored 3.420 bits/char against 3.439 for the hard-target one, also unchanged. Fine-tuning answered 42 / 46, against 43 / 46 before. Five individual answers differ: 300 steps on 46 pairs amplify the last-digit change from exact division. `make sherlock-quick` ran every stage in 17 s (30 s on 0.3.10), with pre-training at 62,742 tok/s.
+
+**Library items (runs 05–07):**
+
+| Run | Change | Result |
+|---|---|---|
+| 05 `iter02b` | Implicit expansion (`X .* row`, `X - col`) instead of the `outer` broadcasts in `gpt_rows` / `gpt_cols` | Reverted. Expansion is slower than `outer` plus a same-shape operation in 0.3.11, and `prim.layernorm_lib_129x128` went 0.110 → 0.163 ms. This became iteration 03's R3. |
+| 06 `iter02c` | Run 05 reverted; `gpt_dlogits` subtracts the one-hot targets in one linear-index write instead of a loop over positions | Gate output bit-identical, masked case included. Within noise. |
+| 07 `iter02d` | `gpt_grad_flat` appends the loss inside the flatten concatenation (`gpt_flatten_tail`), not as a second copy of 811 k values | Gate output bit-identical. `par.grad_flat_B8` 44.7 → 42.7 ms, within noise. |
+| 08 `suite-v3` | Same binary and library; adds `prim.ewise_same_129x128`, `prim.expand_row_129x128`, `prim.expand_col_129x128`, `prim.alloc_window`, `par.alloc_window_B8` | 19,310 tok/s |
+
+`lib/gpt.rlab` now needs rustlab 0.3.11 or later, and `make sherlock-doctor` checks for it.
+
+**Side effects checked:** All 28 notebook pages render and lint clean. Thirteen book pages changed in their last one or two digits from exact division. Two inline prose numbers moved with them: Lesson 22's superposition residual, 1.4e-14 → 9.8e-15, and Lesson 24's shifted-row mean, −8.3e-17 → −4.9e-17. Both are computed in place, and the text still holds. Lesson 22's finite-difference error at ε = 1e-8, inside the round-off branch the text calls ragged, moved from 4.6e-8 to 1.3e-7.

@@ -431,7 +431,7 @@ print("one random J (d = 32):  RMS singular value =", sqrt(mean(sv .^ 2)), "  si
 
 <!-- rustlab:output-start -->
 ```text
-one random J (d = 32):  RMS singular value = 1.0005113956081162   sigma_max = 1.9112734968558776   spectral radius = 1.0547404373380362
+one random J (d = 32):  RMS singular value = 1.0005113956081162   sigma_max = 1.9112734968558784   spectral radius = 1.0547404373380374
 ```
 
 <!-- rustlab:output-end -->
@@ -487,7 +487,7 @@ hold("off")
 
 <!-- rustlab:output-start -->
 ```text
-L1 / L12 ratios:  gain 0.7: 0.03693700091743238   gain 1.0: 0.88857285134342   gain 1.3: 25.819017934732837   0.7 + I: 8.390376349540086
+L1 / L12 ratios:  gain 0.7: 0.0369370009174324   gain 1.0: 0.8885728513434212   gain 1.3: 25.819017934732845   0.7 + I: 8.390376349540084
 ```
 
 ![plot 1](plots/15-backpropagation/plot-1-216b03d4.svg)
@@ -598,7 +598,7 @@ print("geometric-mean per-stage gain:  0.7 ->", gain_est(1), "  1.0 ->", gain_es
 
 <!-- rustlab:output-start -->
 ```text
-geometric-mean per-stage gain:  0.7 -> 0.7409164532618363   1.0 -> 0.9893175900963115   1.3 -> 1.3438727764480896   0.7 + I -> 1.2133333392461172   (sqrt(1 + 0.49) = 1.2206555615733703 )
+geometric-mean per-stage gain:  0.7 -> 0.7409164532618364   1.0 -> 0.9893175900963116   1.3 -> 1.3438727764480896   0.7 + I -> 1.2133333392461172   (sqrt(1 + 0.49) = 1.2206555615733703 )
 ```
 
 <!-- rustlab:output-end -->

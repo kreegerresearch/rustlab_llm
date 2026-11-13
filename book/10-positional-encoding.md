@@ -376,7 +376,7 @@ title("|DFT| of one PE column (cycles per token)")
 
 <!-- rustlab:output-start -->
 ```text
-wavelengths (tokens): pair 0 = 6.283185307179586  pair 4 = 62.83185307179585  pair 15 = 35332.94752055899
+wavelengths (tokens): pair 0 = 6.283185307179586  pair 4 = 62.83185307179586  pair 15 = 35332.94752055899
 spectral lines: column 1 at f = 0.15625  (omega_0 / 2 pi = 0.15915494309189535 ),  column 9 at f = 0.015625  (omega_4 / 2 pi = 0.015915494309189534 )
 ```
 

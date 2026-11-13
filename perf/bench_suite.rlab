@@ -150,6 +150,23 @@ ts = zeros(R); for r = 1:R
 end
 perf_out("prim.matmul_At_B_512x129x512", ts, 2 * 512 * 129 * 512 / 1e9, "GFLOP/s");
 
+# --- Added in suite v3 (2026-10-20, after iteration 02) ---
+# Implicit expansion of a row and of a column against the same-shape
+# operation on an already expanded matrix (what gpt_rows / gpt_cols build).
+Xe = randn(129, 128);  re = reshape(randn(128), 1, 128);  ce = sum(Xe, 2);  Fe = outer(ones(129), re);
+ts = zeros(R); for r = 1:R
+  tic; Y = Xe .* Fe; ts(r) = toc;
+end
+perf_out("prim.ewise_same_129x128", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; Y = Xe .* re; ts(r) = toc;
+end
+perf_out("prim.expand_row_129x128", ts, 0, "-");
+ts = zeros(R); for r = 1:R
+  tic; Y = Xe - ce; ts(r) = toc;
+end
+perf_out("prim.expand_col_129x128", ts, 0, "-");
+
 # === 2. Flat-vector work per optimiser step (811,008 parameters) ===
 cfg = gpt_config(77, 128, 4, 4, 512, 129);
 P = gpt_init(cfg, 0.02);
@@ -235,6 +252,30 @@ for B = [1, 8, 14]
   end
   perf_out(sprintf("par.grad_flat_B%d", B), ts, B * 128, "tok/s");
 end
+
+# --- Added in suite v3: the zeros calls of one window's forward and backward
+# (caches and gradient accumulators, about 37 MB as complex), each touched
+# once, run serially and as 8 parmap tasks.  Equal times mean allocation
+# does not slow down when 8 workers allocate at once.
+function s = alloc_window(k)
+  s = 0;
+  shapes = [516, 128; 516, 128; 516, 1; 516, 384; 2064, 129; 516, 128; 516, 128; ...
+            516, 128; 516, 1; 516, 512; 516, 512; 77, 128; 512, 384; 512, 128; ...
+            512, 512; 2048, 128; 129, 384; 129, 384; 129, 384; 129, 384];
+  for j = 1:size(shapes)(1)
+    Z = zeros(shapes(j, 1), shapes(j, 2));
+    Z(1, 1) = k;
+    s = s + Z(1, 1);
+  end
+end
+ts = zeros(R); for r = 1:R
+  tic; s = alloc_window(1); ts(r) = toc;
+end
+perf_out("prim.alloc_window", ts, 0, "-");
+ts = zeros(5); for r = 1:5
+  tic; Sa = parmap(@(b) alloc_window(b), 1:8); ts(r) = toc;
+end
+perf_out("par.alloc_window_B8", ts, 0, "-");
 
 # === 5. One full training step, exactly as tutorial/sherlock/train.rlab does it (B = 8) ===
 B = 8;

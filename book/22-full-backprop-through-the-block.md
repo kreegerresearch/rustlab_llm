@@ -245,8 +245,8 @@ print("Wq(1,1):  numerical =", num_q,  " analytical =", ana_q,  " rel error =", 
 
 <!-- rustlab:output-start -->
 ```text
-W_U(1,1): numerical = -0.03485661993651856  analytical = -0.03485661995196678  rel error = 0.00000000022159663096017522
-Wq(1,1):  numerical = -0.0005294123667232142  analytical = -0.0005294123667887497  rel error = 0.00000000006189453791692076
+W_U(1,1): numerical = -0.03485661993651856  analytical = -0.034856619951966754  rel error = 0.0000000002215962328209458
+Wq(1,1):  numerical = -0.0005294123667232142  analytical = -0.0005294123667887488  rel error = 0.00000000006189371874287838
 ```
 
 <!-- rustlab:output-end -->
@@ -293,11 +293,11 @@ eps = 1e-04   rel error = 2.22e-10
 eps = 1e-05   rel error = 8.62e-11
 eps = 1e-06   rel error = 3.92e-10
 eps = 1e-07   rel error = 2.00e-09
-eps = 1e-08   rel error = 4.58e-08
+eps = 1e-08   rel error = 1.25e-07
 eps = 1e-09   rel error = 3.38e-08
 ```
 
-![plot 1](plots/22-full-backprop-through-the-block/plot-1-2fde40f3.svg)
+![plot 1](plots/22-full-backprop-through-the-block/plot-1-c54d7f2c.svg)
 
 <!-- rustlab:output-end -->
 
@@ -407,8 +407,8 @@ print("attention off and PE off L =", L_abl(4), "  (bigram floor", L_bigram, ")"
 ```text
 full model               L = 0.000000003917458201133284
 attention off            L = 0.00000008155139693433182
-PE off                   L = 0.4345792351431697
-attention off and PE off L = 0.4345779208417609   (bigram floor 0.4345778848093911 )
+PE off                   L = 0.43457923514316954
+attention off and PE off L = 0.43457792084176083   (bigram floor 0.4345778848093911 )
 ```
 
 <!-- rustlab:output-end -->
@@ -452,13 +452,13 @@ print("dW_U = H_out' * lambda_N  max deviation    =", costate_check);
 <!-- rustlab:output-start -->
 ```text
 scaling       max |G(2 dl) - 2 G(dl)|      = 0
-superposition max |G(a + b) - G(a) - G(b)| = 0.000000000000014210854715202004
+superposition max |G(a + b) - G(a) - G(b)| = 0.000000000000009769962616701378
 dW_U = H_out' * lambda_N  max deviation    = 0
 ```
 
 <!-- rustlab:output-end -->
 
-Scaling holds exactly (deviation $0$) and superposition to $1.4e-14$ (round-off): the backward pass is a linear time-varying system run in reverse depth, driven by the terminal costate. That linearity is what makes gradient accumulation over micro-batches, gradient clipping by rescaling, and the sum over positions in every `input' * upstream` legitimate.
+Scaling holds exactly (deviation $0$) and superposition to $9.8e-15$ (round-off): the backward pass is a linear time-varying system run in reverse depth, driven by the terminal costate. That linearity is what makes gradient accumulation over micro-batches, gradient clipping by rescaling, and the sum over positions in every `input' * upstream` legitimate.
 
 ### Information
 

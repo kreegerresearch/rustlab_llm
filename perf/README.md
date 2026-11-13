@@ -43,15 +43,29 @@ Then the next turn starts from the new numbers.
 
 | Prefix | Workloads |
 |---|---|
-| `prim.` | Matrix multiplies at the model's exact shapes; elementwise, `tanh`, `gelu`, the library's GELU derivative, `softmax`, LayerNorm, transpose, row and column slices, region writes, row broadcast, the embedding scatter-add loop, and a scalar loop. |
+| `prim.` | Matrix multiplies at the model's exact shapes; elementwise, `tanh`, `gelu`, the library's GELU derivative, `softmax`, LayerNorm, transpose, row and column slices, region writes, row broadcast, the embedding scatter-add loop, a scalar loop, implicit expansion against the same-shape operation, and one window's allocations. |
 | `flat.` | Per-step optimizer work on the 811,008-element parameter vector: axpy, sum of squares, clipping, AdamW, reducing 8 gradient rows, flatten, and unflatten. |
 | `model.` | `gpt_forward`, `gpt_backward`, `gpt_grad_flat`, and greedy generation at the default model size (d 128, 4 layers, 4 heads, context 128). |
-| `par.` | `parmap` over 1, 8, and 14 windows. |
+| `par.` | `parmap` over 1, 8, and 14 windows, and one window's allocations as 8 tasks. |
 | `e2e.` | One complete training step with a batch of 8, exactly as `tutorial/sherlock/train.rlab` does it. This is the number the loop optimizes. |
 
 `gate.rlab` is the correctness gate. A finite-difference gradient check must stay below 1e-6. A fixed-seed, fully serial 25-step AdamW run must also reproduce `reference/gate.json` to within a relative 1e-6. The reference is written by the first recorded run on unmodified rustlab 0.3.9. Rounding differences from reordered sums, as BLAS or threading may cause, pass. Wrong arithmetic does not. A change that alters precision on purpose, such as an `f32` mode, needs its own looser gate, agreed in that iteration's requests.
 
 `profile_step.rlab` runs under `rustlab run --profile`. Since rustlab 0.3.10, the profile shows nested user functions with inclusive and self time, a `[matmul]` row, and `parmap:<name>` rows for worker CPU time. `rustlab run --profile=ops` adds operator and indexing rows. `run.py` stores the table and sorts the report by self time. In 0.3.9 the profiler recorded only outermost user functions; fixing that was iteration 01's R2.
+
+## Comparison with PyTorch
+
+`torch_twin.py` is the same model and training step in PyTorch, and `make perf-torch` runs it with `uv`, so torch is fetched into uv's cache and not installed into any project. It prints ms per step and tok/s for `float64` and `float32` on the CPU, with 1, 10, and 14 threads, with fused attention and `torch.compile`, and for the GPU (MPS). Run it next to `make perf-check` on the same quiet machine. Measured 2026-10-23 on the M4 Max:
+
+| | tok/s |
+|---|---:|
+| rustlab 0.3.16 | 18,350–18,970 |
+| PyTorch `float64`, 1 thread | 18,140–19,450 |
+| PyTorch `float64`, 10 threads | 34,300–37,190 |
+| PyTorch `float32`, 10 threads, fused attention | 61,950–62,110 |
+| PyTorch `float32`, GPU (MPS) | 172,700–178,000 |
+
+PyTorch's CPU build multiplies matrices through Apple Accelerate on the M4's matrix unit, at 330–810 GFLOP/s in `float64` against rustlab's 42–56. See `iterations/03-requests.md`.
 
 ## Rules
 
@@ -59,14 +73,14 @@ Then the next turn starts from the new numbers.
 - **Quiet machine.** Do not measure while a training run, a build, or another benchmark is running.
 - **One change per turn where possible.** If rustlab lands several requests at once, record one run and note all of them in `NOTE`.
 - **Never edit history.** Records in `history/` and `reports/` are append-only. Only a deliberate change to the gate itself regenerates `reference/gate.json`, and its iteration file must say why.
-- **Stopping rule.** Stop when an iteration improves `e2e.train_step_B8` by less than 10 %, or when it passes the current goal.
+- **Stopping rule.** Stop when an iteration improves `e2e.train_step_B8` by less than 10 %, or when it passes the current goal. A raised goal is recorded in the request file that raises it, as `iterations/03-requests.md` did.
 
 ## Goal
 
 | | Baseline (rustlab 0.3.9) | Goal |
 |---|---:|---:|
-| `e2e.train_step_B8` | 2,246 tok/s on 0.3.9; 9,967 after iteration 01 | 17,000 tok/s, roughly PyTorch on the same CPU |
-| Default Sherlock run (3,000 steps) | 20 min on 0.3.9; about 5 min after iteration 01 | under 3 min |
+| `e2e.train_step_B8` | 2,246 tok/s on 0.3.9; 9,967 after iteration 01; 19,310 after iteration 02 | 17,000 tok/s, an unmeasured guess at PyTorch: reached in iteration 02. Now 35,000 tok/s, PyTorch `float64` measured on the same CPU (`make perf-torch`). |
+| Default Sherlock run (3,000 steps) | 20 min on 0.3.9; 5 min after iteration 01; 177 s after iteration 02 | under 3 min: reached. Now under 2 min. |
 
 ## Files
 
@@ -80,6 +94,7 @@ Then the next turn starts from the new numbers.
 | `reports/NN-label.md` | Human-readable comparison for each turn. |
 | `reference/gate.json` | The gate's reference trajectory. |
 | `iterations/NN-requests.md` | What was asked of rustlab in each turn, with acceptance targets. |
+| `torch_twin.py` | The PyTorch yardstick: the same model and step (`make perf-torch`). |
 
 ## Commands
 
@@ -87,4 +102,5 @@ Then the next turn starts from the new numbers.
 make perf LABEL=iter01 NOTE="real dgemm fast path"   # measure, record, compare
 make perf-check                                      # measure and compare without recording
 make perf-gate                                       # correctness gate only (about 1 s)
+make perf-torch                                      # the same step in PyTorch (uv, about 2 min)
 ```

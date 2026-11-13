@@ -223,7 +223,7 @@ print("Adam final theta:", theta_adam);
 
 <!-- rustlab:output-start -->
 ```text
-Adam final loss: 0.01694228895693814
+Adam final loss: 0.016942288956938115
 Adam final theta: [1×2]  0.005759  0.165078
 ```
 
@@ -343,7 +343,7 @@ legend("SGD", "Adam", "AdamW")
 
 <!-- rustlab:output-start -->
 ```text
-final ||theta||   Adam: 0.1651787934911096    AdamW: 0.023991551004220756
+final ||theta||   Adam: 0.16517879349110953    AdamW: 0.023991551004220735
 ```
 
 ![plot 2](plots/16-adamw-optimizer/plot-2-96b03921.svg)
@@ -553,7 +553,7 @@ v_hat at t = 600                 : [1×2]  3.321424  0.285148
 mean g^2 over steps 401-600      : [1×2]  2.839760  0.279113
   = mean(g)^2 + var(g)           : [1×2]  0.000091  0.000020  +  [1×2]  2.853939  0.280495    (sigma^2 = 0.25 )
 rms of m_hat ./ sqrt(v_hat)      : [1×2]  0.094679  0.238139    white-noise prediction sqrt((1-b1)/(1+b1)) = 0.22941573387056174
-sqrt(v_hat) ratio, coord 1 : 2   : 3.4129295220721456    Hessian ratio a/b = 200
+sqrt(v_hat) ratio, coord 1 : 2   : 3.412929522072145    Hessian ratio a/b = 200
 ```
 
 <!-- rustlab:output-end -->

@@ -82,13 +82,19 @@ end
 # Matrices are flattened column-major by reshape (the same order reshape
 # restores), which is all that matters as long as both directions agree.
 function v = gpt_flatten(S, cfg)
+  v = gpt_flatten_tail(S, []);
+end
+
+# gpt_flatten with extra values appended, in the same single concatenation
+# (gpt_grad_flat appends the loss without copying the 811 k values twice).
+function v = gpt_flatten_tail(S, tail)
   v = [reshape(S.E, 1, numel(S.E)), reshape(S.Wqkv, 1, numel(S.Wqkv)), ...
        reshape(S.Wo, 1, numel(S.Wo)), reshape(S.W1, 1, numel(S.W1)), ...
        reshape(S.b1, 1, numel(S.b1)), reshape(S.W2, 1, numel(S.W2)), ...
        reshape(S.b2, 1, numel(S.b2)), reshape(S.g1, 1, numel(S.g1)), ...
        reshape(S.be1, 1, numel(S.be1)), reshape(S.g2, 1, numel(S.g2)), ...
        reshape(S.be2, 1, numel(S.be2)), reshape(S.gf, 1, numel(S.gf)), ...
-       reshape(S.bf, 1, numel(S.bf)), reshape(S.W_U, 1, numel(S.W_U))];
+       reshape(S.bf, 1, numel(S.bf)), reshape(S.W_U, 1, numel(S.W_U)), tail];
 end
 
 # Rebuild a parameter struct from a flat vector.  PE is regenerated.
@@ -243,14 +249,13 @@ function dl = gpt_dlogits(ids, mask, logits, total)
   T = size(logits)(1);  V = size(logits)(2);
   dl = zeros(T, V);
   if total > 0 && T > 1
+    # softmax minus the one-hot targets, in one write: position t's target
+    # is column ids(t + 1), linear index t + (ids(t + 1) - 1) (T - 1) in
+    # column-major order.  Masked positions are multiplied by 0.
     Pm = softmax(logits(1:(T - 1), :));
-    for t = 1:(T - 1)
-      if mask(t) > 0
-        row = Pm(t, :);
-        row(ids(t + 1)) = row(ids(t + 1)) - 1.0;
-        dl(t, :) = row / total;
-      end
-    end
+    lin = (1:(T - 1)) + (ids(2:T) - 1) * (T - 1);
+    Pm(lin) = Pm(lin) - 1.0;
+    dl(1:(T - 1), :) = (Pm .* gpt_cols(mask(1:(T - 1)) > 0, V)) / total;
   end
 end
 
@@ -344,7 +349,7 @@ end
 function g = gpt_grad_flat(ids, mask, P, cfg)
   [lo, L, cache] = gpt_forward(ids, mask, P, cfg);
   G = gpt_backward(ids, gpt_dlogits(ids, mask, lo, cache.total), cache, P, cfg);
-  g = [gpt_flatten(G, cfg), L];
+  g = gpt_flatten_tail(G, L);
 end
 
 # === AdamW on the flat vector (Lesson 16) ===

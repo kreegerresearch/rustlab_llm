@@ -56,11 +56,13 @@ intermediate.
 
 ## Prerequisites
 
-- **rustlab ≥ 0.3.10** (`rustlab --version`). The scripts rely on
+- **rustlab ≥ 0.3.11** (`rustlab --version`). The scripts rely on
   `parmap`, multi-output functions, struct values, string arrays and
   NPZ `save` / `load`, and `lib/gpt.rlab` calls the `gelu_grad` builtin
-  added in 0.3.10. 0.3.10 also trains about 4× faster than 0.3.9; see
-  `perf/reports/` for the measurements.
+  added in 0.3.10. 0.3.11 trains about 7× faster than 0.3.9 (0.3.10
+  about 4×); see `perf/reports/` for the measurements. **Not 0.3.14–0.3.16:**
+  their `run` statement cannot load `../../lib/gpt.rlab`, so every stage
+  fails at its first line. `make sherlock-doctor` checks for this.
 - **Python 3** for Stage 0 only. rustlab cannot read a text file or map a
   character to its code, so the corpus is converted once, outside
   rustlab, by a standard-library-only script. Nothing else uses Python.
@@ -90,9 +92,9 @@ make sherlock-status                      # progress report of a running or fini
 The stages are also separate targets, in this order:
 
 ```sh
-make sherlock-doctor     # rustlab >= 0.3.10, python3, corpus, prepared data, preset, cores
+make sherlock-doctor     # rustlab >= 0.3.11, python3, corpus, prepared data, preset, cores
 make sherlock-data       # Stage 0: about a second. Writes data/ids.csv and data/vocab.rlab
-make sherlock-train      # Stage 1: about 5 minutes at the defaults (3,000 steps, 3.1 M tokens)
+make sherlock-train      # Stage 1: about 3 minutes at the defaults (3,000 steps, 3.1 M tokens)
 make sherlock-generate   # Stage 2: three samples from checkpoints/ckpt_latest.npz
 make sherlock-sft        # Stage 3: fine-tune on the Q/A pairs and probe forgetting
 make sherlock-distill    # Stage 4: distil the trained model into a half-width, half-depth student
@@ -100,7 +102,7 @@ make sherlock-report     # assemble report.md from whichever stages have run
 make sherlock-bench      # throughput at several model sizes (optional, a few minutes)
 ```
 
-`make sherlock-quick` selects the 30-second preset (`presets/quick.rlab`,
+`make sherlock-quick` selects the 20-second preset (`presets/quick.rlab`,
 which trains into `checkpoints-quick/` so it never overwrites a long run)
 and then runs `make sherlock`; `make sherlock-preset PRESET=default`
 switches back — see *Presets* below.
@@ -123,7 +125,10 @@ A complete default run is committed under `example-run/` (`train.log`,
 `generate.log`, `sft.log`, `distill.log`, `ask.log`, the figures and the
 assembled `report.md`), so you can read what to expect before running
 anything. It was recorded on rustlab 0.3.9, when the same run took 20
-minutes; on 0.3.10 the numbers are identical and the time is about 5.
+minutes; on 0.3.11 the whole pipeline takes under 4. Pre-training and
+distillation print the same numbers. Fine-tuning can differ by an
+answer or two (42 / 46 in a 0.3.11 run): 0.3.11 divides real arrays
+exactly, a last-digit change that 300 steps on 46 pairs amplify.
 
 Stage 0 prints the three numbers you will measure everything against:
 
@@ -170,7 +175,7 @@ All four stage scripts begin with `run "config.rlab"` and read the struct
 and 4 have a few knobs of their own — steps, learning rate, replay
 fraction, student size, distillation temperature — in `C_sft` and `C_kd`
 structs at the top of `sft.rlab` and `distill.rlab`; see those sections.) The two
-right-hand columns are the two shipped presets — `quick`, a 30-second
+right-hand columns are the two shipped presets — `quick`, a 20-second
 sanity run, and `large`, a run you leave going overnight; `—` means keep
 the default.
 
@@ -213,9 +218,9 @@ for `quick`, ≈ 2.7 M for `large`. Tokens per run are
 
 | Preset | Params | Tokens | Measured / extrapolated rate | Wall time | Epochs of this book |
 |---|---|---|---|---|---|
-| `quick` | ≈ 101 k | 205 k (400 × 8 × 64) | 37,981 tok/s measured on rustlab 0.3.10 | 5 s for training; 30 s for every stage | ≈ 0.4 |
-| `default` | 811 k | 3.07 M | 9,788 tok/s averaged over a full run on rustlab 0.3.10 (2,527 on 0.3.9) | 5 min (314 s measured; 1,216 s on 0.3.9); 6 min 48 s for every stage | ≈ 5.5 |
-| `large` | ≈ 2.7 M | 35.8 M (20,000 × 14 × 128) | ≈ 4,000–5,000 tok/s *(extrapolated: the 0.3.9 sweep's 1,299 tok/s for 2.69 M params, scaled by the measured 0.3.10 speedup)* | ≈ 2–2.5 h | ≈ 67 — far too many; use the full canon and cut `n_steps` |
+| `quick` | ≈ 101 k | 205 k (400 × 8 × 64) | 62,742 tok/s measured on rustlab 0.3.11 | 3 s for training; 17 s for every stage | ≈ 0.4 |
+| `default` | 811 k | 3.07 M | 17,377 tok/s averaged over a full run on rustlab 0.3.11 (9,788 on 0.3.10, 2,527 on 0.3.9) | 3 min (177 s measured; 314 s on 0.3.10, 1,216 s on 0.3.9); 3 min 48 s for every stage | ≈ 5.5 |
+| `large` | ≈ 2.7 M | 35.8 M (20,000 × 14 × 128) | ≈ 7,000–9,000 tok/s *(extrapolated: the 0.3.9 sweep's 1,299 tok/s for 2.69 M params, scaled by the measured 0.3.11 speedup)* | ≈ 1–1.5 h | ≈ 67 — far too many; use the full canon and cut `n_steps` |
 
 The `large` preset only makes sense with a larger corpus: sixty-odd
 passes over one book is memorisation, and the held-out curve will tell
@@ -244,7 +249,7 @@ and *Troubleshooting* apply; `make sherlock-clean` resets the preset to
 
 The `quick` preset also sets `C.ckpt_dir = "checkpoints-quick"`, so a quick demo and a long default run keep separate checkpoints and separate SFT / student models; the figures, logs and `report.md` are shared, so `make sherlock-report` describes whichever ran last. Three optional fields let a preset scale the later stages too: `C.sft_steps` and `C.sft_eta` override `C_sft.n_steps` / `C_sft.eta` in `sft.rlab`, and `C.kd_steps` overrides `C_kd.n_steps` in `distill.rlab` (`quick` sets `sft_steps = 800`, because a 101 k-parameter model needs more passes to memorise the pairs).
 
-What the quick preset delivers, measured on rustlab 0.3.10: pre-training 400 steps in 5 s (38,000 tok/s; 18 s on 0.3.9) to 3.40 held-out bits/char — a little better than a bigram model — then SFT in 12 s (37 s on 0.3.9) to 29 / 46 exact answers ("Where does Holmes live?" → "221B Baker Street", but "Who is the woman?" → "I Irthe Adler") with +0.11 bits/char forgetting, and distillation into a 17.6 k-parameter student (3.53 vs 3.59 bits/char hard-target). It exercises every stage in about 30 seconds; the default preset is where the text starts to look like English and the answers come out clean.
+What the quick preset delivers, measured on rustlab 0.3.11: pre-training 400 steps in 3 s (63,000 tok/s; 18 s on 0.3.9) to 3.40 held-out bits/char — a little better than a bigram model — then SFT in 7 s (37 s on 0.3.9) to 29 / 46 exact answers ("Where does Holmes live?" → "221B Baker Street", but "Who is the woman?" → "I Irthe Adler") with +0.11 bits/char forgetting, and distillation into a 17.6 k-parameter student (3.53 vs 3.59 bits/char hard-target). It exercises every stage in under 20 seconds; the default preset is where the text starts to look like English and the answers come out clean.
 
 ## Resuming
 
@@ -293,7 +298,7 @@ What good numbers look like, in bits per character:
 | Knows nothing | 6.267 | $\log_2 77$ — the uniform distribution; the loss at step 0 |
 | Character frequencies | 4.473 | Order-0 entropy of this corpus; reached by step ≈ 100 |
 | Bigram (previous character only) | ≈ 3.3 | The Lesson 05 model trained on this book |
-| This tutorial's default run | 2.20 | 811 k parameters, 3,000 steps, 5 minutes on rustlab 0.3.10; held-out, still improving |
+| This tutorial's default run | 2.20 | 811 k parameters, 3,000 steps, 3 minutes on rustlab 0.3.11; held-out, still improving |
 | A good small character GPT | ≈ 1.5–1.8 | Held-out, after a few epochs |
 | Published character models on large English corpora | ≈ 1.0–1.3 | Hundreds of millions of parameters, hundreds of MB of text |
 
@@ -599,10 +604,10 @@ are stripped automatically. Two consequences of changing the corpus:
   trying: it folds the vocabulary to ≈ 50 symbols and the model learns
   noticeably faster at a small cost in fidelity.
 - Time scales with tokens, not with corpus size. At the default model's
-  measured ≈ 9,800 tok/s on rustlab 0.3.10, one epoch of the canon is
-  ≈ 5.5 minutes; five epochs is under half an hour. The 2.7 M-parameter
-  configuration at an extrapolated ≈ 4,500 tok/s takes ≈ 12 minutes per
-  epoch, so 20,000 steps is ≈ 11 epochs of the canon and ≈ 2.2 hours.
+  measured ≈ 17,400 tok/s on rustlab 0.3.11, one epoch of the canon is
+  ≈ 3 minutes; five epochs is about a quarter of an hour. The 2.7 M-parameter
+  configuration at an extrapolated ≈ 8,000 tok/s takes ≈ 7 minutes per
+  epoch, so 20,000 steps is ≈ 11 epochs of the canon and ≈ 1.25 hours.
   On rustlab 0.3.9 these were 20 minutes, 1.1 hours and 7 hours.
 
 **A bigger model.** `d_model`, `n_layer`, `d_ff` and `T` are the knobs,
@@ -650,10 +655,11 @@ tutorial/sherlock/
   ask.rlab             ask the fine-tuned model one question (make sherlock-ask Q="...")
   question.rlab        C.question = "..."; written by make sherlock-ask, read by ask.rlab
   preset.rlab          the selected preset; run last by config.rlab (make sherlock-preset PRESET=...)
-  presets/             default.rlab (empty), quick.rlab (30 s demo), large.rlab (a few hours)
+  presets/             default.rlab (empty), quick.rlab (20 s demo), large.rlab (an hour or more)
   distill.rlab         Stage 4: teacher -> half-width, half-depth student on softened logits, vs a hard-target control (knobs: C_kd)
   benchmark.rlab       throughput at several sizes (feeds the performance document)
   test_gpt_lib.rlab    self-test for lib/gpt.rlab: round trip, gradient check, timing
+  doctor_probe.rlab    make sherlock-doctor's check that this rustlab can load lib/gpt.rlab
   report.py            make sherlock-report: assembles report.md from the stage logs and figures
   report.md            the assembled report of the last run (generated, gitignored)
   <stage>.log          train / generate / sft / distill / ask / benchmark output, written by the make targets (gitignored)

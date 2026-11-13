@@ -85,7 +85,7 @@ eps
 <polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="405,429 405,47 "/>
 <polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="563,429 563,47 "/>
 <polyline fill="none" opacity="0.3" stroke="#9696B4" stroke-width="1" points="721,429 721,47 "/>
-<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="879,79 780,179 681,278 583,377 484,398 385,365 287,330 188,262 90,269 "/>
+<polyline fill="none" opacity="1" stroke="#1F77B4" stroke-width="2" points="879,79 780,179 681,278 583,377 484,398 385,365 287,330 188,241 90,269 "/>
 <polyline fill="none" opacity="1" stroke="#D62728" stroke-width="2" points="453,398 453,79 "/>
 <rect x="762" y="52" width="113" height="49" opacity="0.85" fill="#1E1E2E" stroke="none"/>
 <rect x="762" y="52" width="113" height="49" opacity="0.3" fill="none" stroke="#CDD6F4"/>

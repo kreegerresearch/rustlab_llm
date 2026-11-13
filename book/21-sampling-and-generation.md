@@ -343,9 +343,9 @@ tau=1.0: abababcbcbaba
 tau=2.0: abababcbcbcba
 logits at 'b': [1×3]  8.391505  -8.841305  8.391505
 tau = 0.5   P(. | b) = [1×3]  0.500000  0.000000  0.500000   H = 1.0000000000000275 bits
-tau = 1   P(. | b) = [1×3]  0.500000  0.000000  0.500000   H = 1.0000004314039548 bits
+tau = 1   P(. | b) = [1×3]  0.500000  0.000000  0.500000   H = 1.000000431403955 bits
 tau = 2   P(. | b) = [1×3]  0.499955  0.000091  0.499955   H = 1.001256212153058 bits
-tau = 5   P(. | b) = [1×3]  0.492161  0.015678  0.492161   H = 1.1007526326437538 bits
+tau = 5   P(. | b) = [1×3]  0.492161  0.015678  0.492161   H = 1.1007526326437542 bits
 ```
 
 <!-- rustlab:output-end -->
@@ -572,7 +572,7 @@ ylabel("H [bits]")
 
 <!-- rustlab:output-start -->
 ```text
-dH/dln(tau) at tau=1: 0.808682795298878 nats   Var_q(z) = 0.8086827002533895
+dH/dln(tau) at tau=1: 0.808682795298767 nats   Var_q(z) = 0.8086827002533895
 ```
 
 ![plot 3](plots/21-sampling-and-generation/plot-3-ae9f5772.svg)
@@ -667,10 +667,10 @@ print("entropy rate of the sampled stream = sum_i pi_i H(row i) =", dot(pi_stat,
 <!-- rustlab:output-start -->
 ```text
 H(P(.|b)) in bits under each control:
-  greedy 0   tau=0.5 1.0000000000000275   tau=1 1.0000004314039548   tau=2 1.001256212153058
-  top-K=2 1   top-P=0.9 1   penalty rho=2 on 'a' x2 0.019413435029058648
+  greedy 0   tau=0.5 1.0000000000000275   tau=1 1.000000431403955   tau=2 1.001256212153058
+  top-K=2 1   top-P=0.9 1   penalty rho=2 on 'a' x2 0.019413435029058807
 eigenvalues of P_hat': [1×3]  -1.000000  1.000000  -0.000000   stationary pi = [1×3]  0.250000  0.500000  0.250000
-entropy rate of the sampled stream = sum_i pi_i H(row i) = 0.5000004951647451 bits/token  (corpus: 0.5)
+entropy rate of the sampled stream = sum_i pi_i H(row i) = 0.5000004951647452 bits/token  (corpus: 0.5)
 ```
 
 <!-- rustlab:output-end -->

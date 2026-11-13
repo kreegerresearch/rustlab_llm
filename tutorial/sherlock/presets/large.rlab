@@ -1,5 +1,5 @@
-# Preset: large — a long run.  About 2.7 M parameters; on rustlab 0.3.10
-# expect roughly 2-2.5 hours (extrapolated; 7+ hours on 0.3.9; see
+# Preset: large — a long run.  About 2.7 M parameters; on rustlab 0.3.11
+# expect roughly 1-1.5 hours (extrapolated; 7+ hours on 0.3.9; see
 # perf/reports/).  Lower n_steps for a shorter run.
 C.d_model    = 192;
 C.n_layer    = 6;
