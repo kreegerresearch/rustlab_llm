@@ -237,7 +237,7 @@ print("Final   L =", loss_curve(n_train + 1), "  PPL =", ppl_curve(n_train + 1))
 vocab: 18   d_model: 4   d_ff: 8   params: 300
 prediction pairs: 31   tokens per parameter: 0.10333333333333333   (params at d = 16: 2736 )
 Initial L = 2.8724045210395035   PPL = 17.67947780822632   (log(vocab) = 2.8903717578961645 is the uniform baseline)
-Final   L = 0.00008169636170878974   PPL = 1.0000816996989474
+Final   L = 0.00008169636170859641   PPL = 1.0000816996989472
 ```
 
 <!-- rustlab:output-end -->
@@ -308,8 +308,8 @@ print("A(10,5) =", A_trained(10, 5), "  A(16,13) =", A_trained(16, 13), "  A(24,
 
 <!-- rustlab:output-start -->
 ```text
-A(6,5) = 0.9798972921061128   A(7,6) = 0.8336696829356084   A(8,7) = 0.4099164748365148   (first period: previous token)
-A(10,5) = 0.9998303683483105   A(16,13) = 0.9999120643848809   A(24,21) = 0.998889960239308   (later 'at ' rows: an 'o' column)
+A(6,5) = 0.9798972921127653   A(7,6) = 0.83366968294198   A(8,7) = 0.40991647483548915   (first period: previous token)
+A(10,5) = 0.9998303683483474   A(16,13) = 0.9999120643848947   A(24,21) = 0.9988899602393532   (later 'at ' rows: an 'o' column)
 ```
 
 ![plot 1](plots/23-putting-it-all-together/plot-1-42aa66d7.svg)
@@ -350,7 +350,7 @@ mean attention-row entropy at steps 0/100/300/600 (bits): Matrix(1x4)
   [3.668621, 1.314890, 1.215535, 1.203905]   uniform prefix average: 3.6769769891362594
 ```
 
-![animation 2](plots/23-putting-it-all-together/anim-2-29489099.gif)
+![animation 2](plots/23-putting-it-all-together/anim-2-15d38846.gif)
 
 <!-- rustlab:output-end -->
 
@@ -442,9 +442,9 @@ print("attention off and PE off PPL =", ppl_abl(4), "  (bigram floor", ppl_floor
 
 <!-- rustlab:output-start -->
 ```text
-full model               PPL = 1.0000816996989474
-attention off            PPL = 1.0031483814154676
-PE off                   PPL = 1.000838141101644
+full model               PPL = 1.0000816996989472
+attention off            PPL = 1.003148381399715
+PE off                   PPL = 1.000840358579603
 attention off and PE off PPL = 1.4722596713107259   (bigram floor 1.4722551822198788 )
 ```
 
@@ -502,8 +502,8 @@ print("max |attn_out(8,:) - taps * V(1:8,:)| =", max(abs(attn_final(8, :) - taps
 
 <!-- rustlab:output-start -->
 ```text
-taps at the odd positions (the c, s, o, the m): 0.30437623338539926 0.09544201725513833 0.18701674985540487 0.4099164748365148
-row entropy = 1.8582075883325158 bits  -> effective taps 2^H = 3.6255693960633324   (uniform: 3 bits, 8 taps)
+taps at the odd positions (the c, s, o, the m): 0.3043762333821084 0.0954420172497513 0.18701674986517822 0.40991647483548915
+row entropy = 1.8582075883301992 bits  -> effective taps 2^H = 3.625569396057511   (uniform: 3 bits, 8 taps)
 max |attn_out(8,:) - taps * V(1:8,:)| = 0
 ```
 
@@ -547,8 +547,8 @@ legend("loss", "end of warm-up", "start of tail", "bigram floor")
 <!-- rustlab:output-start -->
 ```text
 bigram floor crossed at step 53
-exponential phase (steps 60-150): e-folding time = 13.875578341835654 steps
-tail: log-slope ratio (200-300 vs 500-600) = 8.037978735597042    eta ratio = 6.003463198762086
+exponential phase (steps 60-150): e-folding time = 13.875578341736414 steps
+tail: log-slope ratio (200-300 vs 500-600) = 8.037978735467245    eta ratio = 6.003463198762086
 ```
 
 ![plot 5](plots/23-putting-it-all-together/plot-5-ca3a043b.svg)
@@ -581,7 +581,7 @@ print("corpus, fixed-length code:", bits_corpus, "bits   model parameters:", bit
 H(next | cur)        = 0.38679536276834264 nats  (= optimal-bigram CE 0.38679536276834264 )
 H(next | cur, prev)  = 0 nats
 I(next ; prev | cur) = 0.38679536276834264 nats = 0.5580277517047355 bits per pair
-corpus, fixed-length code: 133.437600046154 bits   model parameters: 19200 bits   corpus under the model: 0.0036537510127742008 bits
+corpus, fixed-length code: 133.437600046154 bits   model parameters: 19200 bits   corpus under the model: 0.0036537510127655545 bits
 ```
 
 <!-- rustlab:output-end -->

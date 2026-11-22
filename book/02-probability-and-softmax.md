@@ -175,7 +175,7 @@ saveanim("softmax_temperature.gif", 8)
 ```
 
 <!-- rustlab:output-start -->
-![animation 2](plots/02-probability-and-softmax/anim-2-9b15b761.gif)
+![animation 2](plots/02-probability-and-softmax/anim-2-e7789e48.gif)
 
 <!-- rustlab:output-end -->
 
@@ -330,7 +330,7 @@ ylabel("H  [bits]")
 H at tau = 0.05: 0.00000006245012320586353  bits;  at tau = 50: 1.9997655839197161  bits
 ```
 
-![plot 4](plots/02-probability-and-softmax/plot-4-c54e639a.svg)
+![plot 4](plots/02-probability-and-softmax/plot-4-18840af3.svg)
 
 <!-- rustlab:output-end -->
 

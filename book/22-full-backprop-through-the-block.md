@@ -246,7 +246,7 @@ print("Wq(1,1):  numerical =", num_q,  " analytical =", ana_q,  " rel error =", 
 
 <!-- rustlab:output-start -->
 ```text
-W_U(1,1): numerical = -0.034856619937073674  analytical = -0.03485661995196677  rel error = 0.00000000021363364729883632
+W_U(1,1): numerical = -0.034856619937073674  analytical = -0.034856619951966775  rel error = 0.00000000021363374683364365
 Wq(1,1):  numerical = -0.0005294123667232142  analytical = -0.0005294123667887489  rel error = 0.00000000006189382113963368
 ```
 
@@ -453,13 +453,13 @@ print("dW_U = H_out' * lambda_N  max deviation    =", costate_check);
 <!-- rustlab:output-start -->
 ```text
 scaling       max |G(2 dl) - 2 G(dl)|      = 0
-superposition max |G(a + b) - G(a) - G(b)| = 0.000000000000012434497875801753
+superposition max |G(a + b) - G(a) - G(b)| = 0.000000000000014210854715202004
 dW_U = H_out' * lambda_N  max deviation    = 0
 ```
 
 <!-- rustlab:output-end -->
 
-Scaling holds exactly (deviation $0$) and superposition to $1.2e-14$ (round-off): the backward pass is a linear time-varying system run in reverse depth, driven by the terminal costate. That linearity is what makes gradient accumulation over micro-batches, gradient clipping by rescaling, and the sum over positions in every `input' * upstream` legitimate.
+Scaling holds exactly (deviation $0$) and superposition to $1.4e-14$ (round-off): the backward pass is a linear time-varying system run in reverse depth, driven by the terminal costate. That linearity is what makes gradient accumulation over micro-batches, gradient clipping by rescaling, and the sum over positions in every `input' * upstream` legitimate.
 
 ### Information
 

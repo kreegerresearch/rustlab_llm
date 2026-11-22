@@ -451,7 +451,7 @@ print("max ||lambda(Phi)| - 1| =", eig_dev, "   |Phi' Phi - I| =", orth_err);
 <!-- rustlab:output-start -->
 ```text
 max |PE_{t+1} - Phi PE_t| = 0.000000000000003774758283725532    |PE_64 - Phi^63 PE_1| = 0.000000000000019761969838327786
-max ||lambda(Phi)| - 1| = 0.0000000000000002220446049250313    |Phi' Phi - I| = 0.0000000000000008881784197001252
+max ||lambda(Phi)| - 1| = 0.0000000000000004440892098500626    |Phi' Phi - I| = 0.0000000000000008881784197001252
 ```
 
 <!-- rustlab:output-end -->
@@ -479,12 +479,12 @@ print("numerical rank of the 61 x 32 input block:", rank_in);
 <!-- rustlab:output-start -->
 ```text
 least-squares residual of PE_t -> PE_{t+3}: 0.0000000000000043298697960381105    max |B_fit - (Phi^3)'| = 0.00000000000009738954434568292
-numerical rank of the 61 x 32 input block: 24
+numerical rank of the 61 x 32 input block: 23
 ```
 
 <!-- rustlab:output-end -->
 
-A $\mathbf{W}_Q/\mathbf{W}_K$ pair can therefore implement "attend 3 back" as a fixed linear map. One honest caveat sits in the last line: over 64 tokens the input block has numerical rank 24 — the slow columns are all $\approx \omega_k t$ and collinear — so an *unconstrained* $32 \times 32$ fit would not be unique. At short range the slow clocks carry no information; they exist for the ten-thousand-token scale.
+A $\mathbf{W}_Q/\mathbf{W}_K$ pair can therefore implement "attend 3 back" as a fixed linear map. One honest caveat sits in the last line: over 64 tokens the input block has numerical rank 23 — the slow columns are all $\approx \omega_k t$ and collinear — so an *unconstrained* $32 \times 32$ fit would not be unique. At short range the slow clocks carry no information; they exist for the ten-thousand-token scale.
 
 ### Information
 
