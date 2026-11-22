@@ -70,7 +70,7 @@ for t = 1:T
   end
   ids(t) = j;
 end
-ids = ids(:);   % zeros(1, T) is a 1×T matrix; a subscript has to be a vector
+ids = ids(1, :);   % the row slice is a vector. ids(:) is an N×1 column since 0.3.75, and a string array rejects that matrix
 
 % decode: concatenate the vocabulary entry for each id
 decoded = "";

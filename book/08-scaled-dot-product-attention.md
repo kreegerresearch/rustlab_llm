@@ -125,8 +125,8 @@ print("scaled:   max A =", max(A_scaled_v),   "  H(A) =", H_scaled_v, "bits   (u
 
 <!-- rustlab:output-start -->
 ```text
-unscaled: max A = 0.9999999999999583   H(A) = 0.0000000000019142183222577494 bits
-scaled:   max A = 0.5235101584047482   H(A) = 2.1887527342740873 bits   (uniform over 8 = 3 bits)
+unscaled: max A = 0.9999999999999583   H(A) = 0.000000000001914218322257698 bits
+scaled:   max A = 0.5235101584047486   H(A) = 2.1887527342740865 bits   (uniform over 8 = 3 bits)
 ```
 
 <!-- rustlab:output-end -->
@@ -218,7 +218,7 @@ Both axes are **token positions**: rows are the query positions $t$ (which token
 
 ```rustlab
 positions = {"t1", "t2", "t3", "t4", "t5"};
-M_ind = double(M < 0);   % 1 where the causal mask blocks attention, 0 elsewhere. Comparisons are logical (0.3.56); heatmap wants doubles.
+M_ind = (M < 0);   % 1 where the causal mask blocks attention, 0 elsewhere
 
 figure();
 subplot(1, 3, 1)
@@ -488,7 +488,7 @@ print("H(A_t) at c = 0.1, 1, 3:", H_c01, H_c1, H_c3, "bits   (log2 8 =", log2(T_
 H(A_t) at c = 0.1, 1, 3: 2.995300634107477 2.2559471769069237 0.1687290966557756 bits   (log2 8 = 3 )
 ```
 
-![animation 3](plots/08-scaled-dot-product-attention/anim-3-469f832f.gif)
+![animation 3](plots/08-scaled-dot-product-attention/anim-3-6b3dad79.gif)
 
 <!-- rustlab:output-end -->
 

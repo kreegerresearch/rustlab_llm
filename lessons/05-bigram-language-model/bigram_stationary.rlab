@@ -20,7 +20,8 @@ P_smooth = (C + 1) ./ sum(C + 1, 2);
 [V, D] = eig(P');                       # columns of V: left eigenvectors of P
 lam = real(diag(D));
 k1 = argmax(lam);
-pi_st = real(V(:, k1));
+# A single column is N×1 since rustlab 0.3.75. pi is a row: pi P = pi.
+pi_st = reshape(real(V(:, k1)), 1, vocab_size);
 pi_st = pi_st / sum(pi_st);
 print("eigenvalues of P       :", lam);
 print("stationary pi          :", pi_st);
@@ -31,7 +32,7 @@ print("empirical unigram       :", [sum(seq == 1), sum(seq == 2), sum(seq == 3)]
 [Vs, Ds] = eig(P_smooth');
 lam_s = real(diag(Ds));
 ks = argmax(lam_s);
-pi_sm = real(Vs(:, ks));
+pi_sm = reshape(real(Vs(:, ks)), 1, vocab_size);
 pi_sm = pi_sm / sum(pi_sm);
 abs_s = reshape(sort(abs(lam_s), "descend"), 1, vocab_size);
 print("|eigenvalues| P_smooth :", abs_s);

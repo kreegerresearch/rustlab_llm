@@ -375,7 +375,7 @@ saveanim("optimizers.gif", 6)
 ```
 
 <!-- rustlab:output-start -->
-![animation 3](plots/16-adamw-optimizer/anim-3-37380ae3.gif)
+![animation 3](plots/16-adamw-optimizer/anim-3-1d68ae3f.gif)
 
 <!-- rustlab:output-end -->
 
@@ -453,7 +453,7 @@ beta = 0.999: DC gain 1.0000, -3 dB at 2.4e-04 cycles/step (predicted 1.6e-04), 
 heavy ball u = 0.9 u + g: DC gain 10  = 1/(1 - mu)
 ```
 
-![plot 4](plots/16-adamw-optimizer/plot-4-63c3949c.svg)
+![plot 4](plots/16-adamw-optimizer/plot-4-847b6788.svg)
 
 <!-- rustlab:output-end -->
 

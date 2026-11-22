@@ -268,7 +268,7 @@ legend("0.25", "0.02", "schedule", "1.01")
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/17-learning-rate-scheduling/plot-3-4cc87181.svg)
+![plot 3](plots/17-learning-rate-scheduling/plot-3-fdc43d7e.svg)
 
 <!-- rustlab:output-end -->
 
@@ -384,7 +384,7 @@ print("log10 gain after 300 steps, slow mode (0.25 / 0.02 / schedule):", P_slow(
 
 <!-- rustlab:output-start -->
 ```text
-log10 gain after 300 steps, fast mode (0.25 / 0.02 / schedule): 52.8273777167044 -29.073003902416875 -130.74047586714738
+log10 gain after 300 steps, fast mode (0.25 / 0.02 / schedule): 52.8273777167044 -29.073003902416875 -130.74047586714735
 log10 gain after 300 steps, slow mode (0.25 / 0.02 / schedule): -37.48162098248998 -2.632177292251555 -13.841331073768968
 ```
 

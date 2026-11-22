@@ -396,7 +396,7 @@ When a needed function is missing from rustlab, record it here with the format:
 - `quiver` needs gridded origins and rescales shaft lengths to the grid; one or two arrows at a point render wrong. Arrows are drawn as short `plot` polylines.
 - `hold("on")` must be re-issued after each `subplot(...)`.
 - `svd` has an absolute floor ≈ 1e-8 (`svd(diag([1, 1e-9, 1e-12]))` → `[1, 0, 0]`); do not report σ_min below it.
-- `V(:, i)'` does not transpose a column slice (it stays a vector); `M(:, j)'` likewise; use `reshape` or `dot`. `diag(D)` returns a row.
+- Until 0.3.75, `V(:, i)'` did not transpose a column slice (it stayed a vector). From 0.3.75 a single column `M(:, k)` is an N×1 column and `M(:, k)'` is a 1×N row. `diag(D)` returns a row.
 - Indexed compound assignment `C(i, j) += 1` does not parse — write it out.
 - Integer-class matrix `*` is element-wise (`int32(A) * int32(B)` = `A .* B`).
 - `snr` and `histogram` reject 1×n matrices — pass `randn(n)` vectors or `reshape`.
@@ -434,10 +434,10 @@ The 0.3.6 `cache` statement had reserved the lowercase identifier; 0.3.7 made it
 The July rebuild changed observable behaviour without a version bump: the `cache` reservation above, floating-point last-digit changes in reductions, and heatmap NaN handling (NaN cells now gray, colorbar excludes non-finite). `make notebooks-check` diffs against books rendered by the June build will show those deltas. When the drift guard fires with no source change, suspect a binary update — check the binary's mtime — and re-render. Details: `docs/rustlab-issues-2026-07-12.md` §5.
 
 ### ⚠️ BREAKING (rustlab 0.3.26): `zeros(n)` / `ones(n)` / `rand(n)` / `randn(n)` / `randi(imax, n)` are n×n
-A single size used to allocate a length-n vector. It now allocates an n×n matrix (MATLAB). A length-n row is `zeros(1, n)`, `randn(1, n)`, `randi(imax, 1, n)`; a column is `zeros(n, 1)`. `rand()` and `randi(imax)` stay scalars. `zeros(1, n)` is a 1×n matrix, not a bare vector; `length` is `max(size)`, so `length(zeros(1, n))` is still `n`, and `sort` / `cumsum` / `diag` / `outer` treat a 1×n or n×1 as a vector. New code that wants a sequence must pass the row count. In 0.3.26–0.3.43 a 1×n matrix was not a subscript (`invalid index type: matrix`). From 0.3.44 a 1×n or n×1 index is accepted again, and a 1×1 matrix is accepted where a scalar is. The curriculum still writes `ids(:)` (a vector) and `sum(q .* k)` (a scalar dot product). The legacy row write `M(t) = row` accepts a vector and rejects a 1×n matrix; write `M(t, :) = row`.
+A single size used to allocate a length-n vector. It now allocates an n×n matrix (MATLAB). A length-n row is `zeros(1, n)`, `randn(1, n)`, `randi(imax, 1, n)`; a column is `zeros(n, 1)`. `rand()` and `randi(imax)` stay scalars. `zeros(1, n)` is a 1×n matrix, not a bare vector; `length` is `max(size)`, so `length(zeros(1, n))` is still `n`, and `sort` / `cumsum` / `diag` / `outer` treat a 1×n or n×1 as a vector. New code that wants a sequence must pass the row count. In 0.3.26–0.3.43 a 1×n matrix was not a subscript (`invalid index type: matrix`). From 0.3.44 a 1×n or n×1 index is accepted again, and a 1×1 matrix is accepted where a scalar is. The curriculum still writes `ids(:)` and `sum(q .* k)` (a scalar dot product). From 0.3.75 `x(:)` and `reshape(x, N, 1)` are N×1 columns, and a single column `M(:, k)` is N×1; a row subscript of that column still gathers rows. A left-multiply treats that column as N×1, so a stationary row is `reshape(V(:, k), 1, n)`. The legacy row write `M(t) = row` accepts a vector and rejects a 1×n matrix; write `M(t, :) = row`.
 
 ### ⚠️ BREAKING (rustlab 0.3.56): array comparisons are logical, not 0/1 doubles
-`class([1, 2] > 0)` is `"logical"`. Arithmetic promotes a logical array to double 0/1 (`mask + 0`, and `1 - mask`), and `sum(mask)` counts the trues. `mean`, `reshape`, and `heatmap` do not: they error with `unsupported type logical` or `expected matrix, got logical`. Write `double(mask)` first. `double` of a 1×n logical is a vector, not a 1×n matrix; `double` of a wider logical matrix stays a matrix. `parmap` does not pack a logical array returned from a worker.
+`class([1, 2] > 0)` is `"logical"`. From 0.3.67, numeric builtins and the plot functions (`mean`, `reshape`, `heatmap`, and the rest of that list) accept a logical array as 0/1 and return a double, except the shape functions (`reshape`, `repmat`, `transpose`, `diag`, `sort`, `min` / `max`, `cat`), which stay logical when every input is logical. `sum(mask)` counts the trues. `double` of a 1×n logical is a 1×n matrix (it was a vector in 0.3.56–0.3.66). `parmap` does not pack a logical array returned from a worker. The lessons pass a comparison straight to `mean`, `reshape`, and `heatmap`.
 
 ### ⚠️ BREAKING (rustlab 0.3.40): `norm(M)` is the matrix 2-norm
 With no second argument, `norm` of a matrix is the largest singular value, the same number as `norm(M, 2)`. It used to be Frobenius. A vector is unchanged (and a 1×n or n×1 matrix matches that Euclidean length). The entrywise magnitude the lessons compare with $\sqrt{Td}$ is `norm(M, "fro")`.
@@ -499,9 +499,13 @@ All currently-committed scripts and notebooks use the `while` form; new lessons 
 
 Resolved feature requests and fixed bugs, most-recent rustlab version first.
 
+### rustlab 0.3.67–0.3.80 (verified 2026-11-22; source `c9bfd244`, version 0.3.80)
+
+0.3.67 accepts a logical array in `mean`, `reshape`, `heatmap`, and the other numeric builtins (shape functions stay logical). `double` of a 1×n logical is a 1×n matrix. 0.3.75 makes `x(:)`, `reshape(x, N, 1)`, and a single column `M(:, k)` an N×1 column, and `M(:, k)'` a row. 0.3.68 draws plot text with a bundled font, so a Linux build needs only a C compiler and libc headers. The lessons pass comparisons to `mean` / `reshape` / `heatmap` directly, and Lesson 05 reshapes the stationary eigenvector to a row.
+
 ### rustlab 0.3.64 (verified 2026-11-12; source `1c45aa6`)
 
-Every lesson and the Sherlock tutorial run (`make notebooks`, `test_gpt_lib.rlab`, `make sherlock`), and the perf gate passes at 1.42e-15. The `run "../../lib/…"` bug from 0.3.14–0.3.16 is fixed (`doctor_probe.rlab` passes). Matrix multiply reaches 130–384 GFLOP/s, and the training step is 36,050 tok/s (perf run 10, past the PyTorch `float64` goal). Since 0.3.56 a comparison returns a logical array, which `reshape` rejects, so `lib/gpt.rlab` wraps the `gpt_dlogits` mask in `double()`.
+Every lesson and the Sherlock tutorial run (`make notebooks`, `test_gpt_lib.rlab`, `make sherlock`), and the perf gate passes at 1.42e-15. The `run "../../lib/…"` bug from 0.3.14–0.3.16 is fixed (`doctor_probe.rlab` passes). Matrix multiply reaches 130–384 GFLOP/s, and the training step is 36,050 tok/s (perf run 10, past the PyTorch `float64` goal). Since 0.3.56 a comparison returns a logical array. Until 0.3.67 `reshape` rejected it, so `lib/gpt.rlab` wrapped the `gpt_dlogits` mask in `double()`. That wrapper is gone on 0.3.67 and later.
 
 ### rustlab 0.3.12–0.3.16 (checked 2026-10-23; 0.3.16 built from an uncommitted `feature/notebook-diff-words` checkout)
 

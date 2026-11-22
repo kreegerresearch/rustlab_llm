@@ -39,7 +39,7 @@ print("quantised parameters:", n_q, "  max|W| per matrix:", ranges);
 
 <!-- rustlab:output-start -->
 ```text
-re-trained capstone: params = 300   L = 0.00008169636170878974   PPL = 1.0000816996989474
+re-trained capstone: params = 300   L = 0.00008169636170859641   PPL = 1.0000816996989472
 quantised parameters: 272   max|W| per matrix: Matrix(1x8)
   [2.008726, 1.961393, 1.477834, 0.722783, 0.943531, 2.144984, 1.989670, 1.578401]
 ```
@@ -129,12 +129,12 @@ print(fmt_16, " saturated entries:", sum(sum(abs(W) >= 2)), "  SNR", snr_16, "dB
 
 <!-- rustlab:output-start -->
 ```text
-max|W_U| = 1.5784014486107414   step s = 0.012428357863076703   class(q) = int8
+max|W_U| = 1.5784014486155138   step s = 0.012428357863114282   class(q) = int8
 W_U(1, 1:6) = [1×6]  0.433060  0.447733  0.526826  0.709158  0.512755  0.419608
 q(1, 1:6)   = [1×6] (int8)  35  36  42  57  41  34
-entries at +-127: 1    int8 SNR (dB): 45.94462791191329
-QFmt<8-bit Q0.7, round=round, overflow=saturate>  saturated entries: 7   SNR 18.639546316409767 dB
-QFmt<8-bit Q1.6, round=round, overflow=saturate>  saturated entries: 0   SNR 43.34727862306884 dB   (step 0.015625 )
+entries at +-127: 1    int8 SNR (dB): 45.944627912387396
+QFmt<8-bit Q0.7, round=round, overflow=saturate>  saturated entries: 7   SNR 18.639546316366832 dB
+QFmt<8-bit Q1.6, round=round, overflow=saturate>  saturated entries: 0   SNR 43.34727862275611 dB   (step 0.015625 )
 ```
 
 <!-- rustlab:output-end -->
@@ -262,7 +262,7 @@ xlabel("bits per weight b"); ylabel("SNR(b) - SNR(b-1)  (dB)")
 
 <!-- rustlab:output-start -->
 ```text
-crest factor of E: 2.8769919967330555   model intercept (dB): -4.408773075279544
+crest factor of E: 2.8769919967296063   model intercept (dB): -4.40877307526913
 E: measured SNR [1×7]  3.901893  11.132618  17.959081  25.080645  31.795283  37.245509  42.976012   model [1×7]  7.631227  13.651227  19.671227  25.691227  31.711227  37.731227  43.751227
 mean dB per added bit (3..8): Matrix(1x6)
   [9.898346, 7.277465, 6.469852, 6.664511, 5.572157, 6.544953]
@@ -385,9 +385,9 @@ xlabel("bits per activation"); ylabel("SNR (dB)")
 <!-- rustlab:output-start -->
 ```text
 channel max|h|: Matrix(1x4)
-  [67.856716, 26.318431, 33.185321, 24.311239]    per-token max|h| from 10.666712489716033 to 67.85671611427712
-H_out SNR at 8 bits: per-tensor 44.77927512060801  per-token 49.70888375856369    at 4 bits: 18.546316356985407 23.62533090711594
-KL at 4 bits — W_U only: 0.0009081778263727211 bits   logits: 0.24446304315149167 bits   max|logit| = 117.07313909196272
+  [67.856716, 26.318431, 33.185321, 24.311239]    per-token max|h| from 10.66671248984766 to 67.8567161143556
+H_out SNR at 8 bits: per-tensor 44.77927512025636  per-token 49.70888375863238    at 4 bits: 18.546316357006255 23.625330907183326
+KL at 4 bits — W_U only: 0.0009081778265042385 bits   logits: 0.244463043151492 bits   max|logit| = 117.07313909232435
 ```
 
 ![plot 4](plots/26-quantization-and-fixed-point-inference/plot-4-43d79a6d.svg)
@@ -427,7 +427,7 @@ print("saturate: SNR", snr_sat, "dB  PPL", exp(L_sat), "     wrap: SNR", snr_wra
 ```text
 overflowing entries: 59 of 72
 W_U(1,1) = 0.4330597614525455  -> W/s = 183.32863234824427   saturate -> 127  (int8)   wrap -> -73  (int8)
-saturate: SNR 4.044378595753429 dB  PPL 4.594553019072994      wrap: SNR -0.6855708294559159 dB  PPL 967932610.3416166
+saturate: SNR 4.04437859575411 dB  PPL 4.594553019094255      wrap: SNR -0.6855708294567363 dB  PPL 967932610.4132328
 ```
 
 <!-- rustlab:output-end -->
@@ -522,7 +522,7 @@ xlabel("e / Delta"); ylabel("count")
 
 <!-- rustlab:output-start -->
 ```text
-4-bit errors e/Delta over 272 weights: mean -0.013477269657699445   12 var 0.9721392833811219   max|e|/Delta 0.4971076506400643
+4-bit errors e/Delta over 272 weights: mean -0.01347726965740095   12 var 0.972139283383165   max|e|/Delta 0.49710765055343564
 N(0, 0.3^2) in Q1.6:  round-to-nearest 36.42951797969648 dB (model 36.45783703454724 )   truncate 30.392707555327853 dB   difference 6.036810424368625 dB
 ```
 
@@ -557,7 +557,7 @@ print("3-bit per-tensor:  post-training PPL", exp(L_before), "  ->  after 100 QA
 
 <!-- rustlab:output-start -->
 ```text
-3-bit per-tensor:  post-training PPL 14.725295329264018   ->  after 100 QAT steps 1.0112351775253139    KL 0.015316221038986735 bits
+3-bit per-tensor:  post-training PPL 14.725295328833003   ->  after 100 QAT steps 1.0112351775249473    KL 0.015316221038486472 bits
 ```
 
 <!-- rustlab:output-end -->
@@ -589,7 +589,7 @@ print("raw corpus:", bits_corpus_raw, "bits   fp64 model:", n_q * 64, "bits   be
 6 bits/weight:  weights  1632 + corpus     0.01 =   1632.0 bits
 7 bits/weight:  weights  1904 + corpus     0.01 =   1904.0 bits
 8 bits/weight:  weights  2176 + corpus     0.00 =   2176.0 bits
-raw corpus: 133.437600046154 bits   fp64 model: 17408 bits   best two-part code: 936.2869645778508 bits at b = 3
+raw corpus: 133.437600046154 bits   fp64 model: 17408 bits   best two-part code: 936.2869645765417 bits at b = 3
 ```
 
 <!-- rustlab:output-end -->

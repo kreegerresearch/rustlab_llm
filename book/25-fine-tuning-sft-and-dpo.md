@@ -133,12 +133,12 @@ P_sft = P;                 % the fine-tuned policy, kept for the Information len
 
 <!-- rustlab:output-start -->
 ```text
-Pre-SFT abb-corpus L: 0.00002002646539636443
-Final SFT L: 0.01807754856586212
+Pre-SFT abb-corpus L: 0.000020026465396727813
+Final SFT L: 0.01807754856739409
   prompt = [1×3]  1.000000  2.000000  3.000000  -> P(. | prompt) = [1×3]  0.996978  0.003017  0.000006  argmax = 1
   prompt = [1×3]  2.000000  2.000000  3.000000  -> P(. | prompt) = [1×3]  0.996971  0.003024  0.000006  argmax = 1
   prompt = [1×3]  2.000000  1.000000  3.000000  -> P(. | prompt) = [1×3]  0.999490  0.000460  0.000051  argmax = 1
-abb-corpus L: pre-SFT = 0.00002002646539636443   post-SFT = 2.837472363171087   delta = 2.8374523367056907
+abb-corpus L: pre-SFT = 0.000020026465396727813   post-SFT = 2.8374723631710257   delta = 2.837452336705629
 ```
 
 <!-- rustlab:output-end -->
@@ -188,8 +188,8 @@ print("per block [E, Wq, Wk, Wv, Wo, W1, W2, W_U]:", cos_blk);
 
 <!-- rustlab:output-start -->
 ```text
-parameters: 180    |grad_abb| = 0.0002471573388461425    |grad_SFT| = 65.3123433848501
-cos(grad_abb, grad_SFT) = -0.13691347798144118     cos(grad_abb, sign(grad_SFT)) [first AdamW step] = -0.1509958339575991
+parameters: 180    |grad_abb| = 0.0002471573388528113    |grad_SFT| = 65.31234338440193
+cos(grad_abb, grad_SFT) = -0.13691347797119904     cos(grad_abb, sign(grad_SFT)) [first AdamW step] = -0.15099583395216076
 per block [E, Wq, Wk, Wv, Wo, W1, W2, W_U]: Matrix(1x8)
   [0.450362, -0.521261, -0.686479, -0.233080, -0.515673, -0.094494, -0.149262, -0.363562]
 ```
@@ -232,8 +232,8 @@ print("rank-1 LoRA on W_U:", d_model + vocab, "params   mean SFT L =", L_sft_lor
 
 <!-- rustlab:output-start -->
 ```text
-full SFT:           180 params   mean SFT L = 0.04702859472566024    abb-corpus L = 2.837472363171087
-rank-1 LoRA on W_U: 7 params   mean SFT L = 0.01135571041363299    abb-corpus L = 2.762708981039541
+full SFT:           180 params   mean SFT L = 0.04702859473078726    abb-corpus L = 2.8374723631710257
+rank-1 LoRA on W_U: 7 params   mean SFT L = 0.011355710415315605    abb-corpus L = 2.762708980969384
 ```
 
 <!-- rustlab:output-end -->
@@ -363,10 +363,10 @@ end
 <!-- rustlab:output-start -->
 ```text
 Initial DPO L: 0.6931471805599453   (ln 2 = 0.6931471805599453 )   abb-corpus L: 0.000000007095549161999251
-Final DPO L: 0.000000007179710962662864    final abb-corpus L: 0.00008068526970661702
-  prompt 1 :  lp(chosen) = -19.2090174833463   lp(rejected) = -48.616631606043754   margin = 29.407614122697453
-  prompt 2 :  lp(chosen) = -16.361831393904065   lp(rejected) = -48.615263639173534   margin = 32.253432245269465
-  prompt 3 :  lp(chosen) = -0.2713937841146534   lp(rejected) = -47.4943785042135   margin = 47.22298472009885
+Final DPO L: 0.000000007179710962662864    final abb-corpus L: 0.00008068526972865894
+  prompt 1 :  lp(chosen) = -19.209017483009617   lp(rejected) = -48.6166316061638   margin = 29.407614123154183
+  prompt 2 :  lp(chosen) = -16.36183139543921   lp(rejected) = -48.61526363929336   margin = 32.25343224385415
+  prompt 3 :  lp(chosen) = -0.27139378404359327   lp(rejected) = -47.49437850426905   margin = 47.222984720225455
 ```
 
 <!-- rustlab:output-end -->
@@ -479,9 +479,9 @@ end
 <!-- rustlab:output-start -->
 ```text
 pi_ref(. | a b sep) = [1×3]  0.999992  0.000008  0.000000
-beta = 0.05 :  pi* = [1×3]  0.000262  0.999738  0.000000   max |pi* - softmax| = 0.00000000000000000005421010862427522   recovered r - const = [1×3]  0.000000  1.000000  0.000000
-beta = 0.1 :  pi* = [1×3]  0.852266  0.147734  0.000000   max |pi* - softmax| = 0.00000000000000011102230246251565   recovered r - const = [1×3]  0.000000  1.000000  0.000000
-beta = 0.5 :  pi* = [1×3]  0.999942  0.000058  0.000000   max |pi* - softmax| = 0.0000000000000002220446049250313   recovered r - const = [1×3]  0.000000  1.000000  0.000000
+beta = 0.05 :  pi* = [1×3]  0.000262  0.999738  0.000000   max |pi* - softmax| = 0.000000000000000000000000000013016204936146695   recovered r - const = [1×3]  0.000000  1.000000  0.000000
+beta = 0.1 :  pi* = [1×3]  0.852266  0.147734  0.000000   max |pi* - softmax| = 0.00000000000000011102230246251565   recovered r - const = [1×3]  0.000000  1.000000  -0.000000
+beta = 0.5 :  pi* = [1×3]  0.999942  0.000058  0.000000   max |pi* - softmax| = 0.0000000000000000000000000016155871338926322   recovered r - const = [1×3]  0.000000  1.000000  0.000000
 ```
 
 <!-- rustlab:output-end -->
@@ -516,8 +516,8 @@ print("mean KL(pi_ref || pi_theta) per position on the preference prompts after 
 
 <!-- rustlab:output-start -->
 ```text
-mean KL(old || new) per position on the abb corpus:  SFT 4.09331256342832 bits (= 2.837268062490942 nats)   DPO 0.0001163390616280226 bits
-mean KL(pi_ref || pi_theta) per position on the preference prompts after DPO: 0.8732909155598987 bits
+mean KL(old || new) per position on the abb corpus:  SFT 4.093312563428224 bits (= 2.837268062490876 nats)   DPO 0.00011633906165982258 bits
+mean KL(pi_ref || pi_theta) per position on the preference prompts after DPO: 0.8732909156581732 bits
 ```
 
 <!-- rustlab:output-end -->

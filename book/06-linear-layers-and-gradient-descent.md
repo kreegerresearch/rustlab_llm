@@ -276,7 +276,7 @@ hold("off")
 ```
 
 <!-- rustlab:output-start -->
-![plot 3](plots/06-linear-layers-and-gradient-descent/plot-3-4d8ef19f.svg)
+![plot 3](plots/06-linear-layers-and-gradient-descent/plot-3-fc4670eb.svg)
 
 <!-- rustlab:output-end -->
 

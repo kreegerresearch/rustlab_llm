@@ -357,9 +357,9 @@ a discrete-time **linear time-invariant system** whose state lives on the probab
 
 ```rustlab
 [V, D] = eig(P');                       % columns of V: left eigenvectors of P
-lam = real(diag(D));                    % eig returns vectors — no transpose needed
+lam = real(diag(D));
 k1 = argmax(lam);                       % the lambda = 1 mode
-pi_st = real(V(:, k1));
+pi_st = reshape(real(V(:, k1)), 1, vocab_size);  % column is N×1 since 0.3.75; pi is a row
 pi_st = pi_st / sum(pi_st);             % normalise to a distribution
 print("eigenvalues of P      :", lam);
 print("stationary pi         :", pi_st);
@@ -369,7 +369,7 @@ print("empirical unigram     :", [sum(seq == 1), sum(seq == 2), sum(seq == 3)] /
 lam_s = eig(P_smooth');
 [Vs, Ds] = eig(P_smooth');
 ks = argmax(real(diag(Ds)));
-pi_sm = real(Vs(:, ks));
+pi_sm = reshape(real(Vs(:, ks)), 1, vocab_size);
 pi_sm = pi_sm / sum(pi_sm);
 abs_s = reshape(sort(abs(lam_s), "descend"), 1, vocab_size);
 print("|eigenvalues| P_smooth:", abs_s);

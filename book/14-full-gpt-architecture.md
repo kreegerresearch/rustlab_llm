@@ -236,7 +236,7 @@ ylabel("position t")
 ```text
 wrapper reproduces the step-by-step logits: max |diff| = 0
 max |dZ| over positions 1..7: 0
-max |dZ| at position 8:       0.5198977558530139
+max |dZ| at position 8:       0.5198977558530128
 ```
 
 ![plot 2](plots/14-full-gpt-architecture/plot-2-b838885b.svg)
@@ -454,9 +454,9 @@ print("after Gibbs normalisation: sum =", sum(p_tied), "  max =", max(p_tied));
 
 <!-- rustlab:output-start -->
 ```text
-tied head at position T: best-matching token 26   score 1.9129375403189588   = <h_f(T), e_v*> = 1.9129375403189584
+tied head at position T: best-matching token 26   score 1.9129375403189592   = <h_f(T), e_v*> = 1.9129375403189592
 max |Z_tied(T, v) - <h_f(T), e_v>| over all v: 0
-after Gibbs normalisation: sum = 1.0000000000000002   max = 0.09321944761590627
+after Gibbs normalisation: sum = 0.9999999999999996   max = 0.09321944761590628
 ```
 
 <!-- rustlab:output-end -->
@@ -483,7 +483,7 @@ ylabel("|H^{(l)}|")
 
 <!-- rustlab:output-start -->
 ```text
-|H^{(N)}| / |H^{(0)}|: as initialised 4.336349298961599   with 1/sqrt(2N) branch scaling 1.8153253945797936
+|H^{(N)}| / |H^{(0)}|: as initialised 4.336349298961599   with 1/sqrt(2N) branch scaling 1.8153253945797934
 ```
 
 ![plot 5](plots/14-full-gpt-architecture/plot-5-9427ec3b.svg)

@@ -37,6 +37,8 @@ A phased build plan for the nanoGPT tutorial series. Each phase is independently
 
 **rustlab 0.3.63 re-check (2026-11-10, `92c5ef2`).** All 106 lesson scripts pass. `mean`, `reshape`, and `heatmap` reject the logical arrays that comparisons have returned since 0.3.56, so those three call sites use `double(...)`. `make notebooks` re-rendered cleanly (two noise-floor residuals moved in the 16th digit). The perf gate matches `perf/reference/gate.json` (worst relative difference 1.4e-15). `make sherlock-test` worst relative gradient error is 1.8e-9. `make sherlock-quick` completes every stage.
 
+**rustlab 0.3.80 re-check (2026-11-22, `c9bfd244`).** `mean`, `reshape`, and `heatmap` accept logical arrays (0.3.67), so the `double(...)` wrappers are gone, including the mask in `gpt_dlogits`. A single eigenvector column is N×1 (0.3.75); Lesson 05 reshapes it to a row before `pi * P`. `make sherlock-doctor` requires rustlab ≥ 0.3.67.
+
 **Lesson numbering (since 2026-09-27, Phase 11):** `22-full-backprop-through-the-block` (was the first half of 24), `23-putting-it-all-together` (was 22), `24-modern-architectural-variants` (was 23), `25-fine-tuning-sft-and-dpo` (was the second half of 24). The capstone now comes *after* the lesson that derives the backward pass it runs on. Older handoff notes below keep their original numbers where they narrate history.
 
 ---

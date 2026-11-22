@@ -255,7 +255,7 @@ function dl = gpt_dlogits(ids, mask, logits, total)
     Pm = softmax(logits(1:(T - 1), :));
     lin = (1:(T - 1)) + (ids(2:T) - 1) * (T - 1);
     Pm(lin) = Pm(lin) - 1.0;
-    dl(1:(T - 1), :) = (Pm .* gpt_cols(double(mask(1:(T - 1)) > 0), V)) / total;
+    dl(1:(T - 1), :) = (Pm .* gpt_cols(mask(1:(T - 1)) > 0, V)) / total;
   end
 end
 

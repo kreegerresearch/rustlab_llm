@@ -152,7 +152,7 @@ fd  = (Lp - Lm) / (2 * eps);
 err = abs(fd - dL_dW1(2, 1));
 ```
 
-Finite-difference estimate at $W_1(2, 1)$: $0.358389$ vs analytic $0.358389$ — error $1.10e-11$ (well under $\varepsilon^2$).
+Finite-difference estimate at $W_1(2, 1)$: $0.358389$ vs analytic $0.358389$ — error $1.12e-11$ (well under $\varepsilon^2$).
 
 Two refinements make this check robust at scale. First, compare **relative** error, $|f - a| / \max(|f|, |a|)$, so that a gradient of size $10^3$ and one of size $10^{-3}$ are judged by the same yardstick. Second, the choice $\varepsilon \approx 10^{-5}$ is not arbitrary: the centred difference has truncation error $O(\varepsilon^2)$ and rounding error $O(\varepsilon_{\text{mach}} / \varepsilon)$ with $\varepsilon_{\text{mach}} \approx 2 \times 10^{-16}$ in double precision, and the sum is smallest near $\varepsilon_{\text{mach}}^{1/3} \approx 6 \times 10^{-6}$. (The one-sided rule of thumb $\sqrt{\varepsilon_{\text{mach}}} \approx 10^{-8}$ is for *forward* differences.) A sweep shows the U shape:
 
@@ -177,9 +177,9 @@ end
 ```text
 eps = 0.01    relative error = 0.000001910093267350235
 eps = 0.0001    relative error = 0.00000000019542205403617214
-eps = 0.00001    relative error = 0.00000000003071841583847614
+eps = 0.00001    relative error = 0.000000000031237919713027026
 eps = 0.0000001    relative error = 0.0000000019209059991718153
-eps = 0.000000001    relative error = 0.0000002714309656523153
+eps = 0.000000001    relative error = 0.0000005812126434145493
 ```
 
 <!-- rustlab:output-end -->
@@ -490,7 +490,7 @@ hold("off")
 L1 / L12 ratios:  gain 0.7: 0.036937000917432405   gain 1.0: 0.8885728513434212   gain 1.3: 25.819017934732848   0.7 + I: 8.390376349540086
 ```
 
-![plot 1](plots/15-backpropagation/plot-1-216b03d4.svg)
+![plot 1](plots/15-backpropagation/plot-1-67b86db0.svg)
 
 <!-- rustlab:output-end -->
 

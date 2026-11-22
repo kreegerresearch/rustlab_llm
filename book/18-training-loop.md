@@ -238,8 +238,8 @@ print("lambda = 0.1: final gradient norm", gn_w(n_steps), "  ||E||_F", sqrt(sum(
 
 <!-- rustlab:output-start -->
 ```text
-lambda = 0.1: final train 0.34193843301811083  val 0.3874004916617651   (+ 0.002437773096764073 nats vs lambda = 0)
-lambda = 0.1: final gradient norm 0.007451190110965804   ||E||_F 3.00936537533113  vs 6.245127745507132 at lambda = 0
+lambda = 0.1: final train 0.34193843301811083  val 0.38740049166176505   (+ 0.002437773096764073 nats vs lambda = 0)
+lambda = 0.1: final gradient norm 0.0074511901109658085   ||E||_F 3.009365375331129  vs 6.245127745507132 at lambda = 0
 ```
 
 <!-- rustlab:output-end -->
@@ -314,9 +314,9 @@ print("constant-eta run final train loss:", Ltr_k(n_steps + 1));
 <!-- rustlab:output-start -->
 ```text
 sign changes of dW(2,1) over steps 31-180: 58   -> mean period 5.172413793103448 steps
-||g|| over the last 60 steps: scheduled 0.000005405763360576634 to 0.0006426347189373577 ;  constant eta 0.0000719780445104057 to 0.13116536781353402
+||g|| over the last 60 steps: scheduled 0.000005405763360576634 to 0.0006426347189373577 ;  constant eta 0.00007197804452394361 to 0.1311653678135404
 slope of log||g|| vs log eta_t over steps 60-180: 2.6566754411482125
-constant-eta run final train loss: 0.33950891571260416
+constant-eta run final train loss: 0.3395089157126044
 ```
 
 ![plot 2](plots/18-training-loop/plot-2-b2d7f4b5.svg)
@@ -355,8 +355,8 @@ legend("train", "val")
 
 <!-- rustlab:output-start -->
 ```text
-overfit run: train 0.27726024453114984  (floor 2 ln2 / 5 = 0.2772588722239781 )   val 6.2080986226104935   val at step 0: 1.0783604476361794
-P(. | a) after training: [1×3]  0.000000  1.000000  0.000000   ->  -log P(c | a) = 17.93340563627454 nats
+overfit run: train 0.2772602445313778  (floor 2 ln2 / 5 = 0.2772588722239781 )   val 6.2080986224423285   val at step 0: 1.0783604476361794
+P(. | a) after training: [1×3]  0.000000  1.000000  0.000000   ->  -log P(c | a) = 17.933405636031917 nats
 ```
 
 ![plot 3](plots/18-training-loop/plot-3-a7e4c47d.svg)
@@ -414,7 +414,7 @@ print("final train / val with clipping:", Ltr_c(n_steps + 1), Lva_c(n_steps + 1)
 <!-- rustlab:output-start -->
 ```text
 c = 0.25: limiter fired 7 of 180 steps (steps 9 to 15 )
-final train / val with clipping: 0.3395006599069849 0.3850831237783922    without: 0.33950065992134676 0.38508017927180976
+final train / val with clipping: 0.33950065990698514 0.3850831237783923    without: 0.33950065992134676 0.38508017927180976
 ```
 
 <!-- rustlab:output-end -->
@@ -549,7 +549,7 @@ print("overfit run: -log P(c | a) =", -log(p_from_a(3)), "nats =", -log2(p_from_
 population floor H(X_t+1 | X_t) = 0.5 bits = 0.34657359027997264 nats   (perplexity 1.4142135623730951 )
 train floor 24 ln2 / 49 = 0.3395006598660956 nats = 0.48979591836734687 bits;   val floor 5 ln2 / 9 = 0.3850817669777474 nats = 0.5555555555555556 bits
 initial loss 1.1200930454953792 nats vs log 3 = 1.0986122886681098 ;  final train 0.33950065992134676  final val 0.38508017927180976
-overfit run: -log P(c | a) = 17.93340563627454 nats = 25.87243537770346 bits for one transition with zero training support
+overfit run: -log P(c | a) = 17.933405636031917 nats = 25.872435377353433 bits for one transition with zero training support
 ```
 
 <!-- rustlab:output-end -->

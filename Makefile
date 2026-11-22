@@ -63,10 +63,10 @@ sherlock-quick: ## Sherlock: everything with the 15-second preset (small model, 
 	@$(MAKE) --no-print-directory sherlock-preset PRESET=quick
 	@$(MAKE) --no-print-directory sherlock
 
-sherlock-doctor: ## Sherlock: check rustlab >= 0.3.11, python3, the corpus and the prepared data
+sherlock-doctor: ## Sherlock: check rustlab >= 0.3.67, python3, the corpus and the prepared data
 	@command -v rustlab >/dev/null || { echo "rustlab is not on PATH (https://github.com/kreegerresearch/rustlab)"; exit 1; }
 	@v=$$(rustlab --version | awk '{print $$2}'); printf 'rustlab %s ' "$$v"; \
-	  [ "$$(printf '%s\n0.3.11\n' "$$v" | sort -V | head -1)" = "0.3.11" ] && echo "(ok, >= 0.3.11)" || { echo "(too old: need >= 0.3.11)"; exit 1; }
+	  [ "$$(printf '%s\n0.3.67\n' "$$v" | sort -V | head -1)" = "0.3.67" ] && echo "(ok, >= 0.3.67)" || { echo "(too old: need >= 0.3.67)"; exit 1; }
 	@cd $(SHERLOCK) && rustlab run doctor_probe.rlab --plot none >/dev/null 2>&1 && echo "lib/gpt.rlab loads from the stage scripts" || { echo "rustlab cannot load ../../lib/gpt.rlab: rustlab 0.3.14-0.3.16 have a run-path bug (see AGENTS.md); use 0.3.11-0.3.13 or a fixed build"; exit 1; }
 	@command -v python3 >/dev/null && echo "python3 ok (used once, by prepare_corpus.py)" || { echo "python3 is missing"; exit 1; }
 	@test -f $(SHERLOCK)/data/adventures.txt && echo "corpus ok: $(SHERLOCK)/data/adventures.txt" || { echo "corpus missing: $(SHERLOCK)/data/adventures.txt"; exit 1; }

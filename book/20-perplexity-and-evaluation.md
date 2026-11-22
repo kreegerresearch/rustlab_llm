@@ -227,7 +227,7 @@ print("max |E - E_lib| =", max(max(abs(E - E_lib))), "  (the loop above is train
 <!-- rustlab:output-start -->
 ```text
 initial train PPL: 2.995343312749529   held-out: 2.984295518083625   (uniform reference 3)
-final   train PPL: 1.404246324690318   held-out: 1.4697346039183146
+final   train PPL: 1.404246324690318   held-out: 1.4697346039183148
 max |E - E_lib| = 0   (the loop above is train_bigram_lm with logging)
 ```
 
@@ -292,10 +292,10 @@ print("BPE example: L = 3.0 nats/token at 4.4 char/token -> BPC =", 3.0 / (4.4 *
 <!-- rustlab:output-start -->
 ```text
 final train PPL   : 1.404246324690318    empirical train floor exp(24 ln2 / 49) = 1.404246218971659
-final held-out PPL: 1.4697346039183146    population-optimal bigram on the held-out split exp(5 ln2 / 9) = 1.4697344922755988
+final held-out PPL: 1.4697346039183148    population-optimal bigram on the held-out split exp(5 ln2 / 9) = 1.4697344922755988
 empirical held-out floor (b->c x3, b->a x2): exp(5 H(3/5, 2/5) / 9) = 1.4533850756356859
 optimal-bigram floor (population): sqrt(2) = 1.4142135623730951
-bits per character: train 0.489796026980621   held-out 0.5555556651443194   (uniform reference log2 3 = 1.584962500721156 )
+bits per character: train 0.48979602698062114   held-out 0.5555556651443196   (uniform reference log2 3 = 1.584962500721156 )
 BPE example: L = 3.0 nats/token at 4.4 char/token -> BPC = 0.9836557096970205
 ```
 
@@ -411,8 +411,8 @@ ylabel("count")
 
 <!-- rustlab:output-start -->
 ```text
-mean(losses) = 0.4974875458681027 bits = cross-entropy;  PPL = 2^mean = 1.411752852036258
-std(losses)  = 0.5012547386712853 bits = sqrt(varentropy);   median = 0.00000009139767019031646
+mean(losses) = 0.49748754586810273 bits = cross-entropy;  PPL = 2^mean = 1.4117528520362583
+std(losses)  = 0.5012547386712854 bits = sqrt(varentropy);   median = 0.00000009139767019031646
 ```
 
 ![plot 4](plots/20-perplexity-and-evaluation/plot-4-0009f57d.svg)
@@ -447,7 +447,7 @@ print("parmap mean loss:", loss_par, "nats   serial:", loss_ser, "   diff:", abs
 <summary>Parallel evaluation with parmap</summary>
 
 ```text
-parmap mean loss: 0.34483208978216184 nats   serial: 0.3448320897821617    diff: 0.00000000000000016653345369377348
+parmap mean loss: 0.3448320897821618 nats   serial: 0.3448320897821617    diff: 0.00000000000000011102230246251565
 ```
 
 </details>
@@ -478,8 +478,8 @@ print("PPL per character:", 2 ^ (bits_file / N_char), "   PPL per 2-char token:"
 
 <!-- rustlab:output-start -->
 ```text
-file length      : 99.00002162775243 bits for 199 characters  ->  BPC = 0.4974875458681027
-PPL per character: 1.411752852036258    PPL per 2-char token: 1.9930461152325092    BPC unchanged
+file length      : 99.00002162775245 bits for 199 characters  ->  BPC = 0.49748754586810273
+PPL per character: 1.4117528520362583    PPL per 2-char token: 1.9930461152325092    BPC unchanged
 ```
 
 <!-- rustlab:output-end -->
@@ -495,7 +495,7 @@ print("tokens for +/-1% PPL: this model", ceil((1.96 * sigma_nats / 0.01) ^ 2), 
 
 <!-- rustlab:output-start -->
 ```text
-CE = 0.4974875458681027 +/- 0.06964469238042609 bits (95%)  ->  PPL in [ 1.3452206714890362 , 1.4815755938588049 ]
+CE = 0.49748754586810273 +/- 0.06964469238042612 bits (95%)  ->  PPL in [ 1.3452206714890362 , 1.481575593858805 ]
 tokens for +/-1% PPL: this model 4638    a real LM with sigma = 2.5 nats: 240100
 ```
 
